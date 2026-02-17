@@ -1,0 +1,74 @@
+CREATE TABLE Podcast (
+    id TEXT NOT NULL PRIMARY KEY,
+    feedUrl TEXT NOT NULL,
+    title TEXT NOT NULL,
+    author TEXT,
+    description TEXT,
+    artworkUrl TEXT,
+    lastRefreshedEpochMillis INTEGER,
+    isSubscribed INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE Episode (
+    id TEXT NOT NULL PRIMARY KEY,
+    podcastId TEXT NOT NULL REFERENCES Podcast(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT,
+    audioUrl TEXT NOT NULL,
+    artworkUrl TEXT,
+    publishDateEpochMillis INTEGER NOT NULL,
+    durationSeconds INTEGER NOT NULL,
+    episodeNumber INTEGER,
+    isPlayed INTEGER NOT NULL DEFAULT 0,
+    playPositionSeconds INTEGER NOT NULL DEFAULT 0,
+    isDownloaded INTEGER NOT NULL DEFAULT 0,
+    localPath TEXT
+);
+
+CREATE INDEX idx_episode_podcastId ON Episode(podcastId);
+CREATE INDEX idx_episode_publishDate ON Episode(publishDateEpochMillis);
+
+-- Podcast queries
+
+selectAllPodcasts:
+SELECT * FROM Podcast WHERE isSubscribed = 1 ORDER BY title COLLATE NOCASE;
+
+selectPodcastById:
+SELECT * FROM Podcast WHERE id = ?;
+
+insertOrReplacePodcast:
+INSERT OR REPLACE INTO Podcast(id, feedUrl, title, author, description, artworkUrl, lastRefreshedEpochMillis, isSubscribed)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+deletePodcast:
+DELETE FROM Podcast WHERE id = ?;
+
+markPodcastUnsubscribed:
+UPDATE Podcast SET isSubscribed = 0 WHERE id = ?;
+
+-- Episode queries
+
+selectEpisodesByPodcast:
+SELECT * FROM Episode WHERE podcastId = ? ORDER BY publishDateEpochMillis DESC;
+
+selectEpisodeById:
+SELECT * FROM Episode WHERE id = ?;
+
+insertOrReplaceEpisode:
+INSERT OR REPLACE INTO Episode(id, podcastId, title, description, audioUrl, artworkUrl, publishDateEpochMillis, durationSeconds, episodeNumber, isPlayed, playPositionSeconds, isDownloaded, localPath)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteEpisode:
+DELETE FROM Episode WHERE id = ?;
+
+deleteEpisodesByPodcast:
+DELETE FROM Episode WHERE podcastId = ?;
+
+markEpisodePlayed:
+UPDATE Episode SET isPlayed = ? WHERE id = ?;
+
+updatePlayPosition:
+UPDATE Episode SET playPositionSeconds = ? WHERE id = ?;
+
+updateDownloadStatus:
+UPDATE Episode SET isDownloaded = ?, localPath = ? WHERE id = ?;
