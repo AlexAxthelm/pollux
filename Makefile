@@ -1,4 +1,7 @@
-.PHONY: help build clean test test-jvm test-ios run-mac run-ios dev reload
+.PHONY: help build clean test test-jvm test-ios run-mac run-ios dev reload ios-build ios-sim
+
+# Set IOS_SIM_ID to your simulator UUID (find with: xcrun simctl list devices)
+IOS_SIM_ID ?= 4B05657F-089D-45A9-A6EC-7EB5D52A16AC
 
 # Default target - show help
 help:
@@ -55,18 +58,17 @@ run-ios:
 ios-build:
 	./gradlew linkDebugFrameworkIosSimulatorArm64
 
-ios-sim:
-	@echo "Building iOS framework..."
-	./gradlew linkDebugFrameworkIosSimulatorArm64
+ios-sim: ios-build
 	@echo "Building and installing app..."
 	xcodebuild -project iosApp/iosApp.xcodeproj \
 		-scheme iosApp \
 		-configuration Debug \
-		-destination 'platform=iOS Simulator,id=4B05657F-089D-45A9-A6EC-7EB5D52A16AC' \
+		-destination 'platform=iOS Simulator,id=$(IOS_SIM_ID)' \
 		-derivedDataPath build/ios
 	@echo "Launching in simulator..."
-	xcrun simctl boot 4B05657F-089D-45A9-A6EC-7EB5D52A16AC 2>/dev/null || true
-	xcrun simctl install 4B05657F-089D-45A9-A6EC-7EB5D52A16AC \
+	xcrun simctl boot $(IOS_SIM_ID) 2>/dev/null || true
+	open -a Simulator
+	xcrun simctl install $(IOS_SIM_ID) \
 		build/ios/Build/Products/Debug-iphonesimulator/pollux.app
-	xcrun simctl launch --console 4B05657F-089D-45A9-A6EC-7EB5D52A16AC \
+	xcrun simctl launch --console $(IOS_SIM_ID) \
 		com.alexaxthelm.pollux.pollux
