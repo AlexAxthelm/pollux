@@ -1,4 +1,4 @@
-.PHONY: help build clean test run-mac run-ios dev reload
+.PHONY: help build clean test test-jvm test-ios run-mac run-ios dev reload
 
 # Default target - show help
 help:
@@ -7,7 +7,9 @@ help:
 	@echo "Building:"
 	@echo "  make build          Build the project"
 	@echo "  make clean          Clean build artifacts"
-	@echo "  make test           Run tests"
+	@echo "  make test           Run all tests"
+	@echo "  make test-jvm       Run JVM tests only"
+	@echo "  make test-ios       Run iOS simulator tests only"
 	@echo ""
 	@echo "Running:"
 	@echo "  make run-mac        Run macOS app (production)"
@@ -27,7 +29,13 @@ clean:
 	./gradlew clean
 
 test:
-	./gradlew test
+	./gradlew allTests
+
+test-jvm:
+	./gradlew jvmTest
+
+test-ios:
+	./gradlew iosSimulatorArm64Test
 
 # macOS
 run-mac:
