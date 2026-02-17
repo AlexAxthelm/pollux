@@ -1,6 +1,6 @@
 package com.alexaxthelm.pollux.domain.model
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlin.time.Duration
 
 data class Episode(

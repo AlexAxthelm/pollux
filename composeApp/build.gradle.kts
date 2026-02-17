@@ -37,7 +37,7 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
-            implementation(libs.sqldelight.driver.sqlite)
+            implementation(libs.kotlinx.coroutines.test)
         }
         iosMain.dependencies {
             implementation(libs.sqldelight.driver.native)
@@ -45,6 +45,9 @@ kotlin {
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutinesSwing)
+            implementation(libs.sqldelight.driver.sqlite)
+        }
+        jvmTest.dependencies {
             implementation(libs.sqldelight.driver.sqlite)
         }
     }

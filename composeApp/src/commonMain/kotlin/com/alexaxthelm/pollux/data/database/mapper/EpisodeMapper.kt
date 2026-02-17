@@ -1,7 +1,7 @@
 package com.alexaxthelm.pollux.data.database.mapper
 
 import com.alexaxthelm.pollux.domain.model.Episode
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlin.time.Duration.Companion.seconds
 import com.alexaxthelm.pollux.data.database.Episode as DbEpisode
 

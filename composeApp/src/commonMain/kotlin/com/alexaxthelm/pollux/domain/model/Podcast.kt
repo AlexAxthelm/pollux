@@ -1,6 +1,6 @@
 package com.alexaxthelm.pollux.domain.model
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 data class Podcast(
     val id: String,

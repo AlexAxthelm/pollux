@@ -11,6 +11,7 @@ actual class DatabaseDriverFactory {
         val dbPath = File(dbDir, "pollux.db").absolutePath
         val driver = JdbcSqliteDriver("jdbc:sqlite:$dbPath")
         PolluxDatabase.Schema.create(driver)
+        driver.execute(null, "PRAGMA foreign_keys = ON", 0)
         return driver
     }
 }

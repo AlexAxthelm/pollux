@@ -1,7 +1,7 @@
 package com.alexaxthelm.pollux.data.database.mapper
 
 import com.alexaxthelm.pollux.domain.model.Podcast
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import com.alexaxthelm.pollux.data.database.Podcast as DbPodcast
 
 object PodcastMapper {
