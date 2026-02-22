@@ -34,6 +34,8 @@ kotlin {
             implementation(libs.kotlinx.datetime)
             implementation(libs.sqldelight.runtime)
             implementation(libs.sqldelight.coroutines)
+            implementation(libs.ktor.client.core)
+            implementation(libs.xmlutil.core)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
@@ -41,14 +43,17 @@ kotlin {
         }
         iosMain.dependencies {
             implementation(libs.sqldelight.driver.native)
+            implementation(libs.ktor.client.darwin)
         }
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutinesSwing)
             implementation(libs.sqldelight.driver.sqlite)
+            implementation(libs.ktor.client.java)
         }
         jvmTest.dependencies {
             implementation(libs.sqldelight.driver.sqlite)
+            implementation(libs.ktor.client.mock)
         }
     }
 }

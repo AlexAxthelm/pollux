@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Full RSS Podcast</title>
+    <managingEditor>editor@example.com</managingEditor>
+    <description>A podcast with all fields present.</description>
+    <itunes:author>Jane Doe</itunes:author>
+    <itunes:image href="https://example.com/artwork.jpg"/>
+    <image>
+      <url>https://example.com/fallback.jpg</url>
+    </image>
+
+    <item>
+      <title>Episode One</title>
+      <description>First episode description.</description>
+      <guid>episode-one-guid</guid>
+      <enclosure url="https://example.com/ep1.mp3" length="12345" type="audio/mpeg"/>
+      <itunes:image href="https://example.com/ep1-art.jpg"/>
+      <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+      <itunes:duration>1:02:03</itunes:duration>
+      <itunes:episode>1</itunes:episode>
+    </item>
+
+    <item>
+      <title>Episode Two</title>
+      <description>Second episode description.</description>
+      <guid>episode-two-guid</guid>
+      <enclosure url="https://example.com/ep2.mp3" length="23456" type="audio/mpeg"/>
+      <pubDate>Tue, 03 Jan 2006 10:00:00 GMT</pubDate>
+      <itunes:duration>45:30</itunes:duration>
+      <itunes:episode>2</itunes:episode>
+    </item>
+
+    <item>
+      <title>Episode Three</title>
+      <description>Third episode description.</description>
+      <guid>episode-three-guid</guid>
+      <enclosure url="https://example.com/ep3.mp3" length="34567" type="audio/mpeg"/>
+      <pubDate>Wed, 04 Jan 2006 08:00:00 -0500</pubDate>
+      <itunes:duration>3600</itunes:duration>
+      <itunes:episode>3</itunes:episode>
+    </item>
+  </channel>
+</rss>

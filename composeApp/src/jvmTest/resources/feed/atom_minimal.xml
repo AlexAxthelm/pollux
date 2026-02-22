@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Minimal Atom Podcast</title>
+  <entry>
+    <title>Minimal Atom Entry</title>
+    <link rel="enclosure" href="https://example.com/atom-ep1.mp3" type="audio/mpeg"/>
+  </entry>
+</feed>

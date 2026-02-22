@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Duplicate GUIDs Podcast</title>
+
+    <item>
+      <title>Original Episode</title>
+      <guid>shared-guid</guid>
+      <enclosure url="https://example.com/original.mp3" length="1000" type="audio/mpeg"/>
+    </item>
+
+    <!-- Same guid as above: should be discarded -->
+    <item>
+      <title>Duplicate Episode</title>
+      <guid>shared-guid</guid>
+      <enclosure url="https://example.com/duplicate.mp3" length="2000" type="audio/mpeg"/>
+    </item>
+
+    <item>
+      <title>Unique Episode</title>
+      <guid>unique-guid</guid>
+      <enclosure url="https://example.com/unique.mp3" length="3000" type="audio/mpeg"/>
+    </item>
+  </channel>
+</rss>

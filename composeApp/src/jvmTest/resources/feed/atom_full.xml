@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"
+      xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <title>Full Atom Podcast</title>
+  <subtitle>An atom feed with all fields present.</subtitle>
+  <author>
+    <name>John Atom</name>
+  </author>
+  <itunes:image href="https://example.com/atom-artwork.jpg"/>
+
+  <entry>
+    <id>atom-entry-one</id>
+    <title>Atom Episode One</title>
+    <summary>First atom episode description.</summary>
+    <link rel="enclosure" href="https://example.com/atom-ep1.mp3" type="audio/mpeg"/>
+    <itunes:image href="https://example.com/atom-ep1-art.jpg"/>
+    <published>2023-01-15T10:00:00Z</published>
+    <itunes:duration>1:00:00</itunes:duration>
+    <itunes:episode>1</itunes:episode>
+  </entry>
+
+  <entry>
+    <id>atom-entry-two</id>
+    <title>Atom Episode Two</title>
+    <summary>Second atom episode description.</summary>
+    <link rel="enclosure" href="https://example.com/atom-ep2.mp3" type="audio/mpeg"/>
+    <published>2023-02-20T14:30:00+05:30</published>
+    <itunes:duration>30:00</itunes:duration>
+    <itunes:episode>2</itunes:episode>
+  </entry>
+</feed>
