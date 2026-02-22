@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Missing Fields Podcast</title>
+
+    <!-- No guid: should fall back to enclosure URL -->
+    <item>
+      <title>No GUID Episode</title>
+      <enclosure url="https://example.com/ep-no-guid.mp3" length="1000" type="audio/mpeg"/>
+    </item>
+
+    <!-- No enclosure: should be dropped -->
+    <item>
+      <title>No Enclosure Episode</title>
+      <guid>no-enclosure-guid</guid>
+    </item>
+
+    <!-- No author at channel level; no itunes:author -->
+    <item>
+      <title>No Author Episode</title>
+      <guid>no-author-guid</guid>
+      <enclosure url="https://example.com/ep-no-author.mp3" length="2000" type="audio/mpeg"/>
+    </item>
+  </channel>
+</rss>

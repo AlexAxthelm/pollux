@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Missing Fields Atom Podcast</title>
+
+  <!-- No id: should fall back to enclosure href -->
+  <entry>
+    <title>No ID Entry</title>
+    <link rel="enclosure" href="https://example.com/atom-no-id.mp3" type="audio/mpeg"/>
+  </entry>
+
+  <!-- No enclosure link: should be dropped -->
+  <entry>
+    <id>no-enclosure-atom-id</id>
+    <title>No Enclosure Entry</title>
+  </entry>
+
+  <!-- Entry with id and enclosure but no other optional fields -->
+  <entry>
+    <id>minimal-entry-id</id>
+    <title>Minimal Entry</title>
+    <link rel="enclosure" href="https://example.com/atom-minimal.mp3" type="audio/mpeg"/>
+  </entry>
+</feed>
