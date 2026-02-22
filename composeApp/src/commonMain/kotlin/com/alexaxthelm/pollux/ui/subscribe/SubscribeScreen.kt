@@ -14,7 +14,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,7 +64,12 @@ fun SubscribeScreen(
                     if (errorMessage != null) onDismissError()
                 },
                 label = { Text("Feed URL") },
-                placeholder = { Text("https://example.com/feed.xml") },
+                placeholder = {
+                    Text(
+                        "https://example.com/feed.xml",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    )
+                },
                 isError = errorMessage != null,
                 supportingText = errorMessage?.let { { Text(it) } },
                 singleLine = true,
