@@ -8,9 +8,10 @@ actual class DatabaseDriverFactory {
     actual fun createDriver(): SqlDriver {
         val dbDir = File(System.getProperty("user.home"), ".pollux")
         dbDir.mkdirs()
-        val dbPath = File(dbDir, "pollux.db").absolutePath
-        val driver = JdbcSqliteDriver("jdbc:sqlite:$dbPath")
-        PolluxDatabase.Schema.create(driver)
+        val dbFile = File(dbDir, "pollux.db")
+        val isNew = !dbFile.exists()
+        val driver = JdbcSqliteDriver("jdbc:sqlite:${dbFile.absolutePath}")
+        if (isNew) PolluxDatabase.Schema.create(driver)
         driver.execute(null, "PRAGMA foreign_keys = ON", 0)
         return driver
     }
