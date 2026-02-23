@@ -19,7 +19,6 @@ import com.alexaxthelm.pollux.presentation.subscribe.SubscribeState
 import com.alexaxthelm.pollux.presentation.subscribe.SubscribeViewModel
 import com.alexaxthelm.pollux.ui.library.LibraryScreen
 import com.alexaxthelm.pollux.ui.subscribe.SubscribeScreen
-import com.alexaxthelm.pollux.ui.subscribe.SubscriptionPreviewScreen
 import io.ktor.client.HttpClient
 
 private enum class Destination { Library, Subscribe }
@@ -59,48 +58,26 @@ fun App() {
             }
 
             Destination.Subscribe -> {
-                val subscribeState by subscribeViewModel.state.collectAsState()
+                val state by subscribeViewModel.state.collectAsState()
 
-                when (val s = subscribeState) {
-                    is SubscribeState.Idle -> SubscribeScreen(
-                        isLoading = false,
-                        errorMessage = null,
+                if (state is SubscribeState.Saved) {
+                    // Reset the subscribe flow and return to Library.
+                    // Must be in LaunchedEffect — mutating state during composition is a bug.
+                    LaunchedEffect(Unit) {
+                        subscribeViewModel.cancelPreview()
+                        destination = Destination.Library
+                    }
+                } else {
+                    SubscribeScreen(
+                        state = state,
                         onSubmit = subscribeViewModel::submit,
-                        onDismissError = subscribeViewModel::dismissError,
-                    )
-
-                    is SubscribeState.Loading -> SubscribeScreen(
-                        isLoading = true,
-                        errorMessage = null,
-                        onSubmit = {},
-                        onDismissError = {},
-                    )
-
-                    is SubscribeState.Error -> SubscribeScreen(
-                        isLoading = false,
-                        errorMessage = s.message,
-                        onSubmit = subscribeViewModel::submit,
-                        onDismissError = subscribeViewModel::dismissError,
-                    )
-
-                    is SubscribeState.Preview -> SubscriptionPreviewScreen(
-                        feed = s.feed,
-                        isLoading = false,
                         onConfirm = subscribeViewModel::confirmSubscription,
                         onCancel = {
                             subscribeViewModel.cancelPreview()
                             destination = Destination.Library
                         },
+                        onDismissError = subscribeViewModel::dismissError,
                     )
-
-                    is SubscribeState.Saved -> {
-                        // Reset the subscribe flow and return to Library.
-                        // Must be in LaunchedEffect — mutating state during composition is a bug.
-                        LaunchedEffect(Unit) {
-                            subscribeViewModel.cancelPreview()
-                            destination = Destination.Library
-                        }
-                    }
                 }
             }
         }
