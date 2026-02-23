@@ -2,6 +2,7 @@ package com.alexaxthelm.pollux.data.repository
 
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
+import app.cash.sqldelight.coroutines.mapToOneOrNull
 import com.alexaxthelm.pollux.data.database.PolluxDatabase
 import com.alexaxthelm.pollux.data.database.mapper.EpisodeMapper
 import com.alexaxthelm.pollux.domain.model.Episode
@@ -22,6 +23,12 @@ class EpisodeRepositoryImpl(
             .asFlow()
             .mapToList(Dispatchers.Default)
             .map { list -> list.map(EpisodeMapper::toDomain) }
+
+    override fun observeEpisodeById(id: String): Flow<Episode?> =
+        queries.selectEpisodeById(id)
+            .asFlow()
+            .mapToOneOrNull(Dispatchers.Default)
+            .map { it?.let(EpisodeMapper::toDomain) }
 
     override suspend fun getEpisodesByPodcast(podcastId: String): List<Episode> =
         withContext(Dispatchers.Default) {

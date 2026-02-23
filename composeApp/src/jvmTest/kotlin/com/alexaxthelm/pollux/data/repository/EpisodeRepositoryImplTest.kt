@@ -160,6 +160,27 @@ class EpisodeRepositoryImplTest {
     }
 
     @Test
+    fun should_EmitEpisode_When_ObservingById() = runTest {
+        insertTestPodcast()
+        episodeRepo.saveEpisode(testEpisode())
+
+        val episode = episodeRepo.observeEpisodeById("e1").first()
+
+        assertEquals("e1", episode?.id)
+    }
+
+    @Test
+    fun should_EmitUpdatedEpisode_When_PlayedStatusChanges() = runTest {
+        insertTestPodcast()
+        episodeRepo.saveEpisode(testEpisode())
+
+        episodeRepo.markEpisodePlayed("e1", true)
+        val episode = episodeRepo.observeEpisodeById("e1").first()
+
+        assertEquals(true, episode?.isPlayed)
+    }
+
+    @Test
     fun should_SaveAll_When_BatchSaving() = runTest {
         insertTestPodcast()
         val episodes = listOf(

@@ -6,24 +6,26 @@ import com.alexaxthelm.pollux.domain.repository.EpisodeRepository
 import com.alexaxthelm.pollux.domain.repository.PodcastRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class PodcastDetailViewModel(
-    private val podcastId: String,
-    private val podcastRepo: PodcastRepository,
+class EpisodeDetailViewModel(
+    private val episodeId: String,
     private val episodeRepo: EpisodeRepository,
+    private val podcastRepo: PodcastRepository,
 ) : ViewModel() {
 
-    val state: StateFlow<PodcastDetailState> = flow {
-        val podcast = podcastRepo.getPodcastById(podcastId) ?: return@flow
-        episodeRepo.observeEpisodesByPodcast(podcastId).collect { episodes ->
-            emit(PodcastDetailState.Loaded(podcast, episodes))
+    val state: StateFlow<EpisodeDetailState> = flow {
+        val initial = episodeRepo.getEpisodeById(episodeId) ?: return@flow
+        val podcast = podcastRepo.getPodcastById(initial.podcastId) ?: return@flow
+        episodeRepo.observeEpisodeById(episodeId).filterNotNull().collect { episode ->
+            emit(EpisodeDetailState.Loaded(episode, podcast))
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, PodcastDetailState.Loading)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, EpisodeDetailState.Loading)
 
-    fun markEpisodePlayed(episodeId: String, played: Boolean) {
+    fun markEpisodePlayed(played: Boolean) {
         viewModelScope.launch {
             episodeRepo.markEpisodePlayed(episodeId, played)
         }

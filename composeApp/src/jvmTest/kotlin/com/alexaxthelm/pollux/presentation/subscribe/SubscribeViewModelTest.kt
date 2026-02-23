@@ -213,6 +213,7 @@ private class FakeEpisodeRepository : EpisodeRepository {
     private val flow = MutableStateFlow<List<Episode>>(emptyList())
 
     override fun observeEpisodesByPodcast(podcastId: String): Flow<List<Episode>> = flow
+    override fun observeEpisodeById(id: String): Flow<Episode?> = MutableStateFlow(store[id])
     override suspend fun getEpisodesByPodcast(podcastId: String): List<Episode> =
         store.values.filter { it.podcastId == podcastId }
     override suspend fun getEpisodeById(id: String): Episode? = store[id]
