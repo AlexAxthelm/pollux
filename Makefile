@@ -26,7 +26,7 @@ help:
 
 # Build
 build:
-	./gradlew build
+	./gradlew build -x linkReleaseFrameworkIosArm64 -x linkReleaseFrameworkIosSimulatorArm64
 
 clean:
 	./gradlew clean

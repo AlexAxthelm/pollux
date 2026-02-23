@@ -6,8 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import com.alexaxthelm.pollux.data.database.DatabaseDriverFactory
 import com.alexaxthelm.pollux.data.database.PolluxDatabase
 import com.alexaxthelm.pollux.data.feed.KtorFeedParser
@@ -43,15 +43,15 @@ fun App() {
         )
     }
 
-    val libraryViewModel = viewModel { LibraryViewModel(podcastRepo) }
-    val subscribeViewModel = viewModel { SubscribeViewModel(subscribeUseCase) }
+    val libraryViewModel = remember(podcastRepo) { LibraryViewModel(podcastRepo) }
+    val subscribeViewModel = remember(subscribeUseCase) { SubscribeViewModel(subscribeUseCase) }
 
     var destination by remember { mutableStateOf(Destination.Library) }
 
     MaterialTheme {
         when (destination) {
             Destination.Library -> {
-                val state by libraryViewModel.state.collectAsStateWithLifecycle()
+                val state by libraryViewModel.state.collectAsState()
                 LibraryScreen(
                     state = state,
                     onAddPodcast = { destination = Destination.Subscribe },
@@ -59,7 +59,7 @@ fun App() {
             }
 
             Destination.Subscribe -> {
-                val subscribeState by subscribeViewModel.state.collectAsStateWithLifecycle()
+                val subscribeState by subscribeViewModel.state.collectAsState()
 
                 when (val s = subscribeState) {
                     is SubscribeState.Idle -> SubscribeScreen(
@@ -95,8 +95,11 @@ fun App() {
 
                     is SubscribeState.Saved -> {
                         // Reset the subscribe flow and return to Library.
-                        subscribeViewModel.cancelPreview()
-                        destination = Destination.Library
+                        // Must be in LaunchedEffect — mutating state during composition is a bug.
+                        LaunchedEffect(Unit) {
+                            subscribeViewModel.cancelPreview()
+                            destination = Destination.Library
+                        }
                     }
                 }
             }
