@@ -205,22 +205,42 @@ private fun EpisodeDetailBody(
 
         // Description
         if (episode.description != null) {
-            Spacer(Modifier.height(24.dp))
-            Text(
-                text = "Description",
-                style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = episode.description,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
+            val plainDescription = stripHtml(episode.description)
+            if (plainDescription.isNotBlank()) {
+                Spacer(Modifier.height(24.dp))
+                Text(
+                    text = "Description",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = plainDescription,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
         }
 
         Spacer(Modifier.height(32.dp))
     }
+}
+
+private fun stripHtml(html: String): String {
+    return html
+        .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
+        .replace(Regex("</?p[^>]*>", RegexOption.IGNORE_CASE), "\n")
+        .replace(Regex("<li[^>]*>", RegexOption.IGNORE_CASE), "\n• ")
+        .replace(Regex("<[^>]+>"), "")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&nbsp;", " ")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace(Regex("\n{3,}"), "\n\n")
+        .trim()
 }
 
 private fun formatDate(instant: Instant): String {

@@ -113,6 +113,7 @@ private fun PodcastDetailContent(
                     items(state.episodes, key = { it.id }) { episode ->
                         SwipeableEpisodeRow(
                             episode = episode,
+                            onRowClick = { onNavigateToEpisode(episode.id) },
                             onMoreClick = { actionEpisode = episode },
                             onMarkPlayed = { played -> onMarkEpisodePlayed(episode.id, played) },
                         )
@@ -149,6 +150,7 @@ private fun PodcastDetailContent(
 @Composable
 private fun SwipeableEpisodeRow(
     episode: Episode,
+    onRowClick: () -> Unit,
     onMoreClick: () -> Unit,
     onMarkPlayed: (Boolean) -> Unit,
 ) {
@@ -182,6 +184,7 @@ private fun SwipeableEpisodeRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                .clickable(onClick = onRowClick)
                 .pointerInput(episode.id) {
                     detectHorizontalDragGestures(
                         onDragStart = {
