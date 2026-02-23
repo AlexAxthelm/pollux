@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -42,12 +44,13 @@ class LibraryScreen(private val deps: AppDependencies) : Screen {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val viewModel = remember { LibraryViewModel(deps.podcastRepo) }
+        val viewModel = remember { LibraryViewModel(deps.podcastRepo, deps.refreshAllUseCase) }
         val state by viewModel.state.collectAsState()
         LibraryScreenContent(
             state = state,
             onAddPodcast = { navigator.push(SubscribeScreen(deps)) },
             onPodcastClick = { id -> navigator.push(PodcastDetailScreen(deps, id)) },
+            onRefreshAll = viewModel::refreshAll,
         )
     }
 }
@@ -58,12 +61,25 @@ private fun LibraryScreenContent(
     state: LibraryState,
     onAddPodcast: () -> Unit,
     onPodcastClick: (String) -> Unit,
+    onRefreshAll: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isRefreshing = (state as? LibraryState.Loaded)?.isRefreshing ?: false
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(title = { Text("Library") })
+            TopAppBar(
+                title = { Text("Library") },
+                actions = {
+                    IconButton(onClick = onRefreshAll, enabled = !isRefreshing) {
+                        if (isRefreshing) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                        } else {
+                            Text("↻", style = MaterialTheme.typography.titleLarge)
+                        }
+                    }
+                },
+            )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = onAddPodcast) {

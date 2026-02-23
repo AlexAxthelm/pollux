@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface EpisodeRepository {
     fun observeEpisodesByPodcast(podcastId: String): Flow<List<Episode>>
+    fun observeEpisodeById(id: String): Flow<Episode?>
     suspend fun getEpisodesByPodcast(podcastId: String): List<Episode>
     suspend fun getEpisodeById(id: String): Episode?
     suspend fun saveEpisode(episode: Episode)

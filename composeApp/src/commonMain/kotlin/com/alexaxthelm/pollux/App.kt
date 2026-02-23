@@ -9,6 +9,7 @@ import com.alexaxthelm.pollux.data.database.PolluxDatabase
 import com.alexaxthelm.pollux.data.feed.KtorFeedParser
 import com.alexaxthelm.pollux.data.repository.EpisodeRepositoryImpl
 import com.alexaxthelm.pollux.data.repository.PodcastRepositoryImpl
+import com.alexaxthelm.pollux.domain.usecase.RefreshAllPodcastsUseCase
 import com.alexaxthelm.pollux.domain.usecase.SubscribeToPodcastUseCase
 import com.alexaxthelm.pollux.ui.library.LibraryScreen
 import io.ktor.client.HttpClient
@@ -19,11 +20,17 @@ fun App() {
         val database = PolluxDatabase(DatabaseDriverFactory().createDriver())
         val podcastRepo = PodcastRepositoryImpl(database)
         val episodeRepo = EpisodeRepositoryImpl(database)
+        val feedParser = KtorFeedParser(HttpClient())
         AppDependencies(
             podcastRepo = podcastRepo,
             episodeRepo = episodeRepo,
             subscribeUseCase = SubscribeToPodcastUseCase(
-                feedParser = KtorFeedParser(HttpClient()),
+                feedParser = feedParser,
+                podcastRepository = podcastRepo,
+                episodeRepository = episodeRepo,
+            ),
+            refreshAllUseCase = RefreshAllPodcastsUseCase(
+                feedParser = feedParser,
                 podcastRepository = podcastRepo,
                 episodeRepository = episodeRepo,
             ),
