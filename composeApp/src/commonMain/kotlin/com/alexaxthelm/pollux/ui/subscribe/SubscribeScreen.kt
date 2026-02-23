@@ -17,13 +17,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -31,11 +35,39 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import cafe.adriel.voyager.core.screen.Screen
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
+import com.alexaxthelm.pollux.AppDependencies
 import com.alexaxthelm.pollux.domain.feed.ParsedFeed
 import com.alexaxthelm.pollux.presentation.subscribe.SubscribeState
+import com.alexaxthelm.pollux.presentation.subscribe.SubscribeViewModel
+
+class SubscribeScreen(private val deps: AppDependencies) : Screen {
+    @Composable
+    override fun Content() {
+        val navigator = LocalNavigator.currentOrThrow
+        val viewModel = remember { SubscribeViewModel(deps.subscribeUseCase) }
+        val state by viewModel.state.collectAsState()
+        if (state is SubscribeState.Saved) {
+            LaunchedEffect(Unit) {
+                viewModel.cancelPreview()
+                navigator.pop()
+            }
+        } else {
+            SubscribeScreenContent(
+                state = state,
+                onSubmit = viewModel::submit,
+                onConfirm = viewModel::confirmSubscription,
+                onCancel = { viewModel.cancelPreview(); navigator.pop() },
+                onDismissError = viewModel::dismissError,
+            )
+        }
+    }
+}
 
 @Composable
-fun SubscribeScreen(
+private fun SubscribeScreenContent(
     state: SubscribeState,
     onSubmit: (String) -> Unit,
     onConfirm: () -> Unit,
@@ -49,6 +81,7 @@ fun SubscribeScreen(
         is SubscribeState.Error -> UrlEntryStep(
             state = state,
             onSubmit = onSubmit,
+            onCancel = onCancel,
             onDismissError = onDismissError,
             modifier = modifier,
         )
@@ -60,7 +93,7 @@ fun SubscribeScreen(
             modifier = modifier,
         )
 
-        // Saved is handled in App.kt via LaunchedEffect — nothing to render here.
+        // Saved is handled in Content() via LaunchedEffect — nothing to render here.
         is SubscribeState.Saved -> Unit
     }
 }
@@ -69,6 +102,7 @@ fun SubscribeScreen(
 private fun UrlEntryStep(
     state: SubscribeState,
     onSubmit: (String) -> Unit,
+    onCancel: () -> Unit,
     onDismissError: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -81,6 +115,12 @@ private fun UrlEntryStep(
             .fillMaxSize()
             .safeContentPadding(),
     ) {
+        IconButton(
+            onClick = onCancel,
+            modifier = Modifier.align(Alignment.TopEnd),
+        ) {
+            Text("✕")
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
