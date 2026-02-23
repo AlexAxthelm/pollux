@@ -36,6 +36,7 @@ kotlin {
             implementation(libs.sqldelight.coroutines)
             implementation(libs.ktor.client.core)
             implementation(libs.xmlutil.core)
+            implementation(libs.voyager.navigator)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
