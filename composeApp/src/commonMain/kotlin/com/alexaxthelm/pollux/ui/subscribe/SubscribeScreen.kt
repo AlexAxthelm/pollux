@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -80,6 +81,7 @@ private fun SubscribeScreenContent(
         is SubscribeState.Error -> UrlEntryStep(
             state = state,
             onSubmit = onSubmit,
+            onCancel = onCancel,
             onDismissError = onDismissError,
             modifier = modifier,
         )
@@ -100,6 +102,7 @@ private fun SubscribeScreenContent(
 private fun UrlEntryStep(
     state: SubscribeState,
     onSubmit: (String) -> Unit,
+    onCancel: () -> Unit,
     onDismissError: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -112,6 +115,12 @@ private fun UrlEntryStep(
             .fillMaxSize()
             .safeContentPadding(),
     ) {
+        IconButton(
+            onClick = onCancel,
+            modifier = Modifier.align(Alignment.TopEnd),
+        ) {
+            Text("✕")
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
