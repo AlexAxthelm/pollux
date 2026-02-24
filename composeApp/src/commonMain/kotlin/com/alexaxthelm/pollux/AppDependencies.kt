@@ -1,5 +1,6 @@
 package com.alexaxthelm.pollux
 
+import com.alexaxthelm.pollux.domain.download.DownloadManager
 import com.alexaxthelm.pollux.domain.repository.EpisodeRepository
 import com.alexaxthelm.pollux.domain.repository.PodcastRepository
 import com.alexaxthelm.pollux.domain.usecase.RefreshAllPodcastsUseCase
@@ -10,4 +11,5 @@ data class AppDependencies(
     val episodeRepo: EpisodeRepository,
     val subscribeUseCase: SubscribeToPodcastUseCase,
     val refreshAllUseCase: RefreshAllPodcastsUseCase,
+    val downloadManager: DownloadManager,
 )
