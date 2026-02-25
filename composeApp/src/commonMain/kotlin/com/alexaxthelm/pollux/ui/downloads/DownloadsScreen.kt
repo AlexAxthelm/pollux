@@ -34,6 +34,7 @@ import com.alexaxthelm.pollux.domain.download.DownloadItem
 import com.alexaxthelm.pollux.domain.download.DownloadStatus
 import com.alexaxthelm.pollux.presentation.downloads.DownloadsState
 import com.alexaxthelm.pollux.presentation.downloads.DownloadsViewModel
+import kotlin.math.roundToInt
 
 class DownloadsScreen(private val deps: AppDependencies) : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -248,10 +249,15 @@ private fun FailedDownloadRow(item: DownloadItem, onRetry: () -> Unit, onRemove:
     }
 }
 
-private fun formatBytes(bytes: Long): String {
-    return when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-        else -> "${"%.1f".format(bytes.toDouble() / (1024 * 1024))} MB"
+private fun formatBytes(bytes: Long): String =
+    when {
+        bytes < 1024L -> "$bytes B"
+        bytes < 1024L * 1024L -> "${bytes / 1024L} KB"
+        else -> {
+            val mb = bytes.toDouble() / (1024.0 * 1024.0)
+            val mb10 = (mb * 10).roundToInt()          // value * 10 rounded
+            val whole = mb10 / 10
+            val frac = kotlin.math.abs(mb10 % 10)      // just in case
+            "$whole.$frac MB"
+        }
     }
-}
