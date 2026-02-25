@@ -8,7 +8,7 @@ class JvmFileStorage(baseDir: File = File(System.getProperty("user.home"), ".pol
     private val downloadsDir = File(baseDir, "downloads").also { it.mkdirs() }
 
     override fun getDownloadPath(episodeId: String): String =
-        File(downloadsDir, "$episodeId.mp3").absolutePath
+        File(downloadsDir, "${episodeIdToFilename(episodeId)}.mp3").absolutePath
 
     override fun fileExists(path: String): Boolean = File(path).exists()
 

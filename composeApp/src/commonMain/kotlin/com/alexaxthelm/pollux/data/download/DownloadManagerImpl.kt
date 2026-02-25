@@ -7,11 +7,12 @@ import com.alexaxthelm.pollux.domain.download.DownloadStatus
 import com.alexaxthelm.pollux.domain.model.Episode
 import com.alexaxthelm.pollux.domain.repository.EpisodeRepository
 import io.ktor.client.HttpClient
-import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.contentLength
 import io.ktor.http.isSuccess
+import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -101,13 +102,33 @@ class DownloadManagerImpl(
                 throw Exception("HTTP ${response.status.value}: ${response.status.description}")
             }
 
-            val contentLength = response.contentLength()
-            updateStatus(episode.id, DownloadStatus.InProgress(bytesDownloaded = 0L, totalBytes = contentLength))
+            val totalBytes = response.contentLength()
+            updateStatus(episode.id, DownloadStatus.InProgress(bytesDownloaded = 0L, totalBytes = totalBytes))
 
-            val bytes: ByteArray = response.body()
+            // Stream the response body in chunks so we can report real download progress.
+            val channel = response.bodyAsChannel()
+            val chunkBuffer = ByteArray(CHUNK_SIZE)
+            val chunks = mutableListOf<ByteArray>()
+            var bytesDownloaded = 0L
+
+            while (!channel.isClosedForRead) {
+                val read = channel.readAvailable(chunkBuffer, 0, chunkBuffer.size)
+                if (read <= 0) break
+                chunks.add(chunkBuffer.copyOfRange(0, read))
+                bytesDownloaded += read
+                updateStatus(episode.id, DownloadStatus.InProgress(bytesDownloaded, totalBytes))
+            }
 
             // If the user cancelled while we were downloading, discard the result.
             if (_downloads.value.none { it.episode.id == episode.id }) return
+
+            // Combine all received chunks into a single array for writing.
+            val bytes = ByteArray(bytesDownloaded.toInt())
+            var writeOffset = 0
+            for (chunk in chunks) {
+                chunk.copyInto(bytes, writeOffset)
+                writeOffset += chunk.size
+            }
 
             withContext(fileDispatcher) {
                 fileStorage.writeBytes(path, bytes)
@@ -116,8 +137,7 @@ class DownloadManagerImpl(
             episodeRepository.updateDownloadStatus(episode.id, isDownloaded = true, localPath = path)
             updateStatus(episode.id, DownloadStatus.Completed)
 
-            // Remove completed items after a brief delay so the UI can show "done" state.
-            // For Phase 1 we remove immediately; the episode's isDownloaded flag is the source of truth.
+            // Remove completed items immediately; the episode's isDownloaded flag is the source of truth.
             _downloads.update { items -> items.filterNot { it.episode.id == episode.id } }
         } catch (e: CancellationException) {
             throw e
@@ -132,5 +152,9 @@ class DownloadManagerImpl(
                 if (item.episode.id == episodeId) item.copy(status = status) else item
             }
         }
+    }
+
+    companion object {
+        private const val CHUNK_SIZE = 8 * 1024 // 8 KB
     }
 }

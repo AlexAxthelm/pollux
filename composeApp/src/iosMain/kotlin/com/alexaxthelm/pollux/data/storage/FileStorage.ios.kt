@@ -33,7 +33,8 @@ class IosFileStorage : FileStorage {
         )
     }
 
-    override fun getDownloadPath(episodeId: String): String = "$downloadsDir/$episodeId.mp3"
+    override fun getDownloadPath(episodeId: String): String =
+        "$downloadsDir/${episodeIdToFilename(episodeId)}.mp3"
 
     override fun fileExists(path: String): Boolean =
         NSFileManager.defaultManager.fileExistsAtPath(path)
