@@ -38,6 +38,7 @@ import com.alexaxthelm.pollux.domain.model.Podcast
 import com.alexaxthelm.pollux.presentation.library.LibraryState
 import com.alexaxthelm.pollux.presentation.library.LibraryViewModel
 import com.alexaxthelm.pollux.ui.detail.PodcastDetailScreen
+import com.alexaxthelm.pollux.ui.downloads.DownloadsScreen
 import com.alexaxthelm.pollux.ui.subscribe.SubscribeScreen
 
 class LibraryScreen(private val deps: AppDependencies) : Screen {
@@ -51,6 +52,7 @@ class LibraryScreen(private val deps: AppDependencies) : Screen {
             onAddPodcast = { navigator.push(SubscribeScreen(deps)) },
             onPodcastClick = { id -> navigator.push(PodcastDetailScreen(deps, id)) },
             onRefreshAll = viewModel::refreshAll,
+            onOpenDownloads = { navigator.push(DownloadsScreen(deps)) },
         )
     }
 }
@@ -62,6 +64,7 @@ private fun LibraryScreenContent(
     onAddPodcast: () -> Unit,
     onPodcastClick: (String) -> Unit,
     onRefreshAll: () -> Unit,
+    onOpenDownloads: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val isRefreshing = (state as? LibraryState.Loaded)?.isRefreshing ?: false
@@ -71,6 +74,9 @@ private fun LibraryScreenContent(
             TopAppBar(
                 title = { Text("Library") },
                 actions = {
+                    IconButton(onClick = onOpenDownloads) {
+                        Text("⬇", style = MaterialTheme.typography.titleLarge)
+                    }
                     IconButton(onClick = onRefreshAll, enabled = !isRefreshing) {
                         if (isRefreshing) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp))

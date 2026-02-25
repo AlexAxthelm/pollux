@@ -48,6 +48,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import com.alexaxthelm.pollux.AppDependencies
 import com.alexaxthelm.pollux.domain.model.Episode
 import com.alexaxthelm.pollux.domain.model.Podcast
+import com.alexaxthelm.pollux.domain.download.DownloadManager
 import com.alexaxthelm.pollux.presentation.detail.PodcastDetailState
 import com.alexaxthelm.pollux.presentation.detail.PodcastDetailViewModel
 import kotlin.math.roundToInt
@@ -69,6 +70,8 @@ class PodcastDetailScreen(private val deps: AppDependencies, private val podcast
             onBack = { navigator.pop() },
             onNavigateToEpisode = { id -> navigator.push(EpisodeDetailScreen(deps, id)) },
             onMarkEpisodePlayed = { id, played -> viewModel.markEpisodePlayed(id, played) },
+            onDownloadEpisode = { episode -> deps.downloadManager.enqueue(episode) },
+            onDeleteDownload = { episode -> deps.downloadManager.deleteDownload(episode) },
         )
     }
 }
@@ -80,6 +83,8 @@ private fun PodcastDetailContent(
     onBack: () -> Unit,
     onNavigateToEpisode: (String) -> Unit,
     onMarkEpisodePlayed: (String, Boolean) -> Unit,
+    onDownloadEpisode: (Episode) -> Unit,
+    onDeleteDownload: (Episode) -> Unit,
 ) {
     var actionEpisode by remember { mutableStateOf<Episode?>(null) }
 
@@ -140,6 +145,14 @@ private fun PodcastDetailContent(
                 },
                 onMarkPlayed = {
                     onMarkEpisodePlayed(currentActionEpisode.id, !currentActionEpisode.isPlayed)
+                    actionEpisode = null
+                },
+                onDownload = {
+                    onDownloadEpisode(currentActionEpisode)
+                    actionEpisode = null
+                },
+                onDeleteDownload = {
+                    onDeleteDownload(currentActionEpisode)
                     actionEpisode = null
                 },
             )
@@ -268,6 +281,13 @@ private fun EpisodeRow(episode: Episode, onMoreClick: () -> Unit) {
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
+                if (episode.isDownloaded) {
+                    Text(
+                        text = "DOWNLOADED",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
+                }
             }
         }
         IconButton(onClick = onMoreClick) {
@@ -325,6 +345,8 @@ private fun EpisodeActionSheet(
     onDismiss: () -> Unit,
     onEpisodeInfo: () -> Unit,
     onMarkPlayed: () -> Unit,
+    onDownload: () -> Unit,
+    onDeleteDownload: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -369,7 +391,11 @@ private fun EpisodeActionSheet(
         HorizontalDivider()
 
         ActionItem(label = "Play", enabled = false, onClick = {})
-        ActionItem(label = "Download", enabled = false, onClick = {})
+        if (episode.isDownloaded) {
+            ActionItem(label = "Delete Download", onClick = onDeleteDownload)
+        } else {
+            ActionItem(label = "Download", onClick = onDownload)
+        }
         ActionItem(
             label = if (episode.isPlayed) "Mark Unplayed" else "Mark Played",
             onClick = onMarkPlayed,
