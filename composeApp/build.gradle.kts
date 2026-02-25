@@ -6,6 +6,8 @@ plugins {
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.composeHotReload)
     alias(libs.plugins.sqldelight)
+    alias(libs.plugins.detekt)
+    alias(libs.plugins.kover)
 }
 
 kotlin {
@@ -57,6 +59,31 @@ kotlin {
             implementation(libs.ktor.client.mock)
         }
     }
+}
+
+kover {
+    reports {
+        filters {
+            excludes {
+                packages("com.alexaxthelm.pollux.data.database.composeApp")
+            }
+        }
+        total {
+            xml { onCheck = false }
+            html { onCheck = false }
+        }
+    }
+}
+
+detekt {
+    config.setFrom("$rootDir/detekt.yml")
+    buildUponDefaultConfig = true
+    allRules = false
+    source.setFrom(
+        "src/commonMain/kotlin",
+        "src/jvmMain/kotlin",
+        "src/iosMain/kotlin",
+    )
 }
 
 sqldelight {

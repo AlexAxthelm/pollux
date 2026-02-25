@@ -1,4 +1,4 @@
-.PHONY: help build clean test test-jvm test-ios run-mac run-ios dev reload ios-build ios-sim
+.PHONY: help build clean test test-jvm test-ios run-mac run-ios dev reload ios-build ios-sim lint lint-report coverage coverage-xml deps-update license-report
 
 # Set IOS_SIM_ID to your simulator UUID (find with: xcrun simctl list devices)
 IOS_SIM_ID ?= 4B05657F-089D-45A9-A6EC-7EB5D52A16AC
@@ -23,6 +23,14 @@ help:
 	@echo "iOS Simulator:"
 	@echo "  make ios-build      Build iOS framework"
 	@echo "  make ios-sim        Run in iOS simulator (CLI)"
+	@echo ""
+	@echo "Quality:"
+	@echo "  make lint           Run static analysis (Detekt)"
+	@echo "  make lint-report    Run Detekt with HTML report"
+	@echo "  make coverage       Generate HTML coverage report (Kover)"
+	@echo "  make coverage-xml   Generate XML coverage report (Kover)"
+	@echo "  make deps-update    Check for dependency updates"
+	@echo "  make license-report Generate dependency license report"
 
 # Build
 build:
@@ -57,6 +65,26 @@ run-ios:
 
 ios-build:
 	./gradlew linkDebugFrameworkIosSimulatorArm64
+
+coverage:
+	./gradlew koverHtmlReport
+	@echo "Report: composeApp/build/reports/kover/html/index.html"
+
+coverage-xml:
+	./gradlew koverXmlReport
+
+lint:
+	./gradlew detekt
+
+lint-report:
+	./gradlew detekt --reports html:build/reports/detekt/detekt.html
+
+deps-update:
+	./gradlew dependencyUpdates
+
+license-report:
+	./gradlew generateLicenseReport --no-configuration-cache
+	@echo "Report: build/reports/dependency-license/index.html"
 
 ios-sim: ios-build
 	@echo "Building and installing app..."

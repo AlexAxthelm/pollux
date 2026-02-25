@@ -1,5 +1,9 @@
 [versions]
 androidx-lifecycle = "2.9.6"
+detekt = "1.23.8"
+kover = "0.9.1"
+versions-plugin = "0.51.0"
+dependency-license-report = "2.9"
 composeHotReload = "1.0.0"
 composeMultiplatform = "1.10.0"
 kotlin = "2.3.0"
@@ -37,6 +41,10 @@ xmlutil-core = { module = "io.github.pdvrieze.xmlutil:core", version.ref = "xmlu
 
 [plugins]
 composeHotReload = { id = "org.jetbrains.compose.hot-reload", version.ref = "composeHotReload" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+versionsPlugin = { id = "com.github.ben-manes.versions", version.ref = "versions-plugin" }
+dependencyLicenseReport = { id = "com.github.jk1.dependency-license-report", version.ref = "dependency-license-report" }
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
 composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

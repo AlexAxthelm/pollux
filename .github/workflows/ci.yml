@@ -27,8 +27,21 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: ${{ runner.os }}-gradle-
 
+      - name: Run static analysis
+        run: make lint
+
       - name: Run tests
         run: make test
 
       - name: Build
         run: make build
+
+      - name: Generate coverage report
+        run: ./gradlew koverXmlReport
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: composeApp/build/reports/kover/report.xml
+          retention-days: 7
