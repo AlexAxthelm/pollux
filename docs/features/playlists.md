@@ -24,6 +24,11 @@ In general, from a "new playlist" entrypoint, I should be able to easily:
 * Add Rule
 * Add episodes
 
+All playlist types support:
+- Sequential playback through episodes
+- Current position tracking
+- Pause and resume
+
 ### Add Feeds:
 
 The simplest concept: A playlist can have a collection of feeds. All the

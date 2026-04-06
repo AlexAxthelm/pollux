@@ -4,7 +4,9 @@ priority: MVP
 ---
 
 The app should integrate with the OS media system, where available.
-* Use system media intents for 
+* Use system media intents for control.
+* Tracking playback position per episode: If I switch episodes and come back, I should be approximately where I left off. Some clients rewind a few seconds on resume for context overlap.
+
 
 ## UI
 
