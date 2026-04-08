@@ -3,92 +3,92 @@
 priority: high
 ---
 
-Playlists are fundamentally a collection of episodes, with some ordering.
-We can define them by specifying particular epidodes, and the order in which we
-want to play them (manually)
-Or they can be generated automatically, based on criteria.
+Playlists are the primary way users organize and consume episodes in Pollux.
 
-Episodes in a playlist may or may not be available in local storage, and should
-be noted as so (as part of episode info)
+## Data Model
 
-It would be good to hae a mecahnism to include other playlists in playlists
-(meta-playlists). For this I'm thinking a UI with a single (short, single line
-of text) header, and then a 1-standard-row "quick view" with things like episode
-counts / playtime. Conceptually, this is "podcast as feed", and I expect it will
-be useful with rules-based lists.
+A playlist is fundamentally a **query** over a set of sources, with filters and sorts applied:
+
+```
+(sources) → [filters] → [sorts] → ordered episode list
+```
+
+**Sources** may be:
+- One or more feed subscriptions
+- One or more other playlists (enabling composite / meta-playlists)
+- A mix of both
+
+**Filters** narrow which episodes are included (see `playlist-rules.md`)
+
+**Sorts** define the order of the resulting episodes (see `playlist-rules.md`)
+
+This model is intentionally complete from the start. MVP scope is limited by which filter and sort *operations* are implemented, not by the model itself.
+
+### Subscriptions as Implicit Playlists
+
+A feed subscription behaves as an implicit single-feed playlist. It responds to the same play/queue actions as any other playlist. This means playback logic only needs to understand playlists — not whether the source is a subscription or a user-created playlist.
 
 ## Behavior
 
-In general, from a "new playlist" entrypoint, I should be able to easily:
-* Add feed
-* Add Rule
-* Add episodes
+- Sequential playback through episodes, in playlist order
+    - Alternate behavior (configurable): play first unplayed episode in playlist
+      on next-episode, rather than play next in sequence (i.e. "play from top"
+      rather than "play next")
+- Current position tracked (which episode, timestamp within episode)
+- Pause and resume supported
+- Episodes in a playlist may or may not be downloaded; download status is visible per episode
+- An episode may appear in a playlist more than once if explicitly added by the user; otherwise duplicates are suppressed (configurable)
+- A playlist with no rules applied includes all episodes from its sources
 
-All playlist types support:
-- Sequential playback through episodes
-- Current position tracking
-- Pause and resume
+## Active Queue
 
-### Add Feeds:
+There is one active playlist at a time. Activating a new playlist evicts the previous one.
 
-The simplest concept: A playlist can have a collection of feeds. All the
-episodes from those feeds are added to the playlist (by each episode's default
-behavior) and by default, sorted by time.
+The active context is determined by **where in the UI the user initiated playback**, not by which playlists happen to contain that episode. For example:
+- Playing an episode from a playlist view → that playlist becomes active
+- Playing an episode from a subscription view → that subscription becomes active
+- Playing an episode from the library → the library (implicit all-subscriptions playlist) becomes active
 
-later complications here include "priority podcasts" 
+Since the UI does not present episode listings for multiple playlists simultaneously, each play action has an unambiguous source context.
 
-### Add Episodes:
+**Activating a playlist:**
+- Pressing play on an episode within a playlist view sets that playlist as active and begins playback at that episode
+- Pressing play on a playlist from the library resumes from the current position if already active, or begins from the first episode if not
 
-Adding an episode basically brings up a quick episode finder (search / scroll
-through feeds), and when finding the episode you want, you can add to beginning
-or end of playlist.
+**Episode ordering note:** There is no drag-to-reorder in the playlist view. To pin specific episodes to the front of a playlist, a rule should be used (e.g. "episode X, then episode Y, then everything else"). This will be a later rule type.
 
-This has a natural followup of re-ordering the episodes in the playlist.
+## Convenience Playlists
 
-### Add Rule
+System-provided playlists that require no configuration:
+- **All subscriptions**: all episodes from all subscribed feeds, no filters
+- **Downloaded / available**: all downloaded episodes, regardless of feed
 
-This defines some transformation to the playlist.
-Some example 
+## Meta-playlists
 
-Adding a rule to an empty playlist implicity acts on all episodes from all feeds.
-Adding a rule to a populated playlist (either from feed subscriptions or from
-curated episodes) acts on the episodes in that set
-
-Example rules; 
-* Include most recent N episodes (filter)
-* Sort by "number of times played" (find favorites)
-* Include unplayed episodes only 
-* include only downloaded (immediately available) episodes
-
-Effectively, this acts in much the same way as a SQL select, and the "stacking"
-of rules is something that the UI should make easy (re-ordering of rules, easy
-field selection, etc), along with a live preview of what the list looks like if
-saved now. Ideally, this would support an "undo" trigger.
-
-One example "composite playlist" would have a set of podcasts, with the most
-recent episode of each, if unplayed, and then after that, the available other
-unplayed episodes in the podcasts in natural (chronological) order. This could
-be accomplished by having the first set be one playlist, and then the other.
-
-### Episodes
-
-It is plausible for an episode to be in a playlist more than once. If a user has
-explicitly added an episode to a playlist, this should be absolutely included.
-Otherwise, this should be a toggle "allow duplicate episodes" or something like
-that. If disallowed, each episode shows up at the first point in the playlist,
-and subsequent deplicate entries are not included.
+A playlist whose sources include other playlists inherits those playlists' resolved episode lists at playback time. This is the primary mechanism for building composite listening queues (e.g. "latest episodes first, then archives").
 
 ## UI
 
-### Full view
+### Full View
 
-Top row: Icon / title / stummary stats / (config menu)
-Scrollable list of Episodes
+```
+[ Icon / Title ]   [ Summary stats ]   [ ⋮ config ]
+────────────────────────────────────────────────────
+Episode row
+Episode row
+Episode row
+...
+```
 
-### Compact (menu) view
+Summary stats show:
+- Episodes ready to play (downloaded) / total hours ready
+- Total episodes / total hours
+- (These may transition between each other on a timer, as described in product notes)
 
-For presentation in menus / selecting:
-Icon (alternately, tiled album art).
-optionally: number of episodes, playtime
-alternately: immediately available starts
-Playlist type
+### Compact View
+
+For use in menus and selection flows:
+- Icon (or tiled album art)
+- Playlist title
+- Episode count, playtime (ready / total)
+- Playlist type indicator

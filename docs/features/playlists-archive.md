@@ -1,16 +1,58 @@
 # Archive Binge Playlists
+---
+priority: high
+depends: playlists, playlist-rules
+---
 
-The core idea on this one is that there are a lot of podcasts that have very deep archives. Some podcasts are meant to be up-to-date — always listen to the latest episode, track the latest whatever. Other podcasts are evergreen, so for me these are like music podcasts, or Memory Palace, 99PI — those are like you can listen to any episode at any time, it's fine.
+Archive binge is a primary use case that distinguishes Pollux from conventional podcast clients. It is not a separate feature, but a specific configuration of playlist rules that the app should make easy to discover and set up.
 
-So what I would be looking for with this feature is the application helps me systematically work my way through all of the episodes. It would know about the entire backlog for the feed, and it would basically download the next episode on demand after I finished the last one. So there would always be an episode ready to go next, and it would have a log of all the ones that I have played and it would draw from the unplayed ones (default sequentially).
+## The Problem
 
-Ideally, this would interact with some playlist functionality where I could have a set of feeds, and it would switch between those feeds in the playlist so I wouldn't get a clump of like five episodes from the same feed all in a row because that part of the archive binge is way older than anything else on the playlist. That's something I run into right now where it's like I'll have three feeds and on one of them I'm working through episodes from like 2016 and on other ones I'm working through stuff in like 2018, so the stuff from the feed from 2016 is always at the beginning of the playlist.
+Many podcasts have deep, evergreen archives. Conventional clients are optimized for "latest episode only" consumption. Users who want to systematically work through a back catalog — while also keeping up with new episodes — have no good tooling for this.
 
-Another nice feature would be if this could not interfere with tracking new episodes. In an example here: I listen to a podcast that is being currently released. I am also working through its archives. I would like to hear the new episode every week in addition to all of the other older episodes that I am listening to.
+Additionally, when binging multiple feeds simultaneously, episodes from the oldest-progress feed tend to clump at the front of the queue (because their archive dates are earlier). This makes multi-feed binge listening feel unbalanced.
 
-To avoid clumping, some strategies are: round-robin, proportional (more unplayed
-episodes means more episodes in playlist), and date-normalized (treat all feed's
-histories as unit length, and slot in episodes proportionally)
+## The Solution
 
-Functionally, this can exist as "playlist rules", but should have a good
-interface, or be a suggested ruleset
+A composite playlist built from two sub-playlists:
+
+**"Latest" sub-playlist** (per feed):
+- Source: selected feed(s)
+- Filter: most recent 1 episode, unplayed
+- Sort: by age (desc)
+
+**"Archive" sub-playlist** (per feed):
+- Source: selected feed(s)
+- Filter: unplayed, oldest-first
+- Sort: by age (asc)
+
+**Composite playlist:**
+- Sources: Latest playlist, then Archive playlist
+- Sort: by source (sequential) — Latest episodes always precede archive episodes
+
+This ensures new episodes surface immediately, and archive listening resumes naturally after.
+
+## Clumping Problem (Later)
+
+When multiple feeds are included and their archives are at different points in history, earlier-archive feeds dominate the front of the queue. Future sort strategies to address this:
+
+- **Round-robin**: alternate episodes between feeds
+- **Proportional**: feeds with more unplayed episodes get proportionally more slots
+- **Date-normalized**: treat each feed's archive as unit length [0,1] and interleave by normalized position
+
+For MVP, sequential sort by source is acceptable. Document this as a known limitation.
+
+## UI Suggestion
+
+Archive binge should be surfaced as a suggested playlist from a "create playlist" flow. The underlying rules should be visible and editable, but the template should make setup a one-tap action.
+
+## Example
+
+User subscribes to three music podcasts. Two have archives from 2016, one from 2018. They want to hear new episodes weekly and work through all archives.
+
+Desired behavior:
+1. Any new episode this week plays first
+2. Archive episodes fill the rest of the queue
+3. Queue does not clump all 2016-era episodes together (later)
+
+This is achievable with MVP rules for steps 1–2. Step 3 requires an interleaved sort strategy.
