@@ -20,3 +20,20 @@ A central location for user preferences that affect app-wide behavior.
 
 - Should settings be a single screen or organized into sections?
 - Are any settings per-device vs synced across devices (see `sync.md`)?
+
+## Cascading Defaults Pattern
+
+Many settings follow a cascading default pattern: a global default applies
+unless overridden at a more specific level (e.g. per-feed, per-episode). In that
+sense, episodes should inherit from feed, which inherit from subscription, then from global
+
+The UI should always make clear whether a value is the global default or a
+custom override, and offer a way to reset to default. Example display:
+
+- `Refresh every 12 hours (default)` — using global default
+- `Refresh every 24 hours (default)` — global default has been changed
+- `Refresh every 1 hour` — per-feed override is set, a subtle "reset" button
+  should be visible
+
+This pattern applies to: refresh interval, download rules, and any other
+setting that makes sense to configure globally but override locally.
