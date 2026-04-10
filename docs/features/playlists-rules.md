@@ -6,6 +6,10 @@ depends: playlists
 
 Rules are the filters and sorts applied to a playlist's sources to produce an ordered episode list. Rules are applied in sequence; order matters.
 
+## UI
+
+see `playlist-editor.md`
+
 ## Filters
 
 Filters narrow the set of episodes included in the playlist.
