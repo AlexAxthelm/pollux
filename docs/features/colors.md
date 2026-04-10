@@ -1,6 +1,7 @@
 # Colorscheme
 ---
 priority: mid
+depends: settings
 ---
 
 Note this is mid priority not because it's important, but because I don't want
