@@ -1,6 +1,7 @@
 # Episodes
 ---
 priority: MVP
+depends: subscription
 ---
 
 Episodes are the atomic unit of content in Pollux.

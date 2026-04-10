@@ -1,6 +1,7 @@
 # Library
 ---
 priority: MVP
+depends: subscription, playlists, navigation
 ---
 
 The library is the home screen of Pollux and the primary navigation hub. It

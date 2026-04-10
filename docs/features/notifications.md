@@ -1,6 +1,7 @@
 # Notifications
 ---
 priority: low
+depends: storage, subscription
 ---
 
 Pollux should notify users of relevant events without being intrusive.

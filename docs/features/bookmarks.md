@@ -1,6 +1,7 @@
 # Bookmarks
 ---
 priority: mid
+depends: episode, player
 ---
 
 Allow user to mark specific timestamps (for later refernece).

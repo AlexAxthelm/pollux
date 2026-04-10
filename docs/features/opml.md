@@ -1,6 +1,7 @@
 # OPML import/export
 ---
 priority: mid
+depends: subscription, playlists
 ---
 
 Nothing too controversial on this one — pretty bog-standard OPML import/export. I think we would want to be able to, on export, select some subset of the known database of podcasts and only export those. Or maybe export all of the podcasts that are on a playlist.

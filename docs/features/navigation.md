@@ -1,6 +1,7 @@
 # Navigation Structure
 ---
 priority: MVP
+depends: library, player, mini-player
 ---
 
 Pollux has a minimal top-level navigation model:
