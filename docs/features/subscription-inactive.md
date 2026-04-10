@@ -1,6 +1,7 @@
 # Inactive Subscriptions
 ---
 priority: mid
+depends: subscription
 ---
 
 There should be an indicator on subscriptions that are no longer publishing

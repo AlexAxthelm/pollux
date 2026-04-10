@@ -1,6 +1,7 @@
 # Unsubscribing
 ---
-priority: high
+priority: MVP
+depends: subscription
 ---
 
 Unsubscribe is a destructive action and should be protected accordingly:
@@ -16,4 +17,4 @@ ones")
 When a subscription is removed, playlists should have their rule re-evaluated,
 so that the removal is reflected in those too.
 
-see storage-soft-delete.md for future unsubscribe improvements
+see subscription-soft-delete.md for future unsubscribe improvements

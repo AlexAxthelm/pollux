@@ -1,6 +1,7 @@
 # Feed Subscription & Library
 ---
 priority: MVP
+depends: episode, storage, settings
 ---
 
 A subscription is a mapping between the app and an RSS/Atom/JSONFeed URI. It is
