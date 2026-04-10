@@ -96,6 +96,9 @@ and keeps the archive complete even as publishers rotate content.
 
 see `subscription-soft-delete.md` for details
 
+for MVP: if a subscription is removed, all assosciated content files are also
+deleted.
+
 ## Per-Feed Settings
 
 The cascading default pattern applies to all per-feed settings. Each setting
