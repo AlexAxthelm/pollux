@@ -1,4 +1,7 @@
 # Listening Statistics
+---
+priority: mid
+---
 
 
 I'd like to be able to compile listening statistics about the podcasts that I've listened to.

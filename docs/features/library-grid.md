@@ -1,4 +1,7 @@
 # Library Grid view
+---
+priority: mid
+---
 
 The entries in the library (playlists and subscritpions) can be presented as
 lists (default) or in a grid view.

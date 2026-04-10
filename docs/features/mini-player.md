@@ -1,6 +1,6 @@
 # Mini Player
 ---
-priority: important
+priority: MVP
 depends: player
 ---
 

@@ -1,4 +1,7 @@
 # Feed parsing
+---
+priority: low
+---
 
 Beyond RSS (2.0), the app should suppor Atom and JSONFeed files as sources for
 subscriptions. If there are other formats in common use, they should also be

@@ -1,4 +1,7 @@
 # Bookmarks
+---
+priority: mid
+---
 
 Allow user to mark specific timestamps (for later refernece).
 May optionally have a text note attached to the bookmark. 

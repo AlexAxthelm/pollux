@@ -1,6 +1,6 @@
 # Playlists
 ---
-priority: high
+priority: MVP
 ---
 
 Playlists are the primary way users organize and consume episodes in Pollux.
