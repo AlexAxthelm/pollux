@@ -118,11 +118,8 @@ Flagged / starred episodes are never automatically deleted.
 
 ## Device specific
 
-Touches on sync (when we get to that), but there should be a way to have the
-download rules/limits be device specific (sync can suggest that they are the
-same, but not a strong suggestion). So I may want to have this feed downloaded
-on my phone, but not my laptop, or vice versa. When sync works, it would be good
-to have a way to see something like "available on phone" as a bonus feature
+see storage-sync.md for device-specific rules
+For MVP, storage settings should not sync.
 
 ## UI
 
@@ -151,11 +148,4 @@ to have a way to see something like "available on phone" as a bonus feature
 
 ## Future: Eviction
 
-When automatic eviction is implemented, the proposed priority order (lowest to
-highest protection) is:
-
-1. **Evict first**: played episodes, no flag, oldest first
-2. **Evict next**: unplayed episodes, oldest first
-3. **Never evict**: flagged / starred episodes
-
-All eviction rules should be user-configurable for power users.
+see storage-eviction.md

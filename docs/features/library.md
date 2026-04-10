@@ -53,6 +53,10 @@ Shows
   ...
 ```
 
+## Empty State
+
+If there's no subscriptions, then we should have a prompt for the user to add subscription (MVP: simple text describing situation and where to find the button; "Add your first podcast, hit the + button below" or something like that)
+
 ## Ordering
 
 Default ordering for both Playlists and Shows sections is **alphabetical**.
@@ -90,3 +94,5 @@ not MVP).
 - **Add subscription**: in toolbar.
 - **Downloads**: link to the download queue / storage screen, accessible from
   library (exact placement TBD).
+
+For MVP, these should all be buttons in a toolbar

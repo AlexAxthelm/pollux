@@ -39,6 +39,11 @@ On subscribe, the app stores feed metadata and begins the subscription machinery
 
 MVP is to support RSS files, for future enhancements, see Feed parsing spec
 
+After hitting the "subscribe button" the user is taken to the subscription
+details page, which they shouldn't notice, since the only difference between the
+preview and the details page is the presence of the "subscribe" button, which
+disappears when subscribing
+
 ### Authenticated Feeds
 
 Feeds requiring authentication (e.g. Patreon, supporting-cast) are out of scope
@@ -64,6 +69,8 @@ Display pattern:
 Refresh can also be triggered manually from the subscription details page or
 the library view (refresh all).
 
+Feed refresh interval: 12 is the default, managed by settings (cascading)
+
 Refresh should be informed by server-side HTTP conditional GETs, and in general
 play well with 200/304/429 HTTP codes
 
@@ -87,29 +94,7 @@ and keeps the archive complete even as publishers rotate content.
 
 ## Unsubscribing
 
-Unsubscribe is a destructive action and should be protected accordingly:
-- Not in the primary UI — accessed via a menu or settings within the subscription
-  details page
-- Should warn about consequences (downloaded files, playlist membership, etc.)
-
-When the user unsubscribes, the app should warn them that downloaded episodes
-will be deleted (including those on other devices if known), espescially if any
-have been flagged to be saved ("this will delete 27 episodes, including 3 saved
-ones")
-
-When a subscription is removed, playlists should have their rule re-evaluated,
-so that the removal is reflected in those too.
-
-Unsubscribing should be a "soft" action (mark feed as
-Unsubscribed/inactive/whatever), and then after a timeout (30 days) remove from
-db (actual delete of metadata). when the user unsubscribes, there should be a
-note that says "we'll hold on to some details about this for (30 days) if you
-want to resubscribe" so that things like play history and such are preserved for
-a bit, but there should also be a button there that says "delete now" which does
-that.
-
-If the user re-subscribes in the grace window, then the general behavior should
-be that the un-subscribe didn't happen (restore played status on episodes, etc)
+see subscription-unsubscribe.md for details
 
 ## Per-Feed Settings
 

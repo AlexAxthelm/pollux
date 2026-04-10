@@ -23,7 +23,7 @@ indicators). MVP pages:
 
 1. **Artwork**: episode image → feed image → placeholder. Chapter art shown
    if available and episode is in a chapter.
-2. **Show notes**: scrollable episode description/notes extracted from feed.
+2. **Show notes**: see player-show-notes.md
 
 *(Future)* Additional pages: chapter list, visualizer (see `visualizer.md`)
 
@@ -57,9 +57,7 @@ Forward and back skip buttons, configurable independently:
 
 ### Chapter Navigation
 
-When an episode has chapters, chapter back / chapter forward controls are shown
-in line with the title area. These are preferred over time-skip when chapters
-are available.
+see chapters.md
 
 ### Play / Pause
 
