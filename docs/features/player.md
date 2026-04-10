@@ -3,48 +3,101 @@
 priority: MVP
 ---
 
-The app should integrate with the OS media system, where available.
-* Use system media intents for control.
-* Tracking playback position per episode: If I switch episodes and come back, I should be approximately where I left off. Some clients rewind a few seconds on resume for context overlap.
+The player is the primary listening interface. It integrates with the OS media
+system where available, and surfaces controls for the currently active episode
+and playlist.
 
+## OS Integration
 
-## UI
+- Use system media intents for playback control (lock screen, headphone buttons,
+  car/speaker integration)
+- Resume position on return: if the user leaves and comes back, playback resumes
+  approximately where they left off. A small rewind on resume (e.g. 3-5s) is
+  acceptable and common practice for context overlap. User can disable that
+  behavior
 
-The main player interface should present a standard UI for an audio player:
+## Paged Content Area
 
-* Large "album art":
-    * Episode image, fallback to feed image. If there is an embedded image for
-      the capter, that should be shown.
-* Play / pause button
-    * Below album art
-    * main UI color
-    * When playing, shows the "pause" symbol, when not playeing, shows the play
-      button.
-* Forward / back buttons
-    * To either side, in line with play/pause
-    * main ui color
-    * ideally icon is some arrow indicating a jump or skip, showing the
-      increment of time (default 30s, but this will be configurable). if that
-      isn't an option, fall back to normal skip buttons (`>>|`)
-    * Skips forward/backward in current file by a set increment
-        * skipping past end/beginning of current file does not adjust position
-          in next one (no overshoot)
-* Episode Title
-* A "hide" button puts the player into mini-player. in general, this acts the
-  same as the "back" (moving one up in the nav stack), but is on the bottom
-  (easy nav)
-* "Episode Options" is the standard "three dots" menu for the episode
-* Player options is for things like sleep timer, equializer, speed, and any
-  output menus available (integration with OS)
+The top portion of the player is a paged view (swipeable carousel with dot
+indicators). MVP pages:
 
-Expected default layout:
+1. **Artwork**: episode image → feed image → placeholder. Chapter art shown
+   if available and episode is in a chapter.
+2. **Show notes**: scrollable episode description/notes extracted from feed.
+
+*(Future)* Additional pages: chapter list, visualizer (see `visualizer.md`)
+
+Note: investigate whether chapter lists are commonly embedded in show notes
+as timestamps — if so, may want to detect and handle that case before
+splitting into a separate page.
+
+Note: for large screens, MVP will reamin paged, but we may want to show multiple
+pages if we havew space
+
+## Scrubber / Position
+
+A draggable progress bar showing current position in the episode.
+
+*(Future)* Chapter markers overlaid on the scrubber as an enhancement.
+
+scrubber shows current time on left, and total time on right (tapping on that
+switches to "remaining time)
+
+## Controls
+
+### Skip Buttons
+
+Forward and back skip buttons, configurable independently:
+
+- **Default**: 30s forward, 15s back
+- **Configurable**: global default, overridable per feed (cascades global → feed)
+- Button label should display the current increment (e.g. "+30" / "-15")
+- Skipping past the end or beginning of the current file does not overshoot
+  into the next/previous episode
+
+### Chapter Navigation
+
+When an episode has chapters, chapter back / chapter forward controls are shown
+in line with the title area. These are preferred over time-skip when chapters
+are available.
+
+### Play / Pause
+
+Standard toggle. Shows pause symbol when playing, play symbol when paused.
+
+## Source Context
+
+The player should display the active playlist/source context (e.g. "From: Music
+- Boppy"). This is tappable and navigates back to the source playlist or
+subscription view.
+
+This also appears in the mini-player (see `mini-player.md`).
+
+## Player Options Menu
+
+Accessible from the player UI. MVP contents:
+
+- *(placeholder for speed control — see `speed-control.md`)*
+- *(placeholder for sleep timer — see `sleep-timer.md`)*
+- *(placeholder for equalizer — see `equalizer.md`)*
+- OS output/routing options (where available)
+
+## Episode Options Menu
+
+Standard three-dots episode context menu (see `episode.md`). Available from
+the player without leaving the view.
+
+## Default Layout
+
 ```
 NavBar
-Episode art / Viz / Info / Other "big" things
-Position
+[ Paged content area: Art | Notes ]
+[ Dot indicators ]
+Position / scrubber
 (Chapter Back) | Title & Chapter | (Chapter Next)
-(Back 30s) | Play/Pause | (Forward 30s)
-(Hide) | [Player options] | (Episode options `...`)
+(-15s)         |   Play/Pause    | (+30s)
+(Hide)         | [Player options]| (Episode options ...)
 ```
 
-
+"Hide" collapses to mini-player and is equivalent to navigating back up the
+nav stack.
