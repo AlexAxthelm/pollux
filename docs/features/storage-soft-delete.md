@@ -1,17 +1,18 @@
 # Soft Unsubscribe
 ---
 priority: mid
+depends: subscription, storage-eviction
 ---
 
-Unsubscribing should be a "soft" action (mark feed as
-Unsubscribed/inactive/whatever), and then after a timeout (30 days) remove from
-db (actual delete of metadata). when the user unsubscribes, there should be a
-note that says "we'll hold on to some details about this for (30 days) if you
-want to resubscribe" so that things like play history and such are preserved for
-a bit, but there should also be a button there that says "delete now" which does
-that.
+## Summary
 
-If the user re-subscribes in the grace window, then the general behavior should
-be that the un-subscribe didn't happen (restore played status on episodes, etc)
+Unsubscribing is a soft action. The feed is marked inactive and metadata is
+retained for 30 days before hard deletion. During the grace period, the user
+can resubscribe and have everything restored as if the unsubscribe never
+happened (play history, flags, playlist membership, etc).
 
+This should persist settings / metadata, but content files become unprotected,
+and are eligible for immediate eviction
 
+A "Delete now" button is available for users who want immediate hard deletion.
+"Delete now" also immediately removes content files

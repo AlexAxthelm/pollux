@@ -1,6 +1,7 @@
 # Storage & Downloads
 ---
 priority: MVP
+depends: episode, subscription, settings, notifications
 ---
 
 Pollux downloads episode audio files for offline playback. Storage management is

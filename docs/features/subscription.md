@@ -94,7 +94,7 @@ and keeps the archive complete even as publishers rotate content.
 
 ## Unsubscribing
 
-see subscription-unsubscribe.md for details
+see `subscription-soft-delete.md` for details
 
 ## Per-Feed Settings
 
