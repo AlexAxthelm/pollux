@@ -64,6 +64,14 @@ Display pattern:
 Refresh can also be triggered manually from the subscription details page or
 the library view (refresh all).
 
+Refresh should be informed by server-side HTTP conditional GETs, and in general
+play well with 200/304/429 HTTP codes
+
+If the OS/platform supports background operations, then
+polling/refresh/update/downloads
+should happen in background. If not, then there should be a signal to user
+(panel somewhere?) that the app only updates when it's foregrounded.
+
 ## De-listed Episodes
 
 When an episode is no longer present in a feed's RSS/Atom/JSONFeed:
@@ -136,8 +144,3 @@ Known per-feed settings:
 - Episode list preview
 - Prominent "Subscribe" button
 - If already subscribed: warning + "Go to subscription" button
-
-## Open Questions
-
-- Should refresh happen on a background thread even when the app is closed?
-  generally yes, but Platform-dependent — flag for implementation.

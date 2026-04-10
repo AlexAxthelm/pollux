@@ -27,6 +27,13 @@ first run). Nudge intensity should increase when available device storage is low
 A suggested starting point when the user does set a limit: **max(4 GB, 20% of
 device storage)**. At ~60 MB/hour (128kbps MP3), 4 GB ≈ 66 hours of content.
 
+Note that the download limmit should be consluted **before** starting a
+download (if the current space used + size of pending downloads + file in
+consideration is bigger than the limit, do not download). If there are any
+individual episodes that are bigger than the limit (small limit, or very big
+episode files) then that should probably be a notification to the user (when
+that gets implemented).
+
 ### Limit Configuration
 
 The limit is set as a number in GB or hours (user picks unit; the other
@@ -87,6 +94,20 @@ notes below.
 
 **Manual:**
 - User explicitly downloads any episode via context menu or swipe gesture
+- How does the download queue interact with background app refresh / OS
+  download managers? Likely varies significantly by platform.
+
+
+### Background task
+
+If the platformOS supports background app refresh / tasks, then downlopad should
+proceed with that. If not, then there should be a warning to user that it only
+downloads while open.
+
+### Parallel
+
+If possible (within platform limits) downloads should be parallelized (up to
+some limit, 4? 16?). For MVP, serial download is fine.
 
 ## Episode Availability & Protection
 
@@ -120,14 +141,11 @@ to have a way to see something like "available on phone" as a bonus feature
 
 ## Open Questions
 
-- How does the download queue interact with background app refresh / OS
-  download managers? Likely varies significantly by platform.
 - Can the app check server availability of an episode without downloading it?
   (Needed to distinguish "removed from feed but still on server" from "gone
-  entirely" — relevant for archive protection.)
+  entirely", and "listed in feed, but missing file" — relevant for archive protection.)
 - Should there be a "download all episodes" option per subscription, with an
   appropriate warning about storage impact?
-- Parallel download default: 1 (conservative) or more?
 - Should the storage screen be part of settings, or accessible directly from the
   library / subscription view?
 
