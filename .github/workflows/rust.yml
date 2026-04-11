@@ -1,0 +1,38 @@
+---
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+name: Rust Checks
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ github.event_action }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: "Check"
+    uses: ./.github/workflows/rust-check.yml
+
+  test:
+    name: "Tests"
+    uses: ./.github/workflows/rust-test.yml
+
+  lint:
+    name: "Linting"
+    uses: ./.github/workflows/rust-lint.yml
+
+  lock-check:
+    name: "Check Lockfile"
+    uses: ./.github/workflows/rust-lock-check.yml
+
+  format:
+    name: "Format Check"
+    uses: ./.github/workflows/rust-format.yml
+
+  build:
+    name: "Build"
+    uses: ./.github/workflows/rust-build.yml

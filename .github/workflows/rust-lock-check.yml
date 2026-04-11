@@ -1,0 +1,16 @@
+on:
+  workflow_call:
+
+jobs:
+  lock-check:
+    name: "Cargo.lock up to date"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check lockfile is up to date
+        run: make rust-lock-check

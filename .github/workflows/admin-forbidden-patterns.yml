@@ -1,0 +1,57 @@
+---
+on:
+  workflow_call:
+
+jobs:
+  scan:
+    name: Check for forbidden patterns
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Check for Forbidden Patterns
+        uses: RMI/actions/actions/admin/forbidden-patterns@main
+        with:
+          # Regex patterns (one per line)
+          patterns: |
+            # --- Rust: lint/warning suppressions ---
+            \#\[allow\(
+            \#!\[allow\(
+            # --- Rust: unsafe code ---
+            unsafe\s*\{
+            unsafe\s+fn
+            unsafe\s+impl
+            unsafe\s+trait
+            # --- Rust: force unwrap/expect with empty message ---
+            \.unwrap\(\)
+            \.expect\(\s*""\s*\)
+            # --- Swift: lint suppressions ---
+            swiftlint:disable
+            # --- Swift: force try / force cast / force unwrap ---
+            try!
+            as!
+            \w!\s*$
+          default_patterns: true
+          mode: regex
+          ignore_case: true
+          include: |
+            **/*.rs
+            **/*.swift
+            **/*.toml
+            **/*.yml
+            **/*.yaml
+            **/*.md
+          # Common exclusions to reduce noise
+          exclude: |
+            .git/**/*
+            .github/**/*
+            **/node_modules/**/*
+            **/dist/**/*
+            **/build/**/*
+            **/.venv/**/*
+            **/__pycache__/**/*
+            **/package-lock.json
+            **/uv.lock
+            **/Cargo.lock

@@ -1,0 +1,16 @@
+on:
+  workflow_call:
+
+jobs:
+  build:
+    name: "cargo build"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: make rust-build
