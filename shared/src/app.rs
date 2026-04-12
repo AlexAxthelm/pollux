@@ -62,7 +62,7 @@ mod test {
 
     #[test]
     fn renders() {
-        let app = Counter;
+        let app = Pollux;
         let mut model = Model::default();
 
         let mut cmd = app.update(Event::Reset, &mut model);
