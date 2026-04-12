@@ -90,7 +90,7 @@ package:
 generate-project: typegen package
 	xcodegen --spec iOS/project.yml --project iOS
 
-ios-build: typegen package generate-project
+ios-build: generate-project
 
 ios-xcodebuild: ios-build
 	xcodebuild \
