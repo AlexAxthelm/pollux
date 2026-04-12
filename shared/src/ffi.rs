@@ -3,13 +3,13 @@ use crux_core::{
     Core,
 };
 
-use crate::Counter;
+use crate::Pollux;
 
 /// The main interface used by the shell
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 #[cfg_attr(feature = "wasm_bindgen", wasm_bindgen::prelude::wasm_bindgen)]
 pub struct CoreFFI {
-    core: Bridge<Counter>,
+    core: Bridge<Pollux>,
 }
 
 impl Default for CoreFFI {

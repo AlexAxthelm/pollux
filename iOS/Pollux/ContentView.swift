@@ -5,6 +5,7 @@ struct ContentView: View {
     @ObservedObject var core: Core
 
     var body: some View {
+        Text("Pollux")
         VStack {
             Image(systemName: "globe")
                 .imageScale(.large)

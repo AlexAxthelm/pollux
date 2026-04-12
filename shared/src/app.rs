@@ -7,9 +7,9 @@ use facet::Facet;
 use serde::{Deserialize, Serialize};
 
 #[derive(Default)]
-pub struct Counter;
+pub struct Pollux;
 
-impl App for Counter {
+impl App for Pollux {
     type Event = Event;
     type Model = Model;
     type ViewModel = ViewModel;
@@ -73,7 +73,7 @@ mod test {
 
     #[test]
     fn shows_initial_count() {
-        let app = Counter;
+        let app = Pollux;
         let model = Model::default();
 
         let actual_view = app.view(&model).count;
@@ -83,7 +83,7 @@ mod test {
 
     #[test]
     fn increments_count() {
-        let app = Counter;
+        let app = Pollux;
         let mut model = Model::default();
 
         let mut cmd = app.update(Event::Increment, &mut model);
@@ -98,7 +98,7 @@ mod test {
 
     #[test]
     fn decrements_count() {
-        let app = Counter;
+        let app = Pollux;
         let mut model = Model::default();
 
         let mut cmd = app.update(Event::Decrement, &mut model);
@@ -113,7 +113,7 @@ mod test {
 
     #[test]
     fn resets_count() {
-        let app = Counter;
+        let app = Pollux;
         let mut model = Model::default();
 
         let _ = app.update(Event::Increment, &mut model);
@@ -127,7 +127,7 @@ mod test {
 
     #[test]
     fn counts_up_and_down() {
-        let app = Counter;
+        let app = Pollux;
         let mut model = Model::default();
 
         let _ = app.update(Event::Increment, &mut model);

@@ -35,7 +35,7 @@ rust-clean:
 	cargo clean
 
 # -- Swift --
-IOS_SWIFT_DIR   := iOS/SimpleCounter
+IOS_SWIFT_DIR   := iOS/Pollux
 
 swift-all-checks: swift-lint swift-format-check
 
@@ -49,8 +49,8 @@ swift-format-check:
 	swiftformat --lint $(IOS_SWIFT_DIR)
 
 # -- iOS --
-XCODE_PROJECT   := iOS/SimpleCounter.xcodeproj
-XCODE_SCHEME    := SimpleCounter
+XCODE_PROJECT   := iOS/Pollux.xcodeproj
+XCODE_SCHEME    := Pollux
 
 SIM_DEVICE_NAME := iPhone 14 Pro Max
 SIM_ID := $(shell \

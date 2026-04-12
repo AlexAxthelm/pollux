@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct CounterApp: App {
+struct PolluxApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(core: Core())

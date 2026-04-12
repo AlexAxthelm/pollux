@@ -1,25 +1,25 @@
 # /iOS/project.yml
-name: SimpleCounter
+name: Pollux
 packages:
   Shared:
     path: ./generated/Shared
   App:
     path: ./generated/App
 options:
-  bundleIdPrefix: com.example.simple-counter
+  bundleIdPrefix: com.example.pollux
 attributes:
   BuildIndependentTargetsInParallel: true
 targets:
-  SimpleCounter:
+  Pollux:
     type: application
     platform: iOS
     deploymentTarget: 18.0
-    sources: [SimpleCounter]
+    sources: [Pollux]
     dependencies:
       - package: Shared
       - package: App
     info:
-      path: SimpleCounter/Info.plist
+      path: Pollux/Info.plist
       properties:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
