@@ -33,14 +33,12 @@ class Core: ObservableObject {
     func processEffect(_ request: Request) {
         switch request.effect {
         case .render:
-            DispatchQueue.main.async {
-                guard let updatedView = try? ViewModel.bincodeDeserialize(
-                    input: [UInt8](self.core.view()),
-                ) else {
-                    fatalError("Failed to deserialize ViewModel during render")
-                }
-                self.view = updatedView
+            guard let updatedView = try? ViewModel.bincodeDeserialize(
+                input: [UInt8](self.core.view()),
+            ) else {
+                fatalError("Failed to deserialize ViewModel during render")
             }
+            self.view = updatedView
         }
     }
 }
