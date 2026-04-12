@@ -87,7 +87,7 @@ package:
 		rm -rf Shared
 
 # Rebuild the Xcode project from project.yml
-generate-project:
+generate-project: typegen package
 	xcodegen --spec iOS/project.yml --project iOS
 
 ios-build: typegen package generate-project
