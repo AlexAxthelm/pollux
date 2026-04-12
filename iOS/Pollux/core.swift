@@ -34,11 +34,11 @@ class Core: ObservableObject {
         switch request.effect {
         case .render:
             guard let updatedView = try? ViewModel.bincodeDeserialize(
-                input: [UInt8](self.core.view()),
+                input: [UInt8](core.view()),
             ) else {
                 fatalError("Failed to deserialize ViewModel during render")
             }
-            self.view = updatedView
+            view = updatedView
         }
     }
 }
