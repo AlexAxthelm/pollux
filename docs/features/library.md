@@ -91,9 +91,9 @@ not MVP).
 ## Actions
 
 - **Refresh all**: triggers a feed refresh for all subscriptions. Accessible
-  via pull-to-refresh or toolbar button (TBD).
+  via toolbar button
 - **Add subscription**: in toolbar.
 - **Downloads**: link to the download queue / storage screen, accessible from
-  library (exact placement TBD).
+  library (button in toolbar).
 
 For MVP, these should all be buttons in a toolbar

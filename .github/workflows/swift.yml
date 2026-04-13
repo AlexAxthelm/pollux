@@ -1,0 +1,22 @@
+---
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+name: Swift Checks
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ github.event_action }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: "Linting"
+    uses: ./.github/workflows/swift-lint.yml
+
+  format:
+    name: "Format Check"
+    uses: ./.github/workflows/swift-format.yml

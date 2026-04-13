@@ -1,0 +1,16 @@
+on:
+  workflow_call:
+
+jobs:
+  lint:
+    name: "swiftlint"
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install swiftlint
+        run: brew install swiftlint
+
+      - name: Run lint
+        run: make swift-lint

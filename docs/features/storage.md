@@ -77,7 +77,7 @@ notes below.
 ### Download Queue
 
 - Episodes are queued for download and processed in order
-- Parallel downloads are configurable (default TBD)
+- Parallel downloads are configurable (default 1)
 - Queue is visible in the storage/download screen
 - Queue items can be reordered (move to top) or cancelled
 - Failed downloads show an error and a retry button

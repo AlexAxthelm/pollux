@@ -1,0 +1,16 @@
+on:
+  workflow_call:
+
+jobs:
+  format-check:
+    name: "swiftformat"
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install swiftformat
+        run: brew install swiftformat
+
+      - name: Run format check
+        run: make swift-format-check

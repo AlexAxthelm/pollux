@@ -1,0 +1,18 @@
+on:
+  workflow_call:
+
+jobs:
+  format-check:
+    name: "cargo fmt"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Run format check
+        run: make rust-format-check

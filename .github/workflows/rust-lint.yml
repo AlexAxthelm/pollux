@@ -1,0 +1,18 @@
+on:
+  workflow_call:
+
+jobs:
+  lint:
+    name: "cargo clippy"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Run lint
+        run: make rust-lint

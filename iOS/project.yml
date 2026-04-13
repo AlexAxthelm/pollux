@@ -1,0 +1,28 @@
+# /iOS/project.yml
+name: Pollux
+packages:
+  Shared:
+    path: ./generated/Shared
+  App:
+    path: ./generated/App
+options:
+  bundleIdPrefix: com.example.pollux
+attributes:
+  BuildIndependentTargetsInParallel: true
+targets:
+  Pollux:
+    type: application
+    platform: iOS
+    deploymentTarget: 18.0
+    sources: [Pollux]
+    dependencies:
+      - package: Shared
+      - package: App
+    info:
+      path: Pollux/Info.plist
+      properties:
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UILaunchScreen: {}
