@@ -175,8 +175,8 @@ GitHub Actions runs on push and PR to `main`:
 - **Rust checks**: `cargo check`, `cargo test`, `cargo clippy -D warnings`,
   `cargo fmt --check`, `cargo check --locked`
 - **Swift checks**: `swiftlint lint --strict`, `swiftformat --lint`
-- **Admin**: forbidden-pattern scan (no `#[allow(…)]`, no `unsafe`, no
-  `.unwrap()`, no force-try/cast in Swift, etc.)
+- **Admin**: forbidden-pattern scan (no no lint suppressions, no `unsafe`, no
+  force-unwrap calls, no force-try/cast in Swift, etc.)
 
 All CI targets in `.github/workflows/` are reusable `workflow_call` workflows
 composed by `rust.yml`, `swift.yml`, and `admin.yml`.
