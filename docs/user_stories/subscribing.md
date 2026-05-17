@@ -1,12 +1,12 @@
 # User Stories: Subscribing
 
 As a user
-I want to subscribe to a show,
-so that I can always access the latest episodes
-
-As a user
 I want to subscribe with just a link to a show,
 so that I can get new episodes
+
+As a curator
+I want to unsubscribe from a show
+so that I stop listening to it 
 
 As a user
 I want to listen to an episode without subscribing

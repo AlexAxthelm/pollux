@@ -53,10 +53,6 @@ I want to include other playlists
 so that I can inherit their filters and sorts
 
 As a curator
-I want to unsubscribe from a show
-so that I stop listening to it 
-
-As a curator
 I want sensible "quick options"
 so that I can start a playlist effectively
 
