@@ -28,6 +28,10 @@ As a subscriber
 I want to undo an unsubscribe
 so that I can fix a mistake
 
+As a subscriber
+I want to remove all data related to a subscription
+so that it's like I never subscribed
+
 ## Import/Export
 
 As a user
@@ -48,5 +52,4 @@ so that I don't feel pressure from it
 As a subscriber
 I want to be warned before subscribing to a high cadence feed
 so that I don't feel pressure from it
-
 

@@ -46,10 +46,6 @@ I want to set a space limit
 so that I can keep space on device for other applications
 
 As a subscriber
-I want to remove all data related to a subscription
-so that it's like I never subscribed
-
-As a subscriber
 I want to remove all episodes
 so that space on my device is freed up
 
@@ -64,10 +60,6 @@ so that I can take applications
 As a user
 I want to know if a download failed
 so that I can take action
-
-As a subscriber
-I want to know if a feed cannot be fetched
-so that I can take action (re-subscribe/unsubscribe)
 
 As a curator
 I want to know if an episode cannot be downloaded
@@ -113,7 +105,7 @@ As a curator
 I want to be able to set rules to evict or retain episodes based on storage
 so that I don't have to manually manage storage
 
-as a curator
+As a curator
 I want to be able to set rules to evict or retain episodes on episode properties
 (date, size, listened status)
 so that I don't use storage on episodes I don't want to keep locally
@@ -177,6 +169,8 @@ As a user
 I want to see a conversion between time and space when setting limits
 so that I can generally understand the consequences of my decisions
 
-as a user
+As a user
 I want to see space limits as fraction of device whole
 so that I can understand how it will impact my system overall
+
+
