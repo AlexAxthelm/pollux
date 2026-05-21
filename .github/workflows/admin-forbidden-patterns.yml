@@ -55,3 +55,4 @@ jobs:
             **/package-lock.json
             **/uv.lock
             **/Cargo.lock
+            docs/HACKING.md
