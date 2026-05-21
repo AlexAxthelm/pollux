@@ -40,4 +40,51 @@ As a user
 I want to search a catalog of shows
 so that I can find something new
 
+As a User
+I want to easily access both playlists and subscriptions from my Library
+so that I can easily navigate from one view
+
+As a user
+I want to manage playlists and subscriptions similarly
+so that I can expect consistent behavior
+
+As a user
+I want a quick way to tell if a playlist is a default "subscription playlist"
+so that I know if it's all coming from one source
+
+As a user
+I want to check for new episodes in a playlist manually
+so that I don't have to refresh my whole library
+
+As a user
+I want refresh my entire library manually (at once)
+so that I don't have to indivudally update them or wait for a timed refresh
+
+As a curator
+I want to be able to flag/star an episode
+so that I can come back to it or filter it
+
+As a curator
+I want to have multiple flag types
+so that I can distingush why I flagged
+
+As a listener
+I want to mark an episode as unplayed
+so that I can listen again
+
+As a user
+I want common episode actions to be available as swipe gestures (where
+available)
+so that I can access them easily
+
+As a user
+I want common episode actions to be visible when I click on an episode
+so that I can get tot hem without swiping
+
+As a curator
+I want to see suggested instructions when my library is empty
+so that I Know what to do next
+
+
+
 

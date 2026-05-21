@@ -35,6 +35,8 @@ so that I control what sequence they play in
 As a curator
 I want to reorder specific episodes
 so that I can change what plays next
+Note: this isn't necessarily drag to reorder, but perhaps a good interface to
+add an episode specific rule?)
 
 As a curator
 I want to control playback settings for the playlist
@@ -72,3 +74,52 @@ As a curator
 I want to prioritize certain shows
 so that I can listen to them first
 
+As a curator
+I want useful ready-made playlists that don't need configuring
+so that I can start listening quickly
+(All subscriptions, Downloaded, in progress, etc)
+
+As a curator
+I want to exclude episodes from a playlist that match some criteria
+so that I can avoid listening to things I don't want
+
+As a curator
+I want to include episodes in a playlist
+so that I can listen to things I want
+
+As a curator
+I want to remove duplicate episodes from a playlist
+so that I can listen to unique episodes
+
+As a curator
+I want to include duplicate episodes in a playlist
+so that I can order them how I want
+
+As a curator
+I want to decide if a playlist plays next episode from the top of list, or next
+in list (if I'm listening in the middle)
+so that I know what to expect
+
+As a listener
+I want to listen to episodes in the middle of a playlist
+so that I can listen to what I want
+
+As a curator
+I want to include/exclude episodes based on starred/flagged status
+so that I can make playlists the way I want
+
+As a curator
+I want to include/exclude episodes based on date
+so that I can make playlists the way I want
+
+As a curator
+I want to include/exclude episodes based on duration
+so that I can make playlists the way I want
+
+As a curator
+I want to include/exclude episodes based on title
+so that I can make playlists the way I want
+
+As a curator
+I want to include/exclude episodes based on listened status
+so that I can make playlists the way I want
