@@ -124,8 +124,32 @@ See also: `GLOSSARY.md` — EpisodeSource.
 
 ## Settings
 
-Settings are discussed when features that require them are being specced.
-The cascading defaults pattern (global → subscription → episode) is documented
-in `DESIGN_PRINCIPLES.md` §3 and `GLOSSARY.md` — Cascading default. How
-settings are represented in the data model (rows in a table vs. structured
-config) is an open question.
+Settings follow the cascading defaults pattern (global → subscription →
+playlist → episode) documented in `DESIGN_PRINCIPLES.md` §3 and `GLOSSARY.md`.
+
+**Resolved: settings are structured config objects, not key-value rows.**
+
+Each level of the hierarchy holds a settings object of a shared shape. At the
+app-default level all fields are concrete (with baked-in defaults). At every other
+level, fields are optional — `None` means "inherit from the level above." The
+cascade resolves a concrete value for every field by walking up the chain until
+a non-None value is found, falling back to the global default.
+
+Conceptually:
+
+```
+AppDefaultSettings      — all fields concrete; the authoritative defaults
+GlobalSettings      — Same fields, all optional; overrides app defaults
+SubscriptionSettings — same fields, all optional; overrides global
+PlaylistSettings    — same fields, all optional; overrides global
+                      (not subscription — a playlist may span many subscriptions)
+EpisodeSettings     — same fields, all optional; overrides subscription or playlist
+                      depending on playback context
+```
+
+These names are placeholders. The final names and the Rust representation
+(trait, generic struct, or otherwise) will be settled during implementation.
+The key constraint is that all levels share the same field shape so that the
+cascade logic is uniform.
+
+See also: `docs/features/settings.md`, `DESIGN_PRINCIPLES.md` §3.
