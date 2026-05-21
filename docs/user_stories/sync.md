@@ -19,7 +19,7 @@ so that I can choose what I want to resume
 ## Per-device control
 
 As a user with multiple devices
-I want control my setting per-device
+I want to control my settings per-device
 so that I can manage them individually
 
 As a user with multiple devices

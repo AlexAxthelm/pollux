@@ -24,16 +24,16 @@ As a subscriber
 I want to check for new episodes manually
 so I don't have to wait for new content
 
-As an curator
+As a curator
 I want to access episodes that are no longer in the feed
 so that I can listen to old episodes
 
-As an curator
+As a curator
 I want to see what episodes have been removed from the feed
 so that I know what's missing
 
 As a listener
-I want to listen to episodes that have been removed from feed
+I want to listen to episodes that have been removed from the feed
 so that I can have a complete library
 
 As a user
@@ -57,8 +57,8 @@ I want to check for new episodes in a playlist manually
 so that I don't have to refresh my whole library
 
 As a user
-I want refresh my entire library manually (at once)
-so that I don't have to indivudally update them or wait for a timed refresh
+I want to refresh my entire library manually (at once)
+so that I don't have to individually update them or wait for a timed refresh
 
 As a curator
 I want to be able to flag/star an episode
@@ -66,7 +66,7 @@ so that I can come back to it or filter it
 
 As a curator
 I want to have multiple flag types
-so that I can distingush why I flagged
+so that I can distinguish why I flagged
 
 As a listener
 I want to mark an episode as unplayed
@@ -79,11 +79,11 @@ so that I can access them easily
 
 As a user
 I want common episode actions to be visible when I click on an episode
-so that I can get tot hem without swiping
+so that I can get to them without swiping
 
 As a curator
 I want to see suggested instructions when my library is empty
-so that I Know what to do next
+so that I know what to do next
 
 
 

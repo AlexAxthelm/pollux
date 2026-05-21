@@ -30,8 +30,8 @@ I want to control playback using the system interface
 so that I don't have to reopen Pollux to control it.
 
 As a listener
-I want playback ton continue when the phone is locked
-so that  don't have to have my screen on all the time
+I want playback to continue when the phone is locked
+so that I don't have to have my screen on all the time
 
 As a listener
 I want to have another episode play automatically when the current one is done
@@ -47,7 +47,7 @@ so that I have control over how far I skip
 
 As a listener
 I want to adjust playback position manually
-so that I can jump to a specific point in episode
+so that I can jump to a specific point in the episode
 
 As a listener
 I want to adjust playback speed

@@ -75,7 +75,7 @@ so that I can listen to them
 
 As a curator
 I want to see the files that are queued for download
-so that I can know what will be a available on my device
+so that I can know what will be available on my device
 
 As a curator
 I want to control which devices a file gets downloaded to
@@ -150,7 +150,7 @@ Note: storage style is effectively a set of presets for storage-related settings
 
 As a User
 I want my user-level storage style to be available as playlist settings
-so that I an set a different style for playlists
+so that I can set a different style for playlists
 
 As a user
 I want to be able to tweak individual storage settings while otherwise using the
