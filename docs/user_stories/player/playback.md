@@ -89,3 +89,10 @@ As a listener
 I want to queue an episode
 so that it plays without changing the playlist I'm listening to 
 
+As a listener
+I want to see what's playing at all times, even if I'm not looking at the main player view
+so that I can quickly control playback
+
+As a listener
+I want to select the output device (Bluetooth, AirPlay, speaker, etc)
+so that I can listen how I want
