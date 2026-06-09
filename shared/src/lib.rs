@@ -11,7 +11,7 @@ pub use app::*;
 pub use capabilities::storage::{StorageOperation, StorageResult};
 pub use crux_core::Core;
 pub use domain::*;
-pub use view_model::{SubscriptionSummary, ViewModel};
+pub use view_model::{LibraryView, SubscriptionSummary, ViewModel};
 
 #[cfg(feature = "uniffi")]
 const _: () = assert!(

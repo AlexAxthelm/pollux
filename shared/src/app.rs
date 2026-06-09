@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::capabilities::storage::{StorageOperation, StorageResult};
 use crate::effect::Effect;
 use crate::model::Model;
-use crate::view_model::{SubscriptionSummary, ViewModel};
+use crate::view_model::{LibraryView, SubscriptionSummary, ViewModel};
 
 #[derive(Default)]
 pub struct Pollux;
@@ -38,17 +38,19 @@ impl App for Pollux {
 
     fn view(&self, model: &Model) -> ViewModel {
         ViewModel {
-            subscriptions: model
-                .subscriptions
-                .iter()
-                .map(|s| SubscriptionSummary {
-                    id: s.id.clone(),
-                    title: s.title.clone(),
-                    artwork_url: s.artwork_url.clone(),
-                })
-                .collect(),
-            loading: model.loading,
-            error: model.error.clone(),
+            library: LibraryView {
+                subscriptions: model
+                    .subscriptions
+                    .iter()
+                    .map(|s| SubscriptionSummary {
+                        id: s.id.clone(),
+                        title: s.title.clone(),
+                        artwork_url: s.artwork_url.clone(),
+                    })
+                    .collect(),
+                loading: model.loading,
+                error: model.error.clone(),
+            },
         }
     }
 }
