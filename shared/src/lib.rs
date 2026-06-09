@@ -1,8 +1,13 @@
 mod app;
+pub mod capabilities;
+pub mod defaults;
+pub mod domain;
 pub mod ffi;
 
 pub use app::*;
+pub use capabilities::storage::{StorageOperation, StorageResult};
 pub use crux_core::Core;
+pub use domain::*;
 
 #[cfg(feature = "uniffi")]
 const _: () = assert!(
