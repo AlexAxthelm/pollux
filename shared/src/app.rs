@@ -18,7 +18,7 @@ impl App for Pollux {
 
     fn update(&self, event: Event, model: &mut Model) -> Command<Effect, Event> {
         match event {
-            Event::Init => {
+            Event::Started => {
                 model.loading = true;
                 Command::request_from_shell(StorageOperation::ListSubscriptions)
                     .then_send(Event::SubscriptionsLoaded)
@@ -59,7 +59,7 @@ impl App for Pollux {
 #[derive(Facet, Serialize, Deserialize, Clone, Debug)]
 #[repr(C)]
 pub enum Event {
-    Init,
+    Started,
     SubscriptionsLoaded(StorageResult),
 }
 
@@ -86,7 +86,7 @@ mod tests {
         let app = Pollux;
         let mut model = Model::default();
 
-        let mut cmd = app.update(Event::Init, &mut model);
+        let mut cmd = app.update(Event::Started, &mut model);
 
         assert!(model.loading);
 
