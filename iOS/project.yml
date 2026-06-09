@@ -5,6 +5,9 @@ packages:
     path: ./generated/Shared
   App:
     path: ./generated/App
+  GRDB:
+    url: https://github.com/groue/GRDB.swift.git
+    from: "7.0.0"
 options:
   bundleIdPrefix: com.example.pollux
 attributes:
@@ -18,6 +21,8 @@ targets:
     dependencies:
       - package: Shared
       - package: App
+      - package: GRDB
+        product: GRDB
     info:
       path: Pollux/Info.plist
       properties:

@@ -7,13 +7,20 @@ class Core: ObservableObject {
     @Published var view: ViewModel
 
     private var core: CoreFfi
+    private let db: DatabaseManager
 
     init() {
         core = CoreFfi()
+        do {
+            db = try DatabaseManager()
+        } catch {
+            fatalError("Failed to initialize DatabaseManager: \(error)")
+        }
         guard let view = try? ViewModel.bincodeDeserialize(input: [UInt8](core.view())) else {
             fatalError("Failed to deserialize initial ViewModel from core")
         }
         self.view = view
+        update(.started)
     }
 
     func update(_ event: Event) {
@@ -34,11 +41,30 @@ class Core: ObservableObject {
         switch request.effect {
         case .render:
             guard let updatedView = try? ViewModel.bincodeDeserialize(
-                input: [UInt8](core.view()),
+                input: [UInt8](core.view())
             ) else {
                 fatalError("Failed to deserialize ViewModel during render")
             }
             view = updatedView
+
+        case .storage(let operation):
+            Task {
+                do {
+                    let result = try await db.execute(operation)
+                    guard let resultBytes = try? result.bincodeSerialize() else { return }
+                    let newEffects = [UInt8](core.resolve(id: request.id, data: Data(resultBytes)))
+                    guard let newRequests: [Request] = try? .bincodeDeserialize(input: newEffects)
+                    else { return }
+                    for req in newRequests { processEffect(req) }
+                } catch {
+                    let errResult = StorageResult.error(error.localizedDescription)
+                    guard let resultBytes = try? errResult.bincodeSerialize() else { return }
+                    let newEffects = [UInt8](core.resolve(id: request.id, data: Data(resultBytes)))
+                    guard let newRequests: [Request] = try? .bincodeDeserialize(input: newEffects)
+                    else { return }
+                    for req in newRequests { processEffect(req) }
+                }
+            }
         }
     }
 }
