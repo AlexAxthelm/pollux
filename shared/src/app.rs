@@ -1,10 +1,11 @@
-use crux_core::{
-    macros::effect,
-    render::{render, RenderOperation},
-    App, Command,
-};
+use crux_core::{render::render, App, Command};
 use facet::Facet;
 use serde::{Deserialize, Serialize};
+
+use crate::capabilities::storage::{StorageOperation, StorageResult};
+use crate::effect::Effect;
+use crate::model::Model;
+use crate::view_model::{SubscriptionSummary, ViewModel};
 
 #[derive(Default)]
 pub struct Pollux;
@@ -17,128 +18,45 @@ impl App for Pollux {
 
     fn update(&self, event: Event, model: &mut Model) -> Command<Effect, Event> {
         match event {
-            Event::Increment => model.count += 1,
-            Event::Decrement => model.count -= 1,
-            Event::Reset => model.count = 0,
+            Event::Init => {
+                model.loading = true;
+                Command::request_from_shell(StorageOperation::ListSubscriptions)
+                    .then_send(Event::SubscriptionsLoaded)
+                    .and(render())
+            }
+            Event::SubscriptionsLoaded(result) => {
+                model.loading = false;
+                match result {
+                    StorageResult::Subscriptions(rows) => model.subscriptions = rows,
+                    StorageResult::Error(e) => model.error = Some(e),
+                    _ => {}
+                }
+                render()
+            }
         }
-
-        render()
     }
 
     fn view(&self, model: &Model) -> ViewModel {
         ViewModel {
-            count: format!("Count is: {}", model.count),
+            subscriptions: model
+                .subscriptions
+                .iter()
+                .map(|s| SubscriptionSummary {
+                    id: s.id.clone(),
+                    title: s.title.clone(),
+                    artwork_url: s.artwork_url.clone(),
+                })
+                .collect(),
+            loading: model.loading,
+            error: model.error.clone(),
         }
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Facet, Serialize, Deserialize, Clone, Debug)]
 #[repr(C)]
 pub enum Event {
-    Increment,
-    Decrement,
-    Reset,
-}
-
-#[derive(Default)]
-pub struct Model {
-    count: isize,
-}
-
-#[derive(Facet, Serialize, Deserialize, Clone, Default)]
-pub struct ViewModel {
-    pub count: String,
-}
-
-#[effect(facet_typegen)]
-#[derive(Debug)]
-pub enum Effect {
-    Render(RenderOperation),
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn renders() {
-        let app = Pollux;
-        let mut model = Model::default();
-
-        let mut cmd = app.update(Event::Reset, &mut model);
-
-        // Check update asked us to `Render`
-        cmd.expect_one_effect().expect_render();
-    }
-
-    #[test]
-    fn shows_initial_count() {
-        let app = Pollux;
-        let model = Model::default();
-
-        let actual_view = app.view(&model).count;
-        let expected_view = "Count is: 0";
-        assert_eq!(actual_view, expected_view);
-    }
-
-    #[test]
-    fn increments_count() {
-        let app = Pollux;
-        let mut model = Model::default();
-
-        let mut cmd = app.update(Event::Increment, &mut model);
-
-        // Check update asked us to `Render`
-        cmd.expect_one_effect().expect_render();
-
-        let actual_view = app.view(&model).count;
-        let expected_view = "Count is: 1";
-        assert_eq!(actual_view, expected_view);
-    }
-
-    #[test]
-    fn decrements_count() {
-        let app = Pollux;
-        let mut model = Model::default();
-
-        let mut cmd = app.update(Event::Decrement, &mut model);
-
-        // Check update asked us to `Render`
-        cmd.expect_one_effect().expect_render();
-
-        let actual_view = app.view(&model).count;
-        let expected_view = "Count is: -1";
-        assert_eq!(actual_view, expected_view);
-    }
-
-    #[test]
-    fn resets_count() {
-        let app = Pollux;
-        let mut model = Model::default();
-
-        let _ = app.update(Event::Increment, &mut model);
-        let _ = app.update(Event::Reset, &mut model);
-
-        // Was the view updated correctly?
-        let actual = app.view(&model).count;
-        let expected = "Count is: 0";
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn counts_up_and_down() {
-        let app = Pollux;
-        let mut model = Model::default();
-
-        let _ = app.update(Event::Increment, &mut model);
-        let _ = app.update(Event::Reset, &mut model);
-        let _ = app.update(Event::Decrement, &mut model);
-        let _ = app.update(Event::Increment, &mut model);
-        let _ = app.update(Event::Increment, &mut model);
-
-        // Was the view updated correctly?
-        let actual = app.view(&model).count;
-        let expected = "Count is: 1";
-        assert_eq!(actual, expected);
-    }
+    Init,
+    SubscriptionsLoaded(StorageResult),
 }
