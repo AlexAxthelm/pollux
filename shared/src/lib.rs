@@ -3,11 +3,14 @@ pub mod capabilities;
 pub mod defaults;
 pub mod domain;
 pub mod ffi;
+pub mod model;
+pub mod view_model;
 
 pub use app::*;
 pub use capabilities::storage::{StorageOperation, StorageResult};
 pub use crux_core::Core;
 pub use domain::*;
+pub use view_model::{SubscriptionSummary, ViewModel};
 
 #[cfg(feature = "uniffi")]
 const _: () = assert!(
