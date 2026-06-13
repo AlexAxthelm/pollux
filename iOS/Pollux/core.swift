@@ -49,22 +49,21 @@ class Core: ObservableObject {
 
         case .storage(let operation):
             Task {
+                let result: StorageResult
                 do {
-                    let result = try await db.execute(operation)
-                    guard let resultBytes = try? result.bincodeSerialize() else { return }
-                    let newEffects = [UInt8](core.resolve(id: request.id, data: Data(resultBytes)))
-                    guard let newRequests: [Request] = try? .bincodeDeserialize(input: newEffects)
-                    else { return }
-                    for req in newRequests { processEffect(req) }
+                    result = try await db.execute(operation)
                 } catch {
-                    let errResult = StorageResult.error(error.localizedDescription)
-                    guard let resultBytes = try? errResult.bincodeSerialize() else { return }
-                    let newEffects = [UInt8](core.resolve(id: request.id, data: Data(resultBytes)))
-                    guard let newRequests: [Request] = try? .bincodeDeserialize(input: newEffects)
-                    else { return }
-                    for req in newRequests { processEffect(req) }
+                    result = .error(error.localizedDescription)
                 }
+                resolveAndDispatch(requestId: request.id, result: result)
             }
         }
+    }
+
+    private func resolveAndDispatch(requestId: UInt32, result: StorageResult) {
+        guard let resultBytes = try? result.bincodeSerialize() else { return }
+        let newEffects = [UInt8](core.resolve(id: requestId, data: Data(resultBytes)))
+        guard let newRequests: [Request] = try? .bincodeDeserialize(input: newEffects) else { return }
+        for req in newRequests { processEffect(req) }
     }
 }
