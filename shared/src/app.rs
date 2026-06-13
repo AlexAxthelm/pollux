@@ -162,7 +162,9 @@ mod tests {
         model.loading = true;
 
         let _ = app.update(
-            Event::SubscriptionsLoaded(Box::new(StorageResult::Error("db unavailable".to_string()))),
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Error(
+                "db unavailable".to_string(),
+            ))),
             &mut model,
         );
 
