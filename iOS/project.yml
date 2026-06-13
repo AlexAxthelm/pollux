@@ -31,3 +31,5 @@ targets:
     sources: [PolluxTests]
     dependencies:
       - target: Pollux
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
