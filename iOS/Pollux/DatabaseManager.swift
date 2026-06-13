@@ -6,8 +6,11 @@ actor DatabaseManager {
     private let db: DatabasePool
 
     init() throws {
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first!
+        guard let support = FileManager.default.urls(
+            for: .applicationSupportDirectory, in: .userDomainMask,
+        ).first else {
+            fatalError("Application Support directory unavailable")
+        }
         try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         db = try DatabasePool(path: support.appendingPathComponent("pollux.sqlite").path)
         try Self.runMigrations(db)
