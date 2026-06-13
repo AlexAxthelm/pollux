@@ -123,7 +123,10 @@ mod tests {
         );
 
         assert!(!model.loading);
-        assert!(model.error.is_none(), "successful load should clear previous error");
+        assert!(
+            model.error.is_none(),
+            "successful load should clear previous error"
+        );
         cmd.expect_one_effect().expect_render();
 
         let view = app.view(&model);
@@ -180,13 +183,17 @@ mod tests {
         assert!(model.error.is_some());
 
         let _ = app.update(
-            Event::SubscriptionsLoaded(StorageResult::Subscriptions(vec![
-                make_subscription("id-1", "Recovered"),
-            ])),
+            Event::SubscriptionsLoaded(StorageResult::Subscriptions(vec![make_subscription(
+                "id-1",
+                "Recovered",
+            )])),
             &mut model,
         );
 
-        assert!(model.error.is_none(), "error should be cleared after successful load");
+        assert!(
+            model.error.is_none(),
+            "error should be cleared after successful load"
+        );
         assert_eq!(model.subscriptions.len(), 1);
     }
 
