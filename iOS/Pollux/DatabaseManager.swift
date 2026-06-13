@@ -234,9 +234,10 @@ actor DatabaseManager {
 
     private static func playbackStatus(from string: String) -> PlaybackStatus {
         switch string {
+        case "Unplayed": return .unplayed
         case "InProgress": return .inProgress
         case "Played": return .played
-        default: return .unplayed
+        default: fatalError("Unknown PlaybackStatus in DB: '\(string)' — add a case to playbackStatus(from:) and playbackStatusString(_:)")
         }
     }
 
@@ -253,12 +254,13 @@ actor DatabaseManager {
 
     private static func downloadStatus(from string: String) -> DownloadStatus {
         switch string {
+        case "NotDownloaded": return .notDownloaded
         case "Queued": return .queued
         case "Downloading": return .downloading
         case "Downloaded": return .downloaded
         case "Failed": return .failed
         case "RemovedFromFeed": return .removedFromFeed
-        default: return .notDownloaded
+        default: fatalError("Unknown DownloadStatus in DB: '\(string)' — add a case to downloadStatus(from:) and downloadStatusString(_:)")
         }
     }
 }

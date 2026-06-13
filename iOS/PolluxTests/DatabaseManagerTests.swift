@@ -32,7 +32,9 @@ private func makeEpisode(
     id: String = UUID().uuidString,
     subscriptionId: String,
     feedGuid: String? = nil,
-    title: String = "Test Episode"
+    title: String = "Test Episode",
+    playbackStatus: PlaybackStatus = .unplayed,
+    downloadStatus: DownloadStatus = .notDownloaded
 ) -> Episode {
     Episode(
         id: id,
@@ -44,9 +46,9 @@ private func makeEpisode(
         durationSecs: 3600,
         enclosureUrl: "https://example.com/\(id).mp3",
         artworkUrl: nil,
-        playbackStatus: .unplayed,
+        playbackStatus: playbackStatus,
         playbackPositionSecs: nil,
-        downloadStatus: .notDownloaded,
+        downloadStatus: downloadStatus,
         downloadProgress: nil,
         isFlagged: false,
         fileSizeBytes: nil,
@@ -217,5 +219,56 @@ struct DatabaseManagerTests {
         let db = try makeManager()
         let result = try await db.execute(.getEpisode(id: "nonexistent"))
         #expect(result == .notFound)
+    }
+
+    // MARK: Status round-trips
+
+    @Test func playbackStatus_allCasesRoundTrip() async throws {
+        let db = try makeManager()
+        let sub = makeSubscription(id: "sub-1")
+        try await db.execute(.upsertSubscription(sub))
+
+        let cases: [(String, PlaybackStatus)] = [
+            ("ep-unplayed", .unplayed),
+            ("ep-inprogress", .inProgress),
+            ("ep-played", .played),
+        ]
+        for (id, status) in cases {
+            try await db.execute(.upsertEpisode(makeEpisode(id: id, subscriptionId: "sub-1", playbackStatus: status)))
+        }
+        for (id, expected) in cases {
+            let result = try await db.execute(.getEpisode(id: id))
+            guard case .episode(let ep) = result else {
+                Issue.record("Expected .episode for id \(id), got \(result)")
+                continue
+            }
+            #expect(ep.playbackStatus == expected, "id: \(id)")
+        }
+    }
+
+    @Test func downloadStatus_allCasesRoundTrip() async throws {
+        let db = try makeManager()
+        let sub = makeSubscription(id: "sub-1")
+        try await db.execute(.upsertSubscription(sub))
+
+        let cases: [(String, DownloadStatus)] = [
+            ("ep-notdownloaded", .notDownloaded),
+            ("ep-queued", .queued),
+            ("ep-downloading", .downloading),
+            ("ep-downloaded", .downloaded),
+            ("ep-failed", .failed),
+            ("ep-removedfromfeed", .removedFromFeed),
+        ]
+        for (id, status) in cases {
+            try await db.execute(.upsertEpisode(makeEpisode(id: id, subscriptionId: "sub-1", downloadStatus: status)))
+        }
+        for (id, expected) in cases {
+            let result = try await db.execute(.getEpisode(id: id))
+            guard case .episode(let ep) = result else {
+                Issue.record("Expected .episode for id \(id), got \(result)")
+                continue
+            }
+            #expect(ep.downloadStatus == expected, "id: \(id)")
+        }
     }
 }
