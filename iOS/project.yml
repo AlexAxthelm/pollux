@@ -31,11 +31,3 @@ targets:
     sources: [PolluxTests]
     dependencies:
       - target: Pollux
-    info:
-      path: Pollux/Info.plist
-      properties:
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
-        UILaunchScreen: {}
