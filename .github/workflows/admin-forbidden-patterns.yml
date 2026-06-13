@@ -56,3 +56,4 @@ jobs:
             **/uv.lock
             **/Cargo.lock
             docs/HACKING.md
+            shared/src/effect.rs

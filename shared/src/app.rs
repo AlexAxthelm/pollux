@@ -21,12 +21,12 @@ impl App for Pollux {
             Event::Started => {
                 model.loading = true;
                 Command::request_from_shell(StorageOperation::ListSubscriptions)
-                    .then_send(Event::SubscriptionsLoaded)
+                    .then_send(|r| Event::SubscriptionsLoaded(Box::new(r)))
                     .and(render())
             }
             Event::SubscriptionsLoaded(result) => {
                 model.loading = false;
-                match result {
+                match *result {
                     StorageResult::Subscriptions(rows) => {
                         model.subscriptions = rows;
                         model.error = None;
@@ -60,12 +60,11 @@ impl App for Pollux {
     }
 }
 
-#[allow(clippy::large_enum_variant)]
 #[derive(Facet, Serialize, Deserialize, Clone, Debug)]
 #[repr(C)]
 pub enum Event {
     Started,
-    SubscriptionsLoaded(StorageResult),
+    SubscriptionsLoaded(Box<StorageResult>),
 }
 
 #[cfg(test)]
@@ -118,7 +117,7 @@ mod tests {
             make_subscription("id-2", "Podcast Two"),
         ];
         let mut cmd = app.update(
-            Event::SubscriptionsLoaded(StorageResult::Subscriptions(subs)),
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Subscriptions(subs))),
             &mut model,
         );
 
@@ -143,7 +142,7 @@ mod tests {
         model.loading = true;
 
         let mut cmd = app.update(
-            Event::SubscriptionsLoaded(StorageResult::Subscriptions(vec![])),
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Subscriptions(vec![]))),
             &mut model,
         );
 
@@ -163,7 +162,7 @@ mod tests {
         model.loading = true;
 
         let _ = app.update(
-            Event::SubscriptionsLoaded(StorageResult::Error("db unavailable".to_string())),
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Error("db unavailable".to_string()))),
             &mut model,
         );
 
@@ -177,16 +176,17 @@ mod tests {
         let mut model = Model::default();
 
         let _ = app.update(
-            Event::SubscriptionsLoaded(StorageResult::Error("transient failure".to_string())),
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Error(
+                "transient failure".to_string(),
+            ))),
             &mut model,
         );
         assert!(model.error.is_some());
 
         let _ = app.update(
-            Event::SubscriptionsLoaded(StorageResult::Subscriptions(vec![make_subscription(
-                "id-1",
-                "Recovered",
-            )])),
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Subscriptions(vec![
+                make_subscription("id-1", "Recovered"),
+            ]))),
             &mut model,
         );
 
@@ -204,7 +204,7 @@ mod tests {
         model.loading = true;
 
         let _ = app.update(
-            Event::SubscriptionsLoaded(StorageResult::NotFound),
+            Event::SubscriptionsLoaded(Box::new(StorageResult::NotFound)),
             &mut model,
         );
 
