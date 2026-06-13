@@ -117,7 +117,7 @@ actor DatabaseManager {
                 INSERT INTO subscriptions
                     (id, feed_url, title, artwork_url, description, last_refreshed, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
+                ON CONFLICT(feed_url) DO UPDATE SET
                     title = excluded.title,
                     artwork_url = excluded.artwork_url,
                     description = excluded.description,
@@ -211,7 +211,7 @@ actor DatabaseManager {
         episodeId: String, status: PlaybackStatus, positionSecs: UInt32?,
     ) async throws -> StorageResult {
         let statusStr = Self.playbackStatusString(status)
-        let position = positionSecs.map { Int32(bitPattern: $0) }
+        let position = positionSecs.map { Int64($0) }
         try await db.write { db in
             try db.execute(
                 sql: """
@@ -249,13 +249,11 @@ private extension DatabaseManager {
             title: row["title"],
             description: row["description"],
             pubDate: row["pub_date"],
-            durationSecs: (row["duration_secs"] as Int32?).map { UInt32(bitPattern: $0) },
+            durationSecs: (row["duration_secs"] as Int64?).map { UInt32($0) },
             enclosureUrl: row["enclosure_url"],
             artworkUrl: row["artwork_url"],
             playbackStatus: playbackStatus(from: row["playback_status"]),
-            playbackPositionSecs: (row["playback_position_secs"] as Int32?).map {
-                UInt32(bitPattern: $0)
-            },
+            playbackPositionSecs: (row["playback_position_secs"] as Int64?).map { UInt32($0) },
             downloadStatus: downloadStatus(from: row["download_status"]),
             downloadProgress: (row["download_progress"] as Int32?).map { UInt8(truncatingIfNeeded: $0) },
             isFlagged: row["is_flagged"],
