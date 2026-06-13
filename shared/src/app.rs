@@ -27,7 +27,10 @@ impl App for Pollux {
             Event::SubscriptionsLoaded(result) => {
                 model.loading = false;
                 match result {
-                    StorageResult::Subscriptions(rows) => model.subscriptions = rows,
+                    StorageResult::Subscriptions(rows) => {
+                        model.subscriptions = rows;
+                        model.error = None;
+                    }
                     StorageResult::Error(e) => model.error = Some(e),
                     unexpected => {
                         model.error = Some(format!("unexpected storage result: {unexpected:?}"))
@@ -120,6 +123,7 @@ mod tests {
         );
 
         assert!(!model.loading);
+        assert!(model.error.is_none(), "successful load should clear previous error");
         cmd.expect_one_effect().expect_render();
 
         let view = app.view(&model);
@@ -162,6 +166,28 @@ mod tests {
 
         assert!(!model.loading);
         assert_eq!(model.error.as_deref(), Some("db unavailable"));
+    }
+
+    #[test]
+    fn successful_load_after_error_clears_error() {
+        let app = Pollux;
+        let mut model = Model::default();
+
+        let _ = app.update(
+            Event::SubscriptionsLoaded(StorageResult::Error("transient failure".to_string())),
+            &mut model,
+        );
+        assert!(model.error.is_some());
+
+        let _ = app.update(
+            Event::SubscriptionsLoaded(StorageResult::Subscriptions(vec![
+                make_subscription("id-1", "Recovered"),
+            ])),
+            &mut model,
+        );
+
+        assert!(model.error.is_none(), "error should be cleared after successful load");
+        assert_eq!(model.subscriptions.len(), 1);
     }
 
     #[test]
