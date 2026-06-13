@@ -64,16 +64,17 @@ actor DatabaseManager {
 
     // MARK: - Execute
 
+    @discardableResult
     func execute(_ operation: StorageOperation) async throws -> StorageResult {
         switch operation {
         case .listSubscriptions:
-            let rows = try await db.read { db -> [Row] in
+            let rows = try db.read { db -> [Row] in
                 return try Row.fetchAll(db, sql: "SELECT * FROM subscriptions ORDER BY title")
             }
             return .subscriptions(rows.map(Self.subscription(from:)))
 
         case .getSubscription(let id):
-            let row = try await db.read { db -> Row? in
+            let row = try db.read { db -> Row? in
                 return try Row.fetchOne(
                     db, sql: "SELECT * FROM subscriptions WHERE id = ?", arguments: [id])
             }
@@ -141,7 +142,7 @@ actor DatabaseManager {
             return .success
 
         case .getEpisode(let id):
-            let row = try await db.read { db -> Row? in
+            let row = try db.read { db -> Row? in
                 return try Row.fetchOne(
                     db, sql: "SELECT * FROM episodes WHERE id = ?", arguments: [id])
             }
@@ -149,7 +150,7 @@ actor DatabaseManager {
             return .episode(Self.episode(from: row))
 
         case .listEpisodesBySubscription(let subscriptionId):
-            let rows = try await db.read { db -> [Row] in
+            let rows = try db.read { db -> [Row] in
                 return try Row.fetchAll(
                     db,
                     sql: "SELECT * FROM episodes WHERE subscription_id = ? ORDER BY pub_date DESC",
@@ -159,7 +160,7 @@ actor DatabaseManager {
             return .episodes(rows.map(Self.episode(from:)))
 
         case .getEpisodeByFeedGuid(let subscriptionId, let feedGuid):
-            let row = try await db.read { db -> Row? in
+            let row = try db.read { db -> Row? in
                 return try Row.fetchOne(
                     db,
                     sql: "SELECT * FROM episodes WHERE subscription_id = ? AND feed_guid = ?",
