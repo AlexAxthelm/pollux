@@ -69,7 +69,7 @@ actor DatabaseManager {
         switch operation {
         case .listSubscriptions:
             let rows = try db.read { db -> [Row] in
-                return try Row.fetchAll(db, sql: "SELECT * FROM subscriptions ORDER BY title")
+                return try Row.fetchAll(db, sql: "SELECT * FROM subscriptions ORDER BY title COLLATE NOCASE")
             }
             return .subscriptions(rows.map(Self.subscription(from:)))
 

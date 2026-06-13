@@ -128,13 +128,13 @@ struct DatabaseManagerTests {
 
     @Test func listSubscriptions_sortedByTitle() async throws {
         let db = try makeManager()
-        try await db.execute(.upsertSubscription(makeSubscription(id: "b", title: "Title C")))
-        try await db.execute(.upsertSubscription(makeSubscription(id: "a", title: "Title A")))
-        try await db.execute(.upsertSubscription(makeSubscription(id: "c", title: "Title B")))
+        try await db.execute(.upsertSubscription(makeSubscription(id: "b", title: "zebra cast")))
+        try await db.execute(.upsertSubscription(makeSubscription(id: "a", title: "Apple Talks")))
+        try await db.execute(.upsertSubscription(makeSubscription(id: "c", title: "middle ground")))
 
         let result = try await db.execute(.listSubscriptions)
         guard case .subscriptions(let subs) = result else { return }
-        #expect(subs.map(\.title) == ["Title A", "Title B", "Title C"])
+        #expect(subs.map(\.title) == ["Apple Talks", "middle ground", "zebra cast"])
     }
 
     // MARK: Episodes
