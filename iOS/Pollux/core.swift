@@ -61,9 +61,13 @@ class Core: ObservableObject {
     }
 
     private func resolveAndDispatch(requestId: UInt32, result: StorageResult) {
-        guard let resultBytes = try? result.bincodeSerialize() else { return }
+        guard let resultBytes = try? result.bincodeSerialize() else {
+            fatalError("Failed to serialize StorageResult for request \(requestId)")
+        }
         let newEffects = [UInt8](core.resolve(id: requestId, data: Data(resultBytes)))
-        guard let newRequests: [Request] = try? .bincodeDeserialize(input: newEffects) else { return }
+        guard let newRequests: [Request] = try? .bincodeDeserialize(input: newEffects) else {
+            fatalError("Failed to deserialize effects after resolving request \(requestId)")
+        }
         for req in newRequests {
             processEffect(req)
         }

@@ -154,7 +154,7 @@ actor DatabaseManager {
                      playback_position_secs, download_status, download_progress,
                      is_flagged, file_size_bytes, local_path)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                ON CONFLICT(id) DO UPDATE SET
+                ON CONFLICT(subscription_id, feed_guid) DO UPDATE SET
                     title = excluded.title,
                     description = excluded.description,
                     enclosure_url = excluded.enclosure_url,
@@ -169,7 +169,7 @@ actor DatabaseManager {
                     episode.enclosureUrl, episode.artworkUrl,
                     playbackStr, episode.playbackPositionSecs,
                     downloadStr, downloadProgress,
-                    episode.isFlagged, episode.fileSizeBytes.map { Int64($0) }, episode.localPath,
+                    episode.isFlagged, episode.fileSizeBytes.map { Int64(bitPattern: $0) }, episode.localPath,
                 ],
             )
         }
@@ -211,7 +211,7 @@ actor DatabaseManager {
         episodeId: String, status: PlaybackStatus, positionSecs: UInt32?,
     ) async throws -> StorageResult {
         let statusStr = Self.playbackStatusString(status)
-        let position = positionSecs.map { Int32($0) }
+        let position = positionSecs.map { Int32(bitPattern: $0) }
         try await db.write { db in
             try db.execute(
                 sql: """
