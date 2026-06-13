@@ -23,6 +23,14 @@ targets:
       - package: App
       - package: GRDB
         product: GRDB
+
+  PolluxTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources: [PolluxTests]
+    dependencies:
+      - target: Pollux
     info:
       path: Pollux/Info.plist
       properties:

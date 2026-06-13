@@ -13,6 +13,12 @@ actor DatabaseManager {
         try Self.runMigrations(db)
     }
 
+    /// Accepts an explicit path — use this in tests to point at a temp file.
+    init(path: String) throws {
+        db = try DatabasePool(path: path)
+        try Self.runMigrations(db)
+    }
+
     // MARK: - Migrations
 
     private static func runMigrations(_ db: DatabasePool) throws {

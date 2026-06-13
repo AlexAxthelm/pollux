@@ -1,5 +1,5 @@
 check: rust-all-checks swift-all-checks
-test: rust-test
+test: rust-test ios-test
 lint: rust-lint swift-lint
 format-check: rust-format-check swift-format-check
 format: rust-format swift-format
@@ -124,6 +124,13 @@ ios-sim: ios-xcodebuild
 	xcrun simctl launch --console $(SIM_ID) \
 		$$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$(APP_PATH)/Info.plist")
 
+ios-test: ios-build
+	xcodebuild test \
+		-project $(XCODE_PROJECT) \
+		-scheme PolluxTests \
+		-destination 'platform=iOS Simulator,id=$(SIM_ID)' \
+		| xcpretty
+
 swift-clean: xcode-clean swift-generated-clean
 
 xcode-clean:
@@ -142,5 +149,5 @@ regenerate: swift-generated-clean typegen
         rust-format rust-format-check rust-lock-check rust-build rust-clean \
         swift-all-checks swift-lint swift-format swift-format-check \
         typegen package generate-project \
-        ios-build ios-xcodebuild ios-rebuild ios-dev ios-sim ios-clean \
+        ios-build ios-xcodebuild ios-rebuild ios-dev ios-sim ios-test ios-clean \
         swift-clean xcode-clean swift-generated-clean regenerate
