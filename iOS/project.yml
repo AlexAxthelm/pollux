@@ -18,6 +18,8 @@ targets:
     platform: iOS
     deploymentTarget: 18.0
     sources: [Pollux]
+    info:
+      path: Pollux/Info.plist
     dependencies:
       - package: Shared
       - package: App
