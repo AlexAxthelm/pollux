@@ -128,6 +128,21 @@ struct DatabaseManagerTests {
         #expect(result == .notFound)
     }
 
+    @Test func upsertSubscription_duplicateFeedUrl_updatesExisting() async throws {
+        let db = try makeManager()
+        let feedUrl = "https://example.com/test.rss"
+        let original = makeSubscription(id: "sub-1", title: "Original Title", feedUrl: feedUrl)
+        try await db.execute(.upsertSubscription(original))
+
+        let duplicate = makeSubscription(id: "sub-2", title: "Updated Title", feedUrl: feedUrl)
+        try await db.execute(.upsertSubscription(duplicate))
+
+        let result = try await db.execute(.listSubscriptions)
+        guard case .subscriptions(let subs) = result else { return }
+        #expect(subs.count == 1, "same feed_url should upsert, not insert a duplicate")
+        #expect(subs[0].title == "Updated Title")
+    }
+
     @Test func listSubscriptions_sortedByTitle() async throws {
         let db = try makeManager()
         try await db.execute(.upsertSubscription(makeSubscription(id: "b", title: "zebra cast")))
@@ -193,6 +208,24 @@ struct DatabaseManagerTests {
         guard case .episode(let fetched) = result else { return }
         #expect(fetched.playbackStatus == .inProgress)
         #expect(fetched.playbackPositionSecs == 42)
+    }
+
+    @Test func updatePlaybackStatus_largePositionRoundTrips() async throws {
+        let db = try makeManager()
+        let sub = makeSubscription(id: "sub-1")
+        try await db.execute(.upsertSubscription(sub))
+        let ep = makeEpisode(id: "ep-1", subscriptionId: "sub-1")
+        try await db.execute(.upsertEpisode(ep))
+
+        // UInt32 values above Int32.max would produce negative values via Int32(bitPattern:),
+        // violating the >= 0 constraint. Verify the full UInt32 range survives the round-trip.
+        let largePosition: UInt32 = UInt32(Int32.max) + 1
+        try await db.execute(
+            .updatePlaybackStatus(episodeId: "ep-1", status: .inProgress, positionSecs: largePosition))
+
+        let result = try await db.execute(.getEpisode(id: "ep-1"))
+        guard case .episode(let fetched) = result else { return }
+        #expect(fetched.playbackPositionSecs == largePosition)
     }
 
     @Test func deleteSubscription_cascadesToEpisodes() async throws {
