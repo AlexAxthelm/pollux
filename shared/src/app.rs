@@ -29,7 +29,9 @@ impl App for Pollux {
                 match result {
                     StorageResult::Subscriptions(rows) => model.subscriptions = rows,
                     StorageResult::Error(e) => model.error = Some(e),
-                    _ => {}
+                    unexpected => {
+                        model.error = Some(format!("unexpected storage result: {unexpected:?}"))
+                    }
                 }
                 render()
             }
@@ -160,5 +162,21 @@ mod tests {
 
         assert!(!model.loading);
         assert_eq!(model.error.as_deref(), Some("db unavailable"));
+    }
+
+    #[test]
+    fn unexpected_storage_result_surfaces_as_error() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.loading = true;
+
+        let _ = app.update(
+            Event::SubscriptionsLoaded(StorageResult::NotFound),
+            &mut model,
+        );
+
+        assert!(!model.loading);
+        assert!(model.error.is_some(), "unexpected result should set error");
+        assert!(model.subscriptions.is_empty());
     }
 }
