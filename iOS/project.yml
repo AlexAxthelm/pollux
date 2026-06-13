@@ -5,6 +5,9 @@ packages:
     path: ./generated/Shared
   App:
     path: ./generated/App
+  GRDB:
+    url: https://github.com/groue/GRDB.swift.git
+    from: "7.0.0"
 options:
   bundleIdPrefix: com.example.pollux
 attributes:
@@ -15,14 +18,20 @@ targets:
     platform: iOS
     deploymentTarget: 18.0
     sources: [Pollux]
+    info:
+      path: Pollux/Info.plist
     dependencies:
       - package: Shared
       - package: App
-    info:
-      path: Pollux/Info.plist
-      properties:
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
-        UILaunchScreen: {}
+      - package: GRDB
+        product: GRDB
+
+  PolluxTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources: [PolluxTests]
+    dependencies:
+      - target: Pollux
+    settings:
+      GENERATE_INFOPLIST_FILE: YES

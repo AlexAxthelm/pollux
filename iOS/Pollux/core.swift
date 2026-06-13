@@ -7,13 +7,20 @@ class Core: ObservableObject {
     @Published var view: ViewModel
 
     private var core: CoreFfi
+    private let db: DatabaseManager
 
     init() {
         core = CoreFfi()
+        do {
+            db = try DatabaseManager()
+        } catch {
+            fatalError("Failed to initialize DatabaseManager: \(error)")
+        }
         guard let view = try? ViewModel.bincodeDeserialize(input: [UInt8](core.view())) else {
             fatalError("Failed to deserialize initial ViewModel from core")
         }
         self.view = view
+        update(.started)
     }
 
     func update(_ event: Event) {
@@ -39,6 +46,30 @@ class Core: ObservableObject {
                 fatalError("Failed to deserialize ViewModel during render")
             }
             view = updatedView
+
+        case let .storage(operation):
+            Task { @MainActor in
+                let result: StorageResult
+                do {
+                    result = try await db.execute(operation)
+                } catch {
+                    result = .error(error.localizedDescription)
+                }
+                resolveAndDispatch(requestId: request.id, result: result)
+            }
+        }
+    }
+
+    private func resolveAndDispatch(requestId: UInt32, result: StorageResult) {
+        guard let resultBytes = try? result.bincodeSerialize() else {
+            fatalError("Failed to serialize StorageResult for request \(requestId)")
+        }
+        let newEffects = [UInt8](core.resolve(id: requestId, data: Data(resultBytes)))
+        guard let newRequests: [Request] = try? .bincodeDeserialize(input: newEffects) else {
+            fatalError("Failed to deserialize effects after resolving request \(requestId)")
+        }
+        for req in newRequests {
+            processEffect(req)
         }
     }
 }

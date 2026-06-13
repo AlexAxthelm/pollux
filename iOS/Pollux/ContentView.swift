@@ -5,42 +5,20 @@ struct ContentView: View {
     @ObservedObject var core: Core
 
     var body: some View {
-        Text("Pollux")
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundColor(.accentColor)
-            Text(core.view.count)
-            HStack {
-                ActionButton(label: "Reset", color: .red) {
-                    core.update(.reset)
-                }
-                ActionButton(label: "Inc", color: .green) {
-                    core.update(.increment)
-                }
-                ActionButton(label: "Dec", color: .yellow) {
-                    core.update(.decrement)
+        NavigationStack {
+            Group {
+                if core.view.library.loading {
+                    ProgressView()
+                } else if core.view.library.subscriptions.isEmpty {
+                    Text("No podcasts yet")
+                        .foregroundStyle(.secondary)
+                } else {
+                    List(core.view.library.subscriptions, id: \.id) { sub in
+                        Text(sub.title)
+                    }
                 }
             }
-        }
-    }
-}
-
-struct ActionButton: View {
-    var label: String
-    var color: Color
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(label)
-                .fontWeight(.bold)
-                .font(.body)
-                .padding(EdgeInsets(top: 10, leading: 15, bottom: 10, trailing: 15))
-                .background(color)
-                .cornerRadius(10)
-                .foregroundColor(.white)
-                .padding()
+            .navigationTitle("Library")
         }
     }
 }
