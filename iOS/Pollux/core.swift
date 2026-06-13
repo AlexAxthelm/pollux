@@ -41,13 +41,13 @@ class Core: ObservableObject {
         switch request.effect {
         case .render:
             guard let updatedView = try? ViewModel.bincodeDeserialize(
-                input: [UInt8](core.view())
+                input: [UInt8](core.view()),
             ) else {
                 fatalError("Failed to deserialize ViewModel during render")
             }
             view = updatedView
 
-        case .storage(let operation):
+        case let .storage(operation):
             Task {
                 let result: StorageResult
                 do {
@@ -64,6 +64,8 @@ class Core: ObservableObject {
         guard let resultBytes = try? result.bincodeSerialize() else { return }
         let newEffects = [UInt8](core.resolve(id: requestId, data: Data(resultBytes)))
         guard let newRequests: [Request] = try? .bincodeDeserialize(input: newEffects) else { return }
-        for req in newRequests { processEffect(req) }
+        for req in newRequests {
+            processEffect(req)
+        }
     }
 }

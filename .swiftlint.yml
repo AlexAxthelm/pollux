@@ -1,0 +1,8 @@
+disabled_rules:
+  - trailing_comma  # SwiftFormat owns this; it adds trailing commas per SE-0084 (Swift 5.9+)
+
+identifier_name:
+  excluded:
+    - db  # idiomatic GRDB closure/parameter name
+    - t   # idiomatic GRDB table-builder closure parameter
+    - id  # universal primary key name
