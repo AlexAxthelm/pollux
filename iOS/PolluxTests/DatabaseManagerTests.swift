@@ -271,4 +271,25 @@ struct DatabaseManagerTests {
             #expect(ep.downloadStatus == expected, "id: \(id)")
         }
     }
+
+    // MARK: Schema constraints
+
+    @Test func upsertEpisode_rejectsNegativeFileSize() async throws {
+        let db = try makeManager()
+        let sub = makeSubscription(id: "sub-1")
+        try await db.execute(.upsertSubscription(sub))
+
+        let ep = Episode(
+            id: "ep-1", feedGuid: "guid-1", subscriptionId: "sub-1",
+            title: "Test", description: nil, pubDate: nil, durationSecs: nil,
+            enclosureUrl: "https://example.com/ep.mp3", artworkUrl: nil,
+            playbackStatus: .unplayed, playbackPositionSecs: nil,
+            downloadStatus: .notDownloaded, downloadProgress: nil,
+            isFlagged: false, fileSizeBytes: UInt64(bitPattern: -1), localPath: nil
+        )
+
+        await #expect(throws: (any Error).self) {
+            try await db.execute(.upsertEpisode(ep))
+        }
+    }
 }
