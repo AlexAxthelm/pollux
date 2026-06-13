@@ -48,7 +48,7 @@ class Core: ObservableObject {
             view = updatedView
 
         case let .storage(operation):
-            Task {
+            Task { @MainActor in
                 let result: StorageResult
                 do {
                     result = try await db.execute(operation)
