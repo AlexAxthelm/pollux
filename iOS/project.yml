@@ -20,6 +20,8 @@ targets:
     sources: [Pollux]
     info:
       path: Pollux/Info.plist
+      properties:
+        UILaunchScreen: {}
     dependencies:
       - package: Shared
       - package: App
