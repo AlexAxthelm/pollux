@@ -4,6 +4,9 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject var core: Core
     @State private var feedUrl = ""
+    private var trimmedFeedUrl: String {
+        feedUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     var body: some View {
         NavigationStack {
@@ -35,10 +38,10 @@ struct ContentView: View {
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                     Button("Add") {
-                        core.update(.fetchFeed(feedUrl))
+                        core.update(.fetchFeed(trimmedFeedUrl))
                         feedUrl = ""
                     }
-                    .disabled(feedUrl.isEmpty || core.view.library.loading)
+                    .disabled(trimmedFeedUrl.isEmpty || core.view.library.loading)
                 }
                 .padding()
             }
