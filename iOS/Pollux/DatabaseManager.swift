@@ -265,7 +265,7 @@ private extension DatabaseManager {
                 playbackStr, episode.playbackPositionSecs,
                 downloadStr, downloadProgress,
                 episode.isFlagged,
-                episode.fileSizeBytes.map { Int64(bitPattern: $0) },
+                episode.fileSizeBytes.flatMap { Int64(exactly: $0) },
                 episode.localPath,
             ],
         )

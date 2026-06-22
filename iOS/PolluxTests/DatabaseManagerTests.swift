@@ -386,7 +386,10 @@ struct DatabaseManagerTests {
 
     // MARK: Schema constraints
 
-    @Test func upsertEpisode_rejectsNegativeFileSize() async throws {
+    @Test func upsertEpisode_overflowFileSizeStoredAsNull() async throws {
+        // UInt64 values > Int64.max can't be stored as a non-negative Int64.
+        // The DB layer stores NULL rather than a negative value that would
+        // violate the file_size_bytes >= 0 constraint.
         let db = try makeManager()
         let sub = makeSubscription(id: "sub-1")
         try await db.execute(.upsertSubscription(sub))
@@ -397,11 +400,16 @@ struct DatabaseManagerTests {
             enclosureUrl: "https://example.com/ep.mp3", artworkUrl: nil,
             playbackStatus: .unplayed, playbackPositionSecs: nil,
             downloadStatus: .notDownloaded, downloadProgress: nil,
-            isFlagged: false, fileSizeBytes: UInt64(bitPattern: -1), localPath: nil
+            isFlagged: false, fileSizeBytes: UInt64.max, localPath: nil
         )
 
-        await #expect(throws: (any Error).self) {
-            try await db.execute(.upsertEpisode(ep))
+        try await db.execute(.upsertEpisode(ep))
+
+        let result = try await db.execute(.getEpisode(id: "ep-1"))
+        guard case .episode(let fetched) = result else {
+            Issue.record("Expected .episode, got \(result)")
+            return
         }
+        #expect(fetched.fileSizeBytes == nil, "overflow file size should be stored as NULL")
     }
 }
