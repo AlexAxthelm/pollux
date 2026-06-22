@@ -43,6 +43,7 @@ impl App for Pollux {
             Event::FetchFeed(url) => {
                 model.loading = true;
                 model.fetching_feed = Some(url.clone());
+                model.error = None;
                 Command::request_from_shell(HttpOperation::FetchFeed { url: url.clone() })
                     .then_send(move |r| Event::FeedFetched {
                         url,
