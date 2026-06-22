@@ -135,8 +135,7 @@ actor DatabaseManager {
     }
 
     private func upsertFeedWithEpisodes(subscription: Subscription, episodes: [Episode]) async throws -> StorageResult {
-        return try await db.write { db -> StorageResult in
-            // Upsert subscription by feed_url; on conflict keep the existing id
+        try await db.write { db -> StorageResult in
             try db.execute(
                 sql: """
                 INSERT INTO subscriptions
@@ -154,7 +153,6 @@ actor DatabaseManager {
                     subscription.lastRefreshed, subscription.createdAt,
                 ],
             )
-
             guard let subRow = try Row.fetchOne(
                 db,
                 sql: "SELECT * FROM subscriptions WHERE feed_url = ?",
@@ -163,41 +161,9 @@ actor DatabaseManager {
                 return .error("subscription disappeared after upsert for feed_url: \(subscription.feedUrl)")
             }
             let canonical = Self.subscription(from: subRow)
-
             for episode in episodes {
-                let playbackStr = Self.playbackStatusString(episode.playbackStatus)
-                let downloadStr = Self.downloadStatusString(episode.downloadStatus)
-                let downloadProgress = episode.downloadProgress.map { Int32($0) }
-                try db.execute(
-                    sql: """
-                    INSERT INTO episodes
-                        (id, feed_guid, subscription_id, title, description, pub_date,
-                         duration_secs, enclosure_url, artwork_url, playback_status,
-                         playback_position_secs, download_status, download_progress,
-                         is_flagged, file_size_bytes, local_path)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                    ON CONFLICT(subscription_id, feed_guid) DO UPDATE SET
-                        title = excluded.title,
-                        description = excluded.description,
-                        enclosure_url = excluded.enclosure_url,
-                        artwork_url = excluded.artwork_url,
-                        pub_date = excluded.pub_date,
-                        duration_secs = excluded.duration_secs
-                    """,
-                    arguments: [
-                        episode.id, episode.feedGuid, canonical.id,
-                        episode.title, episode.description,
-                        episode.pubDate, episode.durationSecs,
-                        episode.enclosureUrl, episode.artworkUrl,
-                        playbackStr, episode.playbackPositionSecs,
-                        downloadStr, downloadProgress,
-                        episode.isFlagged,
-                        episode.fileSizeBytes.map { Int64(bitPattern: $0) },
-                        episode.localPath,
-                    ],
-                )
+                try Self.upsertEpisodeRow(episode, subscriptionId: canonical.id, db: db)
             }
-
             return .subscription(canonical)
         }
     }
@@ -212,36 +178,8 @@ actor DatabaseManager {
     // MARK: - Episode operations
 
     private func upsertEpisode(_ episode: Episode) async throws -> StorageResult {
-        let playbackStr = Self.playbackStatusString(episode.playbackStatus)
-        let downloadStr = Self.downloadStatusString(episode.downloadStatus)
-        let downloadProgress = episode.downloadProgress.map { Int32($0) }
         try await db.write { db in
-            try db.execute(
-                sql: """
-                INSERT INTO episodes
-                    (id, feed_guid, subscription_id, title, description, pub_date,
-                     duration_secs, enclosure_url, artwork_url, playback_status,
-                     playback_position_secs, download_status, download_progress,
-                     is_flagged, file_size_bytes, local_path)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                ON CONFLICT(subscription_id, feed_guid) DO UPDATE SET
-                    title = excluded.title,
-                    description = excluded.description,
-                    enclosure_url = excluded.enclosure_url,
-                    artwork_url = excluded.artwork_url,
-                    pub_date = excluded.pub_date,
-                    duration_secs = excluded.duration_secs
-                """,
-                arguments: [
-                    episode.id, episode.feedGuid, episode.subscriptionId,
-                    episode.title, episode.description,
-                    episode.pubDate, episode.durationSecs,
-                    episode.enclosureUrl, episode.artworkUrl,
-                    playbackStr, episode.playbackPositionSecs,
-                    downloadStr, downloadProgress,
-                    episode.isFlagged, episode.fileSizeBytes.map { Int64(bitPattern: $0) }, episode.localPath,
-                ],
-            )
+            try Self.upsertEpisodeRow(episode, subscriptionId: episode.subscriptionId, db: db)
         }
         return .success
     }
@@ -299,6 +237,40 @@ actor DatabaseManager {
 // MARK: - Row mapping + status conversion
 
 private extension DatabaseManager {
+    static func upsertEpisodeRow(_ episode: Episode, subscriptionId: String, db: Database) throws {
+        let playbackStr = playbackStatusString(episode.playbackStatus)
+        let downloadStr = downloadStatusString(episode.downloadStatus)
+        let downloadProgress = episode.downloadProgress.map { Int32($0) }
+        try db.execute(
+            sql: """
+            INSERT INTO episodes
+                (id, feed_guid, subscription_id, title, description, pub_date,
+                 duration_secs, enclosure_url, artwork_url, playback_status,
+                 playback_position_secs, download_status, download_progress,
+                 is_flagged, file_size_bytes, local_path)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(subscription_id, feed_guid) DO UPDATE SET
+                title = excluded.title,
+                description = excluded.description,
+                enclosure_url = excluded.enclosure_url,
+                artwork_url = excluded.artwork_url,
+                pub_date = excluded.pub_date,
+                duration_secs = excluded.duration_secs
+            """,
+            arguments: [
+                episode.id, episode.feedGuid, subscriptionId,
+                episode.title, episode.description,
+                episode.pubDate, episode.durationSecs,
+                episode.enclosureUrl, episode.artworkUrl,
+                playbackStr, episode.playbackPositionSecs,
+                downloadStr, downloadProgress,
+                episode.isFlagged,
+                episode.fileSizeBytes.map { Int64(bitPattern: $0) },
+                episode.localPath,
+            ],
+        )
+    }
+
     static func subscription(from row: Row) -> Subscription {
         Subscription(
             id: row["id"],

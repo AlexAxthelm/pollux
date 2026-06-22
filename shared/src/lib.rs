@@ -3,8 +3,8 @@ pub mod capabilities;
 pub mod defaults;
 pub mod domain;
 pub mod effect;
-pub mod ffi;
 mod feed_parser;
+pub mod ffi;
 pub mod model;
 pub mod view_model;
 

@@ -70,8 +70,8 @@ class Core: ObservableObject {
 
     private func fetchHttp(_ operation: HttpOperation) async -> HttpResult {
         switch operation {
-        case .fetchFeed(let url):
-            return await fetchFeed(url: url)
+        case let .fetchFeed(url):
+            await fetchFeed(url: url)
         }
     }
 
