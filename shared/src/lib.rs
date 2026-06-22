@@ -4,10 +4,12 @@ pub mod defaults;
 pub mod domain;
 pub mod effect;
 pub mod ffi;
+mod feed_parser;
 pub mod model;
 pub mod view_model;
 
 pub use app::*;
+pub use capabilities::http::{HttpOperation, HttpResult};
 pub use capabilities::storage::{StorageOperation, StorageResult};
 pub use crux_core::Core;
 pub use domain::*;

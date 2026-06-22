@@ -4,5 +4,6 @@ use crate::domain::Subscription;
 pub struct Model {
     pub subscriptions: Vec<Subscription>,
     pub loading: bool,
+    pub fetching_feed: Option<String>,
     pub error: Option<String>,
 }

@@ -3,6 +3,7 @@
 
 use crux_core::{macros::effect, render::RenderOperation};
 
+use crate::capabilities::http::HttpOperation;
 use crate::capabilities::storage::StorageOperation;
 
 #[effect(facet_typegen)]
@@ -10,4 +11,5 @@ use crate::capabilities::storage::StorageOperation;
 pub enum Effect {
     Render(RenderOperation),
     Storage(StorageOperation),
+    Http(HttpOperation),
 }

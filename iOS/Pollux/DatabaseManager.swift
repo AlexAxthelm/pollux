@@ -88,6 +88,8 @@ actor DatabaseManager {
             try getEpisodeByFeedGuid(subscriptionId: subscriptionId, feedGuid: feedGuid)
         case let .updatePlaybackStatus(episodeId, status, positionSecs):
             try await updatePlaybackStatus(episodeId: episodeId, status: status, positionSecs: positionSecs)
+        case let .upsertFeedWithEpisodes(subscription, episodes):
+            try await upsertFeedWithEpisodes(subscription: subscription, episodes: episodes)
         }
     }
 
@@ -130,6 +132,74 @@ actor DatabaseManager {
             )
         }
         return .success
+    }
+
+    private func upsertFeedWithEpisodes(subscription: Subscription, episodes: [Episode]) async throws -> StorageResult {
+        return try await db.write { db -> StorageResult in
+            // Upsert subscription by feed_url; on conflict keep the existing id
+            try db.execute(
+                sql: """
+                INSERT INTO subscriptions
+                    (id, feed_url, title, artwork_url, description, last_refreshed, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(feed_url) DO UPDATE SET
+                    title = excluded.title,
+                    artwork_url = excluded.artwork_url,
+                    description = excluded.description,
+                    last_refreshed = excluded.last_refreshed
+                """,
+                arguments: [
+                    subscription.id, subscription.feedUrl, subscription.title,
+                    subscription.artworkUrl, subscription.description,
+                    subscription.lastRefreshed, subscription.createdAt,
+                ],
+            )
+
+            guard let subRow = try Row.fetchOne(
+                db,
+                sql: "SELECT * FROM subscriptions WHERE feed_url = ?",
+                arguments: [subscription.feedUrl],
+            ) else {
+                return .error("subscription disappeared after upsert for feed_url: \(subscription.feedUrl)")
+            }
+            let canonical = Self.subscription(from: subRow)
+
+            for episode in episodes {
+                let playbackStr = Self.playbackStatusString(episode.playbackStatus)
+                let downloadStr = Self.downloadStatusString(episode.downloadStatus)
+                let downloadProgress = episode.downloadProgress.map { Int32($0) }
+                try db.execute(
+                    sql: """
+                    INSERT INTO episodes
+                        (id, feed_guid, subscription_id, title, description, pub_date,
+                         duration_secs, enclosure_url, artwork_url, playback_status,
+                         playback_position_secs, download_status, download_progress,
+                         is_flagged, file_size_bytes, local_path)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT(subscription_id, feed_guid) DO UPDATE SET
+                        title = excluded.title,
+                        description = excluded.description,
+                        enclosure_url = excluded.enclosure_url,
+                        artwork_url = excluded.artwork_url,
+                        pub_date = excluded.pub_date,
+                        duration_secs = excluded.duration_secs
+                    """,
+                    arguments: [
+                        episode.id, episode.feedGuid, canonical.id,
+                        episode.title, episode.description,
+                        episode.pubDate, episode.durationSecs,
+                        episode.enclosureUrl, episode.artworkUrl,
+                        playbackStr, episode.playbackPositionSecs,
+                        downloadStr, downloadProgress,
+                        episode.isFlagged,
+                        episode.fileSizeBytes.map { Int64(bitPattern: $0) },
+                        episode.localPath,
+                    ],
+                )
+            }
+
+            return .subscription(canonical)
+        }
     }
 
     private func deleteSubscription(id: String) async throws -> StorageResult {

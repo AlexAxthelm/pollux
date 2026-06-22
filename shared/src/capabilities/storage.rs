@@ -31,6 +31,10 @@ pub enum StorageOperation {
         status: PlaybackStatus,
         position_secs: Option<u32>,
     },
+    UpsertFeedWithEpisodes {
+        subscription: Subscription,
+        episodes: Vec<Episode>,
+    },
 }
 
 #[derive(Facet, Serialize, Deserialize, Clone, Debug)]
