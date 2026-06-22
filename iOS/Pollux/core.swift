@@ -59,23 +59,26 @@ class Core: ObservableObject {
             }
 
         case let .http(operation):
-            Task { @MainActor in
-                let result = await fetchHttp(operation)
-                resolveAndDispatch(requestId: request.id, result: result)
+            let requestId = request.id
+            Task.detached { [weak self] in
+                let result = await Core.fetchHttp(operation)
+                await MainActor.run { [weak self] in
+                    self?.resolveAndDispatch(requestId: requestId, result: result)
+                }
             }
         }
     }
 
     // MARK: - HTTP
 
-    private func fetchHttp(_ operation: HttpOperation) async -> HttpResult {
+    private static func fetchHttp(_ operation: HttpOperation) async -> HttpResult {
         switch operation {
         case let .fetchFeed(url):
             await fetchFeed(url: url)
         }
     }
 
-    private func fetchFeed(url: String) async -> HttpResult {
+    private static func fetchFeed(url: String) async -> HttpResult {
         guard let parsedURL = URL(string: url) else {
             return .error("invalid URL: \(url)")
         }
