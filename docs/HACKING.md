@@ -242,6 +242,11 @@ Homebrew's `rustup` formula is keg-only and does not link `cargo`/`rustc` into
 works too, but later `brew` runs wipe the force-link, so the PATH entry is the
 durable fix.)
 
+**`error: no such command: bin` from `make package`**
+`make package` runs `cargo bin cargo-swift`, which needs the **cargo-run-bin**
+prerequisite. Cargo's error names the missing subcommand (`bin`), not the tool,
+so it's easy to miss. Install it: `cargo install cargo-run-bin`.
+
 **`make package` fails to find or run cargo-swift**
 It is managed by cargo-run-bin, not a global install. Make sure `cargo-run-bin`
 is installed (`cargo install cargo-run-bin`); `make package` then builds the
