@@ -158,6 +158,9 @@ actor DatabaseManager {
                 sql: "SELECT * FROM subscriptions WHERE feed_url = ?",
                 arguments: [subscription.feedUrl],
             ) else {
+                // Returning a value here does not roll back — GRDB aborts the
+                // transaction only on a thrown error. The INSERT above commits
+                // while the caller is told the operation failed.
                 return .error("subscription disappeared after upsert for feed_url: \(subscription.feedUrl)")
             }
             let canonical = Self.subscription(from: subRow)
@@ -284,6 +287,12 @@ private extension DatabaseManager {
     }
 
     static func episode(from row: Row) -> Episode {
+        // The UInt32(_:) conversions below trap on out-of-range values, whereas
+        // the write path stores NULL on overflow (see fileSizeBytes in
+        // upsertEpisodeRow). The two directions disagree about whether bad data
+        // is survivable: the CHECK constraints enforce >= 0 but no upper bound,
+        // so a row written by a later schema or by external tooling crashes on
+        // read rather than degrading.
         Episode(
             id: row["id"],
             feedGuid: row["feed_guid"],
