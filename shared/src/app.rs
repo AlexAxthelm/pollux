@@ -42,7 +42,6 @@ impl App for Pollux {
             }
             Event::FetchFeed(url) => {
                 model.loading = true;
-                model.fetching_feed = Some(url.clone());
                 model.error = None;
                 Command::request_from_shell(HttpOperation::FetchFeed { url: url.clone() })
                     .then_send(move |r| Event::FeedFetched {
@@ -54,7 +53,6 @@ impl App for Pollux {
             Event::FeedFetched { url, result } => match *result {
                 HttpResult::Error(e) => {
                     model.loading = false;
-                    model.fetching_feed = None;
                     model.error = Some(e);
                     render()
                 }
@@ -68,21 +66,18 @@ impl App for Pollux {
                     }
                     Err(e) => {
                         model.loading = false;
-                        model.fetching_feed = None;
-                        model.error = Some(e);
+                            model.error = Some(e);
                         render()
                     }
                 },
                 HttpResult::Response { status, .. } => {
                     model.loading = false;
-                    model.fetching_feed = None;
                     model.error = Some(format!("feed fetch failed: HTTP {status}"));
                     render()
                 }
             },
             Event::FeedSaved(result) => {
                 model.loading = false;
-                model.fetching_feed = None;
                 match *result {
                     StorageResult::Subscription(sub) => {
                         if let Some(pos) = model.subscriptions.iter().position(|s| s.id == sub.id) {
@@ -323,10 +318,6 @@ mod tests {
         );
 
         assert!(model.loading);
-        assert_eq!(
-            model.fetching_feed.as_deref(),
-            Some("https://example.com/feed.rss")
-        );
 
         let effects: Vec<Effect> = cmd.effects().collect();
         assert_eq!(effects.len(), 2);
@@ -346,7 +337,6 @@ mod tests {
         let app = Pollux;
         let mut model = Model::default();
         model.loading = true;
-        model.fetching_feed = Some("https://example.com/feed.rss".to_string());
 
         let mut cmd = app.update(
             Event::FeedFetched {
@@ -357,7 +347,6 @@ mod tests {
         );
 
         assert!(!model.loading);
-        assert!(model.fetching_feed.is_none());
         assert_eq!(model.error.as_deref(), Some("connection refused"));
         cmd.expect_one_effect().expect_render();
     }
@@ -367,7 +356,6 @@ mod tests {
         let app = Pollux;
         let mut model = Model::default();
         model.loading = true;
-        model.fetching_feed = Some("https://example.com/feed.rss".to_string());
 
         let mut cmd = app.update(
             Event::FeedFetched {
@@ -381,7 +369,6 @@ mod tests {
         );
 
         assert!(!model.loading);
-        assert!(model.fetching_feed.is_none());
         assert!(model.error.is_some());
         assert!(model.error.as_deref().is_some_and(|e| e.contains("404")));
         cmd.expect_one_effect().expect_render();
@@ -437,7 +424,6 @@ mod tests {
         );
 
         assert!(!model.loading);
-        assert!(model.fetching_feed.is_none());
         assert!(model.error.is_some(), "invalid XML should set error");
         cmd.expect_one_effect().expect_render();
     }
@@ -455,7 +441,6 @@ mod tests {
         );
 
         assert!(!model.loading);
-        assert!(model.fetching_feed.is_none());
         assert!(model.error.is_none());
         assert_eq!(model.subscriptions.len(), 1);
         assert_eq!(model.subscriptions[0].title, "New Podcast");
