@@ -89,7 +89,6 @@ impl App for Pollux {
                             model.subscriptions[pos] = sub;
                         } else {
                             model.subscriptions.push(sub);
-                            model.subscriptions.sort_by_key(|a| a.title.to_lowercase());
                         }
                         model.error = None;
                     }
@@ -104,17 +103,22 @@ impl App for Pollux {
     }
 
     fn view(&self, model: &Model) -> ViewModel {
+        // Display order is owned here rather than at each mutation site, so the
+        // core does not depend on the shell returning rows in any given order.
+        let mut subscriptions: Vec<SubscriptionSummary> = model
+            .subscriptions
+            .iter()
+            .map(|s| SubscriptionSummary {
+                id: s.id.clone(),
+                title: s.title.clone(),
+                artwork_url: s.artwork_url.clone(),
+            })
+            .collect();
+        subscriptions.sort_by_cached_key(|s| s.title.to_lowercase());
+
         ViewModel {
             library: LibraryView {
-                subscriptions: model
-                    .subscriptions
-                    .iter()
-                    .map(|s| SubscriptionSummary {
-                        id: s.id.clone(),
-                        title: s.title.clone(),
-                        artwork_url: s.artwork_url.clone(),
-                    })
-                    .collect(),
+                subscriptions,
                 loading: model.loading,
                 error: model.error.clone(),
             },
@@ -151,6 +155,15 @@ mod tests {
             last_refreshed: None,
             created_at: 0,
         }
+    }
+
+    fn view_titles(app: &Pollux, model: &Model) -> Vec<String> {
+        app.view(model)
+            .library
+            .subscriptions
+            .into_iter()
+            .map(|s| s.title)
+            .collect()
     }
 
     const MINIMAL_RSS: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -469,6 +482,48 @@ mod tests {
     }
 
     #[test]
+    fn feed_saved_resorts_when_refresh_changes_title() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions = vec![
+            make_subscription("a-id", "Alpha Podcast"),
+            make_subscription("z-id", "Zebra Podcast"),
+        ];
+
+        // A refresh renames the first feed so it now sorts last.
+        let renamed = make_subscription("a-id", "Zulu Podcast");
+        let _ = app.update(
+            Event::FeedSaved(Box::new(StorageResult::Subscription(renamed))),
+            &mut model,
+        );
+
+        assert_eq!(model.subscriptions.len(), 2, "rename should not add a row");
+        assert_eq!(
+            view_titles(&app, &model),
+            vec!["Zebra Podcast", "Zulu Podcast"],
+            "view should stay alphabetical after an in-place update"
+        );
+    }
+
+    #[test]
+    fn view_sorts_unordered_subscriptions() {
+        let app = Pollux;
+        let mut model = Model::default();
+        // The shell is not required to return rows in any particular order.
+        model.subscriptions = vec![
+            make_subscription("c-id", "charlie"),
+            make_subscription("a-id", "Alpha"),
+            make_subscription("b-id", "Bravo"),
+        ];
+
+        assert_eq!(
+            view_titles(&app, &model),
+            vec!["Alpha", "Bravo", "charlie"],
+            "view sorts case-insensitively regardless of model order"
+        );
+    }
+
+    #[test]
     fn feed_saved_sorted_alphabetically() {
         let app = Pollux;
         let mut model = Model::default();
@@ -481,7 +536,9 @@ mod tests {
         );
 
         assert_eq!(model.subscriptions.len(), 2);
-        assert_eq!(model.subscriptions[0].title, "Alpha Podcast");
-        assert_eq!(model.subscriptions[1].title, "Zebra Podcast");
+        assert_eq!(
+            view_titles(&app, &model),
+            vec!["Alpha Podcast", "Zebra Podcast"]
+        );
     }
 }
