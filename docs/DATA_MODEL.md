@@ -39,6 +39,48 @@ download status, and flag state.
 
 See also: `GLOSSARY.md` — Episode, Playback status, Flag.
 
+#### Identity across refreshes
+
+An Episode is matched to its existing row by `(subscription_id, feed_guid)`,
+where `feed_guid` comes from the feed's `<guid>`. This key decides whether a
+refresh **updates** an episode or **inserts a new one**, so it also decides
+whether playback position, played status, and flags survive a refresh. Two open
+problems sit here.
+
+**Unstable identity when `<guid>` is absent.** `<guid>` is optional in RSS 2.0.
+When it is missing, `feed-rs` synthesises a random UUID that differs on every
+parse — parsing one unchanged feed twice yields two different ids. Because the
+unique key then never matches, every refresh re-inserts every episode as new
+rows: the library grows without bound and playback state resets to Unplayed,
+since the rows carrying it are orphaned rather than updated. This is a live
+defect, not a hypothetical.
+
+The fix needs an identity that is *stable* across refreshes and *unique* within
+a feed. Candidates and their failure modes:
+
+- **Enclosure URL** — stable for many feeds, but dynamic ad insertion and
+  tracking prefixes rewrite it, which reproduces the same duplication
+- **Normalised enclosure URL** (query string and known tracking prefixes
+  stripped) — better, still breaks if the path itself changes
+- **Title + publication date** — survives URL changes, breaks on an edited
+  title, and collides for entries with no date
+- **Detect the synthesised id** (e.g. `entry.id` parsing as a bare UUID) and
+  fall back to one of the above — cheap, but misfires on feeds that legitimately
+  use UUIDs as guids
+- **Read `<guid>` ourselves** rather than relying on `feed-rs`'s `id`, so guid
+  presence is known rather than inferred — most correct, most work
+
+Choosing between these wants evidence rather than argument: how many real feeds
+omit `<guid>`, and how many rewrite enclosure URLs between fetches. Neither is
+known yet.
+
+**Duplicate guids.** Feeds sometimes repeat a `<guid>` across entries. Storage
+resolves this by overwriting, and because feeds are conventionally newest-first,
+an unguarded overwrite let an *older* duplicate replace a *newer* episode.
+`parse_feed` now collapses duplicates before storage, keeping the **first**
+occurrence. That choice is deliberate — record it here so it is not silently
+reversed.
+
 ### Playlist *(Identified)*
 
 A query definition: one or more sources, with ordered filters and sorts applied.
