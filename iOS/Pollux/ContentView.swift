@@ -4,6 +4,7 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject var core: Core
     @State private var feedUrl = ""
+    @State private var isSubscribing = false
     private var trimmedFeedUrl: String {
         feedUrl.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -38,14 +39,31 @@ struct ContentView: View {
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                     Button("Add") {
+                        isSubscribing = true
                         core.update(.fetchFeed(trimmedFeedUrl))
-                        feedUrl = ""
                     }
                     .disabled(trimmedFeedUrl.isEmpty || core.view.library.loading)
                 }
                 .padding()
             }
             .navigationTitle("Library")
+            .onChange(of: core.view.library.loading) { _, isLoading in
+                // Keep the typed URL until a subscribe actually succeeds, so a
+                // failed attempt can be corrected instead of retyped.
+                switch SubscribeFlow.outcome(
+                    isSubscribing: isSubscribing,
+                    isLoading: isLoading,
+                    error: core.view.library.error,
+                ) {
+                case .pending:
+                    break
+                case .succeeded:
+                    isSubscribing = false
+                    feedUrl = ""
+                case .failed:
+                    isSubscribing = false
+                }
+            }
         }
     }
 }
