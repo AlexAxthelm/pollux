@@ -67,12 +67,17 @@ I want to subscribe to shows whose feeds are still http-only
 so that older or self-hosted shows aren't unreachable
 
 As a subscriber
-I want the app to try a secure connection first and fall back only if needed
-so that my connection is protected whenever the host supports it
+I want the app to retry over https when I paste an http link
+so that I'm never asked to allow insecure access for a host that supports https
+anyway
 
 As a subscriber
-I want to be told when a feed can only be loaded insecurely
-so that I can decide whether I care
+I want the insecure-feed prompt to tell me in concrete terms what I'm accepting
+so that I'm making an actual choice rather than clicking through a warning
+
+As a subscriber
+I want the default to only fetch secure feeds, but with a per-feed override
+so that I can expect security, and opt in to insecure feeds
 
 As a maintainer
 I want any transport-security exception scoped to the specific feeds that need it
@@ -86,9 +91,18 @@ so that we aren't weakening security for every request the app makes
   requires the use of a secure connection." That is accurate but not actionable,
   and it is Apple's wording rather than ours.
 - `iOS/Pollux/Info.plist` currently declares no ATS exceptions, so iOS default
-  behavior (arbitrary loads disabled) applies. Supporting http-only feeds means a
-  deliberate decision about `NSExceptionDomains` scope — hence the maintainer
-  story above, rather than a blanket `NSAllowsArbitraryLoads`.
+  behavior (arbitrary loads disabled) applies.
+- **Unresolved:** the per-feed override story is in tension with how ATS works.
+  `NSExceptionDomains` entries are static Info.plist values fixed at build time,
+  and there is no runtime API to add a domain — but subscription URLs are supplied
+  by the user long after we ship, so the hosts needing an exception are unknowable
+  in advance. A genuinely per-feed opt-in therefore cannot be expressed through
+  ATS scoping. The realistic implementation is the inverse: declare
+  `NSAllowsArbitraryLoads` and enforce the https-only default in our own code,
+  with the per-feed opt-in as our gate rather than the OS's. Same behavior for the
+  user, but the OS stops being the backstop and a bug in our gating fails open —
+  so this needs a deliberate decision, and the maintainer story above should be
+  rewritten once it's made.
 - The "URL still there" story is a concrete current gap: `ContentView.swift`
   clears the text field immediately on tapping Add, so a failed attempt loses
   what was typed.
