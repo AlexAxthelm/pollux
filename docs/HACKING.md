@@ -11,15 +11,28 @@ For a conceptual overview of the architecture, see `ARCHITECTURE.md`.
 
 - **Rust** (stable) — managed via `rust-toolchain.toml`; install via
   [rustup](https://rustup.rs/)
-- **Xcode 16+** — required for Swift 6.2 and iOS 18 deployment target
+- **Xcode 16+** — required for Swift 6.2 and iOS 18 deployment target. Accept the
+  license (`sudo xcodebuild -license accept`) after installing. For `make ios-sim`
+  you also need an **iOS Simulator runtime**, which recent Xcode versions do not
+  bundle — install one via Xcode → Settings → Platforms, or
+  `xcodebuild -downloadPlatform iOS`.
 - **xcodegen** — regenerates the Xcode project from `iOS/project.yml`
   ```
   brew install xcodegen
   ```
-- **cargo-swift** — exactly version 0.9.0 (the `make package` target checks
-  this and will fail fast if the version is wrong)
+- **xcbeautify** — formats `xcodebuild` output; `make ios-sim` and `make ios-test`
+  pipe through it, so it must be installed or those targets fail with
+  `xcbeautify: command not found`
   ```
-  cargo install cargo-swift --version 0.9.0
+  brew install xcbeautify
+  ```
+- **cargo-run-bin** — runs project-pinned cargo tools via `cargo bin`. The build
+  uses it for **cargo-swift**, pinned to `0.9.0` in `[workspace.metadata.bin]` in
+  the root `Cargo.toml`. `make package` invokes cargo-swift through it, building
+  the pinned version into a git-ignored `.bin/` cache on first use — so you do
+  **not** install cargo-swift yourself.
+  ```
+  cargo install cargo-run-bin
   ```
 
 ### For Swift checks (also required in CI)
@@ -31,12 +44,16 @@ brew install swiftlint swiftformat
 ### Verify your setup
 
 ```
-rustup show          # should show stable toolchain and Apple targets
-cargo swift --version | grep 0.9.0
+rustup show                        # should show stable toolchain and Apple targets
+cargo install --list | grep cargo-run-bin
 xcodegen --version
+xcbeautify --version
 swiftlint --version
 swiftformat --version
 ```
+
+cargo-swift itself is built on demand by `make package`; you can pre-build it
+with `cargo bin cargo-swift --version` (first run compiles it into `.bin/`).
 
 ---
 
@@ -70,8 +87,9 @@ This runs three steps in order:
 
 1. `make typegen` — runs the `codegen` binary to generate Swift type stubs
    into `iOS/generated/App/`
-2. `make package` — runs `cargo swift package` to compile the Rust static lib
-   and wrap it as a Swift package in `iOS/generated/Shared/`
+2. `make package` — runs `cargo bin cargo-swift package` (the pinned 0.9.0) to
+   compile the Rust static lib and wrap it as a Swift package in
+   `iOS/generated/Shared/`
 3. `make generate-project` — runs `xcodegen` to regenerate `iOS/Pollux.xcodeproj`
 
 Run `make ios-build` whenever you change anything in `shared/src/app.rs` (new
@@ -94,9 +112,12 @@ make ios-sim
 ```
 
 This builds, installs, and launches in the first available "iPhone 14 Pro Max"
-simulator. To target a different device, override `SIM_DEVICE_NAME`:
+simulator (the `SIM_DEVICE_NAME` default in the Makefile). Newer Xcode runtimes
+may not include that exact device — if `make ios-sim` reports the simulator was
+not found, list what you have and override `SIM_DEVICE_NAME`:
 
 ```bash
+xcrun simctl list devices available     # see installed simulators
 make ios-sim SIM_DEVICE_NAME="iPhone 16"
 ```
 
@@ -205,15 +226,31 @@ make ios-rebuild    # clean + full ios-build
   exactly `0.29.4` (the version assertion in `lib.rs` will catch mismatches)
 - `facet` — pinned to `=0.31` (exact version required); used for type
   introspection during code generation
-- `cargo-swift` — must be exactly `0.9.0`; the `make package` target
-  verifies this before running
+- `cargo-swift` — pinned to exactly `0.9.0` in `[workspace.metadata.bin]` (root
+  `Cargo.toml`) and run through `cargo-run-bin`. Its bundled `uniffi_bindgen`
+  must match the `uniffi` crate version above, so bump both together: 0.9.0 ships
+  uniffi 0.29.x, while cargo-swift 0.10+ move to 0.30/0.31
 
 ---
 
 ## Troubleshooting
 
-**`make package` fails with version error**
-cargo-swift must be exactly 0.9.0. Run `cargo install cargo-swift --version 0.9.0 --force`.
+**`cargo: command not found` after installing via Homebrew**
+Homebrew's `rustup` formula is keg-only and does not link `cargo`/`rustc` into
+`PATH`. Add its bin dir to your shell profile:
+`export PATH="/opt/homebrew/opt/rustup/bin:$PATH"`. (A `brew link --force rustup`
+works too, but later `brew` runs wipe the force-link, so the PATH entry is the
+durable fix.)
+
+**`error: no such command: bin` from `make package`**
+`make package` runs `cargo bin cargo-swift`, which needs the **cargo-run-bin**
+prerequisite. Cargo's error names the missing subcommand (`bin`), not the tool,
+so it's easy to miss. Install it: `cargo install cargo-run-bin`.
+
+**`make package` fails to find or run cargo-swift**
+It is managed by cargo-run-bin, not a global install. Make sure `cargo-run-bin`
+is installed (`cargo install cargo-run-bin`); `make package` then builds the
+pinned cargo-swift into `.bin/` automatically. To rebuild it, delete `.bin/`.
 
 **Xcode can't find the `Shared` or `App` packages**
 Run `make ios-build` to regenerate `iOS/generated/`. Never try to add these
@@ -228,5 +265,6 @@ You need to regenerate: `make ios-build`. The generated Swift types in
 `iOS/generated/App/` are stale.
 
 **`uniffi` version assertion fires**
-The `uniffi` crate in `shared/Cargo.toml` and the `cargo-swift` version must
-stay in sync. Currently both are pinned to 0.29.4.
+The `uniffi` crate in `shared/Cargo.toml` and the cargo-swift version pinned in
+`[workspace.metadata.bin]` (root `Cargo.toml`) must stay in sync. Currently
+uniffi is `=0.29.4` and cargo-swift is `0.9.0` (which ships uniffi 0.29.x).

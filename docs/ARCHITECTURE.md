@@ -52,8 +52,7 @@ pollux/
 │   ├── generated/          # ← git-ignored; produced by `make typegen` + `make package`
 │   │   ├── App/            # Swift type stubs (Event, ViewModel, Request, …)
 │   │   └── Shared/         # Swift package wrapping the compiled Rust static lib
-│   ├── project.yml         # XcodeGen spec (source of truth for the Xcode project)
-│   └── justfile            # iOS-specific task runner
+│   └── project.yml         # XcodeGen spec (source of truth for the Xcode project)
 ├── docs/
 │   ├── ARCHITECTURE.md     # this file
 │   ├── HACKING.md          # developer setup and workflow
