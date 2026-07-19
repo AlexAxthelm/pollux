@@ -88,6 +88,17 @@ package:
 		mkdir -p ../iOS/generated/Shared && \
 		cp -r Shared/* ../iOS/generated/Shared/ && \
 		rm -rf Shared
+	# Flatten the xcframework headers. cargo-swift 0.9.0 nests the FFI modulemap in
+	# a per-framework subdir (headers/RustFramework/module.modulemap), but the
+	# Info.plist HeadersPath is "Headers", so SwiftPM never finds the modulemap and
+	# `canImport(sharedFFI)` fails — the generated bindings then can't see RustBuffer
+	# et al. Move the modulemap + header up to the headers root. (Fixed upstream in
+	# cargo-swift 0.11.0 / PR #87; we stay on 0.9.0 to match uniffi 0.29.4.)
+	for h in iOS/generated/Shared/RustFramework.xcframework/*/headers; do \
+		if [ -d "$$h/RustFramework" ]; then \
+			mv "$$h/RustFramework/"* "$$h/" && rmdir "$$h/RustFramework"; \
+		fi; \
+	done
 
 # Rebuild the Xcode project from project.yml
 generate-project: typegen package
