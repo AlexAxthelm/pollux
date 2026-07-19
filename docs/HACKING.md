@@ -20,6 +20,12 @@ For a conceptual overview of the architecture, see `ARCHITECTURE.md`.
   ```
   brew install xcodegen
   ```
+- **xcbeautify** — formats `xcodebuild` output; `make ios-sim` and `make ios-test`
+  pipe through it, so it must be installed or those targets fail with
+  `xcbeautify: command not found`
+  ```
+  brew install xcbeautify
+  ```
 - **cargo-run-bin** — runs project-pinned cargo tools via `cargo bin`. The build
   uses it for **cargo-swift**, pinned to `0.9.0` in `[workspace.metadata.bin]` in
   the root `Cargo.toml`. `make package` invokes cargo-swift through it, building
@@ -41,6 +47,7 @@ brew install swiftlint swiftformat
 rustup show                        # should show stable toolchain and Apple targets
 cargo install --list | grep cargo-run-bin
 xcodegen --version
+xcbeautify --version
 swiftlint --version
 swiftformat --version
 ```
