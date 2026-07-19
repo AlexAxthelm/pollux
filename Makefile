@@ -71,11 +71,14 @@ typegen:
 			--language swift \
 			--output-dir iOS/generated
 
-# Build the shared library as a Swift package using cargo-swift (requires v0.9.0)
+# Build the shared library as a Swift package using cargo-swift.
+# cargo-swift is pinned in the root Cargo.toml ([workspace.metadata.bin]) and run
+# via cargo-run-bin, which builds it into a project-local .bin/ cache on first use.
+# `cargo bin` injects the `swift` subcommand automatically (the cargo- prefix), so
+# the command is `cargo bin cargo-swift package`, not `... swift package`.
 package:
 	cd shared && \
-		cargo swift --version | grep -q '0.9.0' && \
-		cargo swift package \
+		cargo bin cargo-swift package \
 			--name Shared \
 			--platforms ios \
 			--lib-type static \
@@ -98,7 +101,7 @@ ios-xcodebuild: ios-build
 		-scheme $(XCODE_SCHEME) \
 		-configuration Debug \
 		-destination 'platform=iOS Simulator,id=$(SIM_ID)' \
-		| xcpretty
+		| xcbeautify
 
 # Full rebuild from scratch
 ios-rebuild: ios-clean ios-build
@@ -129,7 +132,7 @@ ios-test: ios-build
 		-project $(XCODE_PROJECT) \
 		-scheme PolluxTests \
 		-destination 'platform=iOS Simulator,id=$(SIM_ID)' \
-		| xcpretty
+		| xcbeautify
 
 swift-clean: xcode-clean swift-generated-clean
 

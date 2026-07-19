@@ -15,3 +15,10 @@ version = "0.1.0"
 anyhow = "1.0.100"
 crux_core = "0.17.0"
 serde = "1.0.228"
+
+# Build tools run via cargo-run-bin (`cargo bin <tool>`), built into a
+# project-local .bin/ cache. Must live at the workspace root (cargo-run-bin reads
+# only the manifest beside Cargo.lock). cargo-swift is pinned to match uniffi
+# =0.29.4 in shared/Cargo.toml — 0.9.0 ships uniffi 0.29.x; 0.10+ bump to 0.30/0.31.
+[workspace.metadata.bin]
+cargo-swift = { version = "0.9.0", locked = true }
