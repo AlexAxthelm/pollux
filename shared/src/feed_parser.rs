@@ -36,7 +36,7 @@ pub fn parse_feed(url: &str, body: Vec<u8>) -> Result<(Subscription, Vec<Episode
         .filter_map(|entry| {
             let media = entry.media.into_iter().next()?;
 
-            // Extract fields before consuming media
+            // Pull the fields we need out of media before moving past it.
             let duration_secs = media
                 .duration
                 .map(|d| d.as_secs().min(u32::MAX as u64) as u32);

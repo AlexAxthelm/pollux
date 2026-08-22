@@ -34,7 +34,8 @@ private func makeEpisode(
     feedGuid: String? = nil,
     title: String = "Test Episode",
     playbackStatus: PlaybackStatus = .unplayed,
-    downloadStatus: DownloadStatus = .notDownloaded
+    downloadStatus: DownloadStatus = .notDownloaded,
+    fileSizeBytes: UInt64? = nil
 ) -> Episode {
     Episode(
         id: id,
@@ -51,7 +52,7 @@ private func makeEpisode(
         downloadStatus: downloadStatus,
         downloadProgress: nil,
         isFlagged: false,
-        fileSizeBytes: nil,
+        fileSizeBytes: fileSizeBytes,
         localPath: nil
     )
 }
@@ -370,6 +371,35 @@ struct DatabaseManagerTests {
         #expect(fetched.title == "New Title")
         // id should be preserved from original insert
         #expect(fetched.id == "ep-1")
+    }
+
+    @Test func upsertFeedWithEpisodes_refreshUpdatesFileSize() async throws {
+        // file_size_bytes is feed metadata and can change when a publisher
+        // re-encodes an episode, so a refresh must not leave it stale.
+        let db = try makeManager()
+        let sub = makeSubscription(id: "sub-1", feedUrl: "https://example.com/feed.rss")
+        try await db.execute(.upsertSubscription(sub))
+
+        let ep = makeEpisode(
+            id: "ep-1", subscriptionId: "sub-1", feedGuid: "stable-guid", fileSizeBytes: 1000,
+        )
+        try await db.execute(.upsertEpisode(ep))
+
+        let refreshed = makeEpisode(
+            id: UUID().uuidString, subscriptionId: "sub-1", feedGuid: "stable-guid",
+            fileSizeBytes: 2000,
+        )
+        try await db.execute(.upsertFeedWithEpisodes(subscription: sub, episodes: [refreshed]))
+
+        let result = try await db.execute(
+            .getEpisodeByFeedGuid(subscriptionId: "sub-1", feedGuid: "stable-guid"),
+        )
+        guard case let .episode(fetched) = result else {
+            Issue.record("Expected .episode, got \(result)")
+            return
+        }
+        #expect(fetched.fileSizeBytes == 2000)
+        #expect(fetched.id == "ep-1", "refresh should preserve the original row")
     }
 
     @Test func upsertFeedWithEpisodes_noEpisodesIsValid() async throws {

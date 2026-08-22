@@ -258,7 +258,8 @@ private extension DatabaseManager {
                 enclosure_url = excluded.enclosure_url,
                 artwork_url = excluded.artwork_url,
                 pub_date = excluded.pub_date,
-                duration_secs = excluded.duration_secs
+                duration_secs = excluded.duration_secs,
+                file_size_bytes = excluded.file_size_bytes
             """,
             arguments: [
                 episode.id, episode.feedGuid, subscriptionId,
