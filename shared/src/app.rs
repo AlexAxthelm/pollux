@@ -66,7 +66,7 @@ impl App for Pollux {
                     }
                     Err(e) => {
                         model.loading = false;
-                            model.error = Some(e);
+                        model.error = Some(e);
                         render()
                     }
                 },

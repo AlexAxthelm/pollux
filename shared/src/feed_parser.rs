@@ -178,5 +178,4 @@ mod tests {
 
         assert_eq!(episodes[0].pub_date, Some(1_704_067_200));
     }
-
 }
