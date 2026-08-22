@@ -83,6 +83,10 @@ As a maintainer
 I want any transport-security exception scoped to the specific feeds that need it
 so that we aren't weakening security for every request the app makes
 
+As a subscriber
+I want to be able to manually enter a url and have it be parsed correctly
+(`example.com/feed` -> `https://www.example.com/feed`)
+
 ## Notes / context
 
 - Both sections came out of manual testing of the `feat/parsing` subscribe flow.
