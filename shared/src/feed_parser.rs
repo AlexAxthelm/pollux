@@ -37,6 +37,9 @@ pub fn parse_feed(url: &str, body: Vec<u8>) -> Result<(Subscription, Vec<Episode
             let media = entry.media.into_iter().next()?;
 
             // Pull the fields we need out of media before moving past it.
+            // The fields we're moving here are tracked individually by rust (borrow checking
+            // shouldn't be a problem) and let us bail out of processing an entry early if there's
+            // nothing there to look at (no url, no content, etc.).
             let duration_secs = media
                 .duration
                 .map(|d| d.as_secs().min(u32::MAX as u64) as u32);
