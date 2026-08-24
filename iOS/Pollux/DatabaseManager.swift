@@ -2,6 +2,19 @@ import App
 import Foundation
 import GRDB
 
+/// Storage-layer errors that carry a specific message. Thrown (not returned)
+/// from inside a write closure so GRDB rolls the transaction back.
+enum DatabaseManagerError: Error, LocalizedError {
+    case subscriptionMissingAfterUpsert(feedURL: String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .subscriptionMissingAfterUpsert(feedURL):
+            "subscription disappeared after upsert for feed_url: \(feedURL)"
+        }
+    }
+}
+
 actor DatabaseManager {
     private let db: DatabasePool
 
@@ -158,10 +171,13 @@ actor DatabaseManager {
                 sql: "SELECT * FROM subscriptions WHERE feed_url = ?",
                 arguments: [subscription.feedUrl],
             ) else {
-                // Returning a value here does not roll back — GRDB aborts the
-                // transaction only on a thrown error. The INSERT above commits
-                // while the caller is told the operation failed.
-                return .error("subscription disappeared after upsert for feed_url: \(subscription.feedUrl)")
+                // Throw rather than return: GRDB rolls back only on a thrown
+                // error, so this undoes the subscription INSERT above instead of
+                // committing it behind a reported failure. execute()'s caller
+                // maps the thrown error to StorageResult.error.
+                throw DatabaseManagerError.subscriptionMissingAfterUpsert(
+                    feedURL: subscription.feedUrl,
+                )
             }
             let canonical = Self.subscription(from: subRow)
             for episode in episodes {
@@ -288,12 +304,11 @@ private extension DatabaseManager {
     }
 
     static func episode(from row: Row) -> Episode {
-        // The UInt32(_:) conversions below trap on out-of-range values, whereas
-        // the write path stores NULL on overflow (see fileSizeBytes in
-        // upsertEpisodeRow). The two directions disagree about whether bad data
-        // is survivable: the CHECK constraints enforce >= 0 but no upper bound,
-        // so a row written by a later schema or by external tooling crashes on
-        // read rather than degrading.
+        // Checked conversions: the CHECK constraints enforce >= 0 but no upper
+        // bound, so a value above UInt32.max (written by a later schema or
+        // external tooling) reads back as nil rather than trapping — matching
+        // the write path, which stores NULL on overflow (see fileSizeBytes in
+        // upsertEpisodeRow).
         Episode(
             id: row["id"],
             feedGuid: row["feed_guid"],
@@ -301,11 +316,11 @@ private extension DatabaseManager {
             title: row["title"],
             description: row["description"],
             pubDate: row["pub_date"],
-            durationSecs: (row["duration_secs"] as Int64?).map { UInt32($0) },
+            durationSecs: (row["duration_secs"] as Int64?).flatMap { UInt32(exactly: $0) },
             enclosureUrl: row["enclosure_url"],
             artworkUrl: row["artwork_url"],
             playbackStatus: playbackStatus(from: row["playback_status"]),
-            playbackPositionSecs: (row["playback_position_secs"] as Int64?).map { UInt32($0) },
+            playbackPositionSecs: (row["playback_position_secs"] as Int64?).flatMap { UInt32(exactly: $0) },
             downloadStatus: downloadStatus(from: row["download_status"]),
             downloadProgress: (row["download_progress"] as Int32?).map { UInt8(truncatingIfNeeded: $0) },
             isFlagged: row["is_flagged"],

@@ -1,5 +1,6 @@
 import App
 import Foundation
+import GRDB
 import Testing
 
 @testable import Pollux
@@ -441,5 +442,31 @@ struct DatabaseManagerTests {
             return
         }
         #expect(fetched.fileSizeBytes == nil, "overflow file size should be stored as NULL")
+    }
+
+    @Test func episode_outOfRangeDurationReadsAsNilNotCrash() async throws {
+        // duration_secs is UInt32 in the typed API, so an out-of-range value can
+        // only arrive from a later schema or external tooling. Plant one via raw
+        // SQL and confirm the read degrades to nil instead of trapping.
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".sqlite").path
+        let db = try DatabaseManager(path: path)
+        try await db.execute(.upsertSubscription(makeSubscription(id: "sub-1")))
+        try await db.execute(.upsertEpisode(
+            makeEpisode(id: "ep-1", subscriptionId: "sub-1", feedGuid: "g1"),
+        ))
+
+        let raw = try DatabasePool(path: path)
+        try await raw.write { db in
+            // 5_000_000_000 > UInt32.max (4_294_967_295)
+            try db.execute(sql: "UPDATE episodes SET duration_secs = 5000000000 WHERE id = 'ep-1'")
+        }
+
+        let result = try await db.execute(.getEpisode(id: "ep-1"))
+        guard case let .episode(fetched) = result else {
+            Issue.record("Expected .episode, got \(result)")
+            return
+        }
+        #expect(fetched.durationSecs == nil, "out-of-range duration should read as nil")
     }
 }
