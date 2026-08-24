@@ -42,37 +42,35 @@ See also: `GLOSSARY.md` — Episode, Playback status, Flag.
 #### Identity across refreshes
 
 An Episode is matched to its existing row by `(subscription_id, feed_guid)`,
-where `feed_guid` comes from the feed's `<guid>`. This key decides whether a
+where `feed_guid` is the feed's `<guid>` when present. This key decides whether a
 refresh **updates** an episode or **inserts a new one**, so it also decides
-whether playback position, played status, and flags survive a refresh. Two open
-problems sit here.
+whether playback position, played status, and flags survive a refresh.
 
-**Unstable identity when `<guid>` is absent.** `<guid>` is optional in RSS 2.0.
-When it is missing, `feed-rs` synthesises a random UUID that differs on every
-parse — parsing one unchanged feed twice yields two different ids. Because the
-unique key then never matches, every refresh re-inserts every episode as new
-rows: the library grows without bound and playback state resets to Unplayed,
-since the rows carrying it are orphaned rather than updated. This is a live
-defect, not a hypothetical.
+**Identity when `<guid>` is absent.** `<guid>` is optional in RSS 2.0. When it is
+missing, `feed-rs` would synthesise a random UUID that differs on every parse, so
+the unique key never matched and every refresh re-inserted every episode — the
+library grew without bound and playback state reset to Unplayed. Resolved for
+RSS: `parse_feed` registers `feed-rs`'s `id_generator` hook, which fires only for
+entries with no id, to mark them; those get a locally derived `feed_guid` from
+`stable_episode_id(enclosure_url, title)` instead. Entries with a real `<guid>`
+are untouched.
 
-The fix needs an identity that is *stable* across refreshes and *unique* within
-a feed. Candidates and their failure modes:
+Two properties of the derived id worth keeping in mind:
 
-- **Enclosure URL** — stable for many feeds, but dynamic ad insertion and
-  tracking prefixes rewrite it, which reproduces the same duplication
-- **Normalised enclosure URL** (query string and known tracking prefixes
-  stripped) — better, still breaks if the path itself changes
-- **Title + publication date** — survives URL changes, breaks on an edited
-  title, and collides for entries with no date
-- **Detect the synthesised id** (e.g. `entry.id` parsing as a bare UUID) and
-  fall back to one of the above — cheap, but misfires on feeds that legitimately
-  use UUIDs as guids
-- **Read `<guid>` ourselves** rather than relying on `feed-rs`'s `id`, so guid
-  presence is known rather than inferred — most correct, most work
+- It is **not** keyed on the parse-time `subscription_id` (a fresh UUID each
+  parse — folding it in would reintroduce the instability). Storage already
+  scopes uniqueness per feed, so the derived value only needs to be unique
+  within one feed.
+- It uses a hand-rolled FNV-1a rather than `std`'s `DefaultHasher`, whose
+  algorithm `std` does not guarantee across releases; stored ids must stay valid
+  across upgrades. A known-answer test locks the hash so it cannot silently
+  drift.
 
-Choosing between these wants evidence rather than argument: how many real feeds
-omit `<guid>`, and how many rewrite enclosure URLs between fetches. Neither is
-known yet.
+Residual failure modes (accepted, and milder than every-refresh churn): editing
+a title or a change to the enclosure URL yields a new id and thus a duplicate
+row; two entries sharing *both* title and enclosure URL collapse to one. This
+does not yet cover Atom, which is moot until Atom entries parse at all (see
+`features/feed-parsing.md`).
 
 **Duplicate guids.** Feeds sometimes repeat a `<guid>` across entries. Storage
 resolves this by overwriting, and because feeds are conventionally newest-first,

@@ -107,9 +107,6 @@ Rounding out MVP to a complete, shippable state.
 - **Subscription-level download rules**: cascading defaults (global → feed)
 - **Settings completion**: all known settings wired up, cascading defaults
   pattern throughout
-- **Episode identity**: stable `feed_guid` for feeds that omit `<guid>` — today
-  every refresh re-inserts every episode and resets playback state. Release
-  blocker; see `DATA_MODEL.md` → Episode → Identity across refreshes
 - **Error states**: feed refresh failures (indicator on subscription row),
   download failures (retry button), invalid URI on subscribe, storage full
   notification
