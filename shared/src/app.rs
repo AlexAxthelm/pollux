@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::capabilities::http::{HttpOperation, HttpResult};
 use crate::capabilities::storage::{StorageOperation, StorageResult};
-use crate::domain::EpisodeSortOrder;
+use crate::domain::{Episode, EpisodeSortOrder};
 use crate::effect::Effect;
 use crate::feed_parser::parse_feed;
 use crate::html::strip_html;
@@ -103,7 +103,7 @@ impl App for Pollux {
                 // already-loaded library, so the page needs no extra fetch for it.
                 model.selected_subscription =
                     model.subscriptions.iter().find(|s| s.id == id).cloned();
-                model.episodes.clear();
+                model.episode_summaries.clear();
                 model.detail_loading = true;
                 model.detail_error = None;
                 Command::request_from_shell(StorageOperation::ListEpisodesBySubscription {
@@ -116,7 +116,8 @@ impl App for Pollux {
                 model.detail_loading = false;
                 match *result {
                     StorageResult::Episodes(rows) => {
-                        model.episodes = rows;
+                        // Project once here (HTML stripping included), not per render.
+                        model.episode_summaries = rows.iter().map(episode_summary).collect();
                         model.detail_error = None;
                     }
                     StorageResult::Error(e) => model.detail_error = Some(e),
@@ -166,27 +167,8 @@ impl App for Pollux {
 /// single source of truth for sort order, independent of how the shell's SQL
 /// returned the rows.
 fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
-    let mut episodes: Vec<EpisodeSummary> = model
-        .episodes
-        .iter()
-        .map(|e| EpisodeSummary {
-            id: e.id.clone(),
-            title: e.title.clone(),
-            description: e.description.clone(),
-            description_text: e
-                .description
-                .as_deref()
-                .map(strip_html)
-                .filter(|s| !s.is_empty()),
-            pub_date: e.pub_date,
-            duration_secs: e.duration_secs,
-            artwork_url: e.artwork_url.clone(),
-            playback_status: e.playback_status.clone(),
-            playback_position_secs: e.playback_position_secs,
-            download_status: e.download_status.clone(),
-            download_progress: e.download_progress,
-        })
-        .collect();
+    // Summaries were already projected at load time; here we only order them.
+    let mut episodes = model.episode_summaries.clone();
     sort_episodes(&mut episodes, model.episode_sort);
 
     let (subscription_id, title, artwork_url) = match &model.selected_subscription {
@@ -202,6 +184,29 @@ fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
         sort_order: model.episode_sort,
         loading: model.detail_loading,
         error: model.detail_error.clone(),
+    }
+}
+
+/// Projects a stored `Episode` into its display `EpisodeSummary`, stripping the
+/// description to plain text for the row preview while keeping the raw HTML for the
+/// detail page. Called once per episode when a feed's episodes load, not per render.
+fn episode_summary(e: &Episode) -> EpisodeSummary {
+    EpisodeSummary {
+        id: e.id.clone(),
+        title: e.title.clone(),
+        description: e.description.clone(),
+        description_text: e
+            .description
+            .as_deref()
+            .map(strip_html)
+            .filter(|s| !s.is_empty()),
+        pub_date: e.pub_date,
+        duration_secs: e.duration_secs,
+        artwork_url: e.artwork_url.clone(),
+        playback_status: e.playback_status.clone(),
+        playback_position_secs: e.playback_position_secs,
+        download_status: e.download_status.clone(),
+        download_progress: e.download_progress,
     }
 }
 
@@ -284,6 +289,15 @@ mod tests {
             .into_iter()
             .map(|e| e.title)
             .collect()
+    }
+
+    /// Loads episodes through the real event, so the at-load projection (including
+    /// HTML stripping) is exercised — the shell never sets summaries directly.
+    fn load_episodes(app: &Pollux, model: &mut Model, episodes: Vec<Episode>) {
+        let _ = app.update(
+            Event::EpisodesLoaded(Box::new(StorageResult::Episodes(episodes))),
+            model,
+        );
     }
 
     fn view_titles(app: &Pollux, model: &Model) -> Vec<String> {
@@ -724,11 +738,15 @@ mod tests {
     fn episodes_loaded_defaults_to_newest_first() {
         let app = Pollux;
         let mut model = Model::default();
-        model.episodes = vec![
-            make_episode("old", "Old", Some(1_000)),
-            make_episode("new", "New", Some(3_000)),
-            make_episode("mid", "Mid", Some(2_000)),
-        ];
+        load_episodes(
+            &app,
+            &mut model,
+            vec![
+                make_episode("old", "Old", Some(1_000)),
+                make_episode("new", "New", Some(3_000)),
+                make_episode("mid", "Mid", Some(2_000)),
+            ],
+        );
 
         assert_eq!(detail_titles(&app, &model), vec!["New", "Mid", "Old"]);
     }
@@ -737,11 +755,15 @@ mod tests {
     fn set_episode_sort_reorders_the_view() {
         let app = Pollux;
         let mut model = Model::default();
-        model.episodes = vec![
-            make_episode("b", "Bravo", Some(3_000)),
-            make_episode("a", "Alpha", Some(1_000)),
-            make_episode("c", "Charlie", Some(2_000)),
-        ];
+        load_episodes(
+            &app,
+            &mut model,
+            vec![
+                make_episode("b", "Bravo", Some(3_000)),
+                make_episode("a", "Alpha", Some(1_000)),
+                make_episode("c", "Charlie", Some(2_000)),
+            ],
+        );
 
         let _ = app.update(
             Event::SetEpisodeSort(EpisodeSortOrder::PubDateAsc),
@@ -776,11 +798,15 @@ mod tests {
     fn episodes_without_pub_date_sort_last_in_both_date_orders() {
         let app = Pollux;
         let mut model = Model::default();
-        model.episodes = vec![
-            make_episode("dated-old", "Dated Old", Some(1_000)),
-            make_episode("undated", "Undated", None),
-            make_episode("dated-new", "Dated New", Some(2_000)),
-        ];
+        load_episodes(
+            &app,
+            &mut model,
+            vec![
+                make_episode("dated-old", "Dated Old", Some(1_000)),
+                make_episode("undated", "Undated", None),
+                make_episode("dated-new", "Dated New", Some(2_000)),
+            ],
+        );
 
         model.episode_sort = EpisodeSortOrder::PubDateDesc;
         assert_eq!(
@@ -834,7 +860,7 @@ mod tests {
         let mut model = Model::default();
         let mut episode = make_episode("e1", "Ep", Some(1_000));
         episode.description = Some("<p>Hello <b>world</b></p>".to_string());
-        model.episodes = vec![episode];
+        load_episodes(&app, &mut model, vec![episode]);
 
         let summary = &app.view(&model).subscription_detail.episodes[0];
         // Raw HTML is preserved for the detail page's rich rendering...
@@ -851,7 +877,11 @@ mod tests {
         let app = Pollux;
         let mut model = Model::default();
         // make_episode leaves description as None.
-        model.episodes = vec![make_episode("e1", "Ep", Some(1_000))];
+        load_episodes(
+            &app,
+            &mut model,
+            vec![make_episode("e1", "Ep", Some(1_000))],
+        );
 
         let summary = &app.view(&model).subscription_detail.episodes[0];
         assert!(summary.description.is_none());
