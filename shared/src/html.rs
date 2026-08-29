@@ -6,24 +6,70 @@
 /// enough for a truncated one-line summary; the full show notes are rendered from
 /// the original HTML shell-side, where a real reader is available.
 pub fn strip_html(input: &str) -> String {
-    // Tags become a space so adjacent blocks (</p><p>, <br>) don't run their words
-    // together; runs of whitespace are collapsed afterwards.
+    // Block/break tags become a space so adjacent blocks (</p><p>, <br>) don't run
+    // their words together; inline tags (<b>, <i>, <a>) are dropped without a space
+    // so they don't split a word they were only emphasizing. Whitespace is then
+    // collapsed.
     let mut without_tags = String::with_capacity(input.len());
-    let mut in_tag = false;
-    for ch in input.chars() {
-        match ch {
-            '<' => {
-                in_tag = true;
-                without_tags.push(' ');
+    let mut rest = input;
+    while let Some(lt) = rest.find('<') {
+        without_tags.push_str(&rest[..lt]);
+        let after = &rest[lt + 1..];
+        match after.find('>') {
+            Some(gt) => {
+                if is_separating_tag(&after[..gt]) {
+                    without_tags.push(' ');
+                }
+                rest = &after[gt + 1..];
             }
-            '>' => in_tag = false,
-            _ if !in_tag => without_tags.push(ch),
-            _ => {}
+            // Unterminated '<': treat it (and the remainder) as literal text.
+            None => {
+                without_tags.push('<');
+                rest = after;
+            }
         }
     }
+    without_tags.push_str(rest);
 
     let decoded = decode_entities(&without_tags);
     decoded.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Whether a tag's removal should leave a separating space. True for block-level
+/// and line-break tags (which delimit text), false for inline tags. `tag` is the
+/// text between `<` and `>`, e.g. `"p"`, `"/p"`, `"br/"`, or `"a href=…"`.
+fn is_separating_tag(tag: &str) -> bool {
+    let name: String = tag
+        .trim_start_matches('/')
+        .chars()
+        .take_while(char::is_ascii_alphanumeric)
+        .flat_map(char::to_lowercase)
+        .collect();
+    matches!(
+        name.as_str(),
+        "p" | "br"
+            | "div"
+            | "li"
+            | "ul"
+            | "ol"
+            | "tr"
+            | "hr"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "blockquote"
+            | "section"
+            | "article"
+            | "header"
+            | "footer"
+            | "table"
+            | "pre"
+            | "dd"
+            | "dt"
+    )
 }
 
 /// Decodes HTML entities in a single left-to-right pass, so an already-decoded
@@ -96,6 +142,16 @@ mod tests {
     fn separates_adjacent_blocks() {
         assert_eq!(strip_html("<p>one</p><p>two</p>"), "one two");
         assert_eq!(strip_html("line<br>break"), "line break");
+    }
+
+    #[test]
+    fn inline_tags_do_not_split_words() {
+        // Inline emphasis inside a word must not introduce a space...
+        assert_eq!(strip_html("un<i>believ</i>able"), "unbelievable");
+        assert_eq!(strip_html("a<b>b</b>c"), "abc");
+        // ...while block/break tags still separate their neighbours.
+        assert_eq!(strip_html("a<br/>b"), "a b");
+        assert_eq!(strip_html("<li>one</li><li>two</li>"), "one two");
     }
 
     #[test]
