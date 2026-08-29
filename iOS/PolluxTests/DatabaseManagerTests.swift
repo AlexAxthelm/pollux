@@ -469,4 +469,31 @@ struct DatabaseManagerTests {
         }
         #expect(fetched.durationSecs == nil, "out-of-range duration should read as nil")
     }
+
+    @Test func episode_outOfRangeDownloadProgressReadsAsNil() async throws {
+        // download_progress has a CHECK (0...100), so planting an out-of-range
+        // value requires bypassing it — standing in for a future schema that
+        // drops the bound or external tooling that ignores it. The read must
+        // degrade to nil, not silently wrap (300 -> 44) as truncation would.
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".sqlite").path
+        let db = try DatabaseManager(path: path)
+        try await db.execute(.upsertSubscription(makeSubscription(id: "sub-1")))
+        try await db.execute(.upsertEpisode(
+            makeEpisode(id: "ep-1", subscriptionId: "sub-1", feedGuid: "g1"),
+        ))
+
+        let raw = try DatabasePool(path: path)
+        try await raw.write { db in
+            try db.execute(sql: "PRAGMA ignore_check_constraints = ON")
+            try db.execute(sql: "UPDATE episodes SET download_progress = 300 WHERE id = 'ep-1'")
+        }
+
+        let result = try await db.execute(.getEpisode(id: "ep-1"))
+        guard case let .episode(fetched) = result else {
+            Issue.record("Expected .episode, got \(result)")
+            return
+        }
+        #expect(fetched.downloadProgress == nil, "out-of-range progress should read as nil")
+    }
 }

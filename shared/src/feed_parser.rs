@@ -129,9 +129,9 @@ fn now_unix() -> i64 {
 /// collapse to one. Both are rarer than the every-refresh churn of relying on
 /// feed-rs's synthesised id.
 fn stable_episode_id(enclosure_url: &str, title: &str) -> String {
-    // Length-delimited so ("ab", "c") and ("a", "bc") cannot collide. The
-    // version prefix lets us intentionally rev the scheme later without
-    // silently re-keying existing episodes.
+    // NUL-delimited so ("ab", "c") and ("a", "bc") cannot collide (NUL cannot
+    // appear in an XML enclosure URL or title). The version prefix lets us
+    // intentionally rev the scheme later without silently re-keying episodes.
     let mut buf = Vec::new();
     buf.extend_from_slice(b"pollux-episode-v1\0");
     buf.extend_from_slice(enclosure_url.as_bytes());
@@ -317,7 +317,7 @@ mod tests {
             base,
             stable_episode_id("https://example.com/a.mp3", "Other")
         );
-        // Length-delimited framing: the split between the two fields matters.
+        // NUL-delimited framing: the split between the two fields matters.
         assert_ne!(
             stable_episode_id("ab", "c"),
             stable_episode_id("a", "bc"),

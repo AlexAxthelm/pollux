@@ -304,11 +304,10 @@ private extension DatabaseManager {
     }
 
     static func episode(from row: Row) -> Episode {
-        // Checked conversions: the CHECK constraints enforce >= 0 but no upper
-        // bound, so a value above UInt32.max (written by a later schema or
-        // external tooling) reads back as nil rather than trapping — matching
-        // the write path, which stores NULL on overflow (see fileSizeBytes in
-        // upsertEpisodeRow).
+        // Checked conversions: a stored value outside the target type's range
+        // (written by a later schema or external tooling) reads back as nil
+        // rather than trapping or silently wrapping — matching the write path,
+        // which stores NULL on overflow (see fileSizeBytes in upsertEpisodeRow).
         Episode(
             id: row["id"],
             feedGuid: row["feed_guid"],
@@ -322,7 +321,7 @@ private extension DatabaseManager {
             playbackStatus: playbackStatus(from: row["playback_status"]),
             playbackPositionSecs: (row["playback_position_secs"] as Int64?).flatMap { UInt32(exactly: $0) },
             downloadStatus: downloadStatus(from: row["download_status"]),
-            downloadProgress: (row["download_progress"] as Int32?).map { UInt8(truncatingIfNeeded: $0) },
+            downloadProgress: (row["download_progress"] as Int32?).flatMap { UInt8(exactly: $0) },
             isFlagged: row["is_flagged"],
             fileSizeBytes: (row["file_size_bytes"] as Int64?).map { UInt64(bitPattern: $0) },
             localPath: row["local_path"],
