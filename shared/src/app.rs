@@ -99,18 +99,32 @@ impl App for Pollux {
                 render()
             }
             Event::SelectSubscription(id) => {
-                // Remember the chosen feed (for the details header) from the
-                // already-loaded library, so the page needs no extra fetch for it.
-                model.selected_subscription =
-                    model.subscriptions.iter().find(|s| s.id == id).cloned();
-                model.episode_summaries.clear();
-                model.detail_loading = true;
-                model.detail_error = None;
-                Command::request_from_shell(StorageOperation::ListEpisodesBySubscription {
-                    subscription_id: id,
-                })
-                .then_send(|r| Event::EpisodesLoaded(Box::new(r)))
-                .and(render())
+                // Re-selecting the feed already on screen (e.g. returning from an
+                // episode detail, which re-fires the shell's selection task) must
+                // not reload it: that would clear the list and flash a spinner for
+                // no new data. Reload only when the selection changes, or when the
+                // previous load errored and should be retried.
+                let already_showing = model
+                    .selected_subscription
+                    .as_ref()
+                    .is_some_and(|s| s.id == id)
+                    && model.detail_error.is_none();
+                if already_showing {
+                    render()
+                } else {
+                    // Remember the chosen feed (for the details header) from the
+                    // already-loaded library, so the page needs no extra fetch.
+                    model.selected_subscription =
+                        model.subscriptions.iter().find(|s| s.id == id).cloned();
+                    model.episode_summaries.clear();
+                    model.detail_loading = true;
+                    model.detail_error = None;
+                    Command::request_from_shell(StorageOperation::ListEpisodesBySubscription {
+                        subscription_id: id,
+                    })
+                    .then_send(|r| Event::EpisodesLoaded(Box::new(r)))
+                    .and(render())
+                }
             }
             Event::EpisodesLoaded(result) => {
                 model.detail_loading = false;
@@ -852,6 +866,64 @@ mod tests {
         assert!(!model.loading);
         assert_eq!(model.error.as_deref(), Some("library error"));
         assert!(model.detail_loading);
+    }
+
+    #[test]
+    fn reselecting_the_current_subscription_does_not_reload() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions = vec![make_subscription("sub-id", "My Feed")];
+
+        // First selection loads the feed's episodes.
+        let _ = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+        assert!(!model.detail_loading);
+        assert_eq!(model.episode_summaries.len(), 1);
+
+        // Re-selecting the same, already-loaded feed (e.g. on back-navigation)
+        // is a no-op: no storage request, list and loading state untouched.
+        let mut cmd = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+        assert!(!model.detail_loading, "must not re-enter the loading state");
+        assert_eq!(model.episode_summaries.len(), 1, "list must be preserved");
+
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            !effects.iter().any(|e| matches!(e, Effect::Storage(_))),
+            "re-selecting the current feed must not re-query storage"
+        );
+        assert!(effects.iter().any(|e| matches!(e, Effect::Render(_))));
+    }
+
+    #[test]
+    fn reselecting_after_an_error_retries_the_load() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions = vec![make_subscription("sub-id", "My Feed")];
+
+        let _ = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+        let _ = app.update(
+            Event::EpisodesLoaded(Box::new(StorageResult::Error("boom".to_string()))),
+            &mut model,
+        );
+        assert!(model.detail_error.is_some());
+
+        // A failed load should not be sticky: re-selecting retries.
+        let mut cmd = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+        assert!(model.detail_loading);
+        assert!(
+            model.detail_error.is_none(),
+            "retry clears the previous error"
+        );
+
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            effects.iter().any(|e| matches!(
+                e,
+                Effect::Storage(r)
+                    if matches!(&r.operation, StorageOperation::ListEpisodesBySubscription { .. })
+            )),
+            "an errored load must be retryable"
+        );
     }
 
     #[test]
