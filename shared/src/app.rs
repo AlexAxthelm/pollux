@@ -229,8 +229,9 @@ fn episode_summary(e: &Episode) -> EpisodeSummary {
 fn sort_episodes(episodes: &mut [EpisodeSummary], order: EpisodeSortOrder) {
     match order {
         EpisodeSortOrder::PubDateDesc => {
-            // Missing dates last: key on (is_missing, negated date) ascending.
-            episodes.sort_by_key(|e| (e.pub_date.is_none(), e.pub_date.map(|d| -d)));
+            // Missing dates last, then newest first. `Reverse` gives the descending
+            // order without negating (which would overflow at i64::MIN).
+            episodes.sort_by_key(|e| (e.pub_date.is_none(), std::cmp::Reverse(e.pub_date)));
         }
         EpisodeSortOrder::PubDateAsc => {
             episodes.sort_by_key(|e| (e.pub_date.is_none(), e.pub_date));
