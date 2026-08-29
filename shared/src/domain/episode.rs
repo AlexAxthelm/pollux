@@ -20,6 +20,18 @@ pub enum DownloadStatus {
     RemovedFromFeed,
 }
 
+#[derive(Facet, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Default)]
+#[repr(C)]
+pub enum EpisodeSortOrder {
+    /// Newest first. Episodes with no pub_date sort last.
+    #[default]
+    PubDateDesc,
+    /// Oldest first. Episodes with no pub_date sort last.
+    PubDateAsc,
+    /// Alphabetical by title, case-insensitive.
+    TitleAsc,
+}
+
 #[derive(Facet, Serialize, Deserialize, Clone, Debug)]
 pub struct Episode {
     pub id: String,

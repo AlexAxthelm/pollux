@@ -20,7 +20,9 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         List(core.view.library.subscriptions, id: \.id) { sub in
-                            Text(sub.title)
+                            NavigationLink(value: sub) {
+                                Text(sub.title)
+                            }
                         }
                     }
                 }
@@ -47,6 +49,9 @@ struct ContentView: View {
                 .padding()
             }
             .navigationTitle("Library")
+            .navigationDestination(for: SubscriptionSummary.self) { sub in
+                SubscriptionDetailScreen(core: core, subscription: sub)
+            }
             .onChange(of: core.view.library.loading) { _, isLoading in
                 // Keep the typed URL until a subscribe actually succeeds, so a
                 // failed attempt can be corrected instead of retyped.

@@ -70,6 +70,15 @@ Display pattern:
 Refresh can also be triggered manually from the subscription details page or
 the library view (refresh all).
 
+> **Implementation note (details page):** the core's `SelectSubscription` is
+> idempotent — re-selecting the feed already shown does not reload its episode
+> list (this is what keeps back-navigation from an episode detail from flashing
+> a spinner). Consequently, when a refresh (or any path) writes new/updated
+> episodes for the feed currently on screen, it must trigger an **explicit**
+> reload of the details page's episode list; the page will not pick up storage
+> changes on its own. See `SelectSubscription` / `EpisodesLoaded` in
+> `shared/src/app.rs`.
+
 Feed refresh interval: 12 is the default, managed by settings (cascading)
 
 Refresh should be informed by server-side HTTP conditional GETs, and in general

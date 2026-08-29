@@ -4,10 +4,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::capabilities::http::{HttpOperation, HttpResult};
 use crate::capabilities::storage::{StorageOperation, StorageResult};
+use crate::domain::{Episode, EpisodeSortOrder};
 use crate::effect::Effect;
 use crate::feed_parser::parse_feed;
+use crate::html::strip_html_preview;
 use crate::model::Model;
-use crate::view_model::{LibraryView, SubscriptionSummary, ViewModel};
+use crate::view_model::{
+    EpisodeSummary, LibraryView, SubscriptionDetailView, SubscriptionSummary, ViewModel,
+};
 
 #[derive(Default)]
 pub struct Pollux;
@@ -94,6 +98,77 @@ impl App for Pollux {
                 }
                 render()
             }
+            Event::SelectSubscription(id) => {
+                // Re-selecting the feed already on screen (e.g. returning from an
+                // episode detail, which re-fires the shell's selection task) must
+                // not reload it: that would clear the list and flash a spinner for
+                // no new data. Reload only when the selection changes, or when the
+                // previous load errored and should be retried.
+                //
+                // NOTE: this makes re-selection a no-op even if the feed's stored
+                // episodes changed since the last load. That is fine today because
+                // nothing refreshes an existing feed's episodes, but when a feed
+                // refresh/refetch lands it must trigger an explicit reload event
+                // rather than relying on re-selection. See docs/features/subscription.md.
+                let already_showing = model
+                    .selected_subscription
+                    .as_ref()
+                    .is_some_and(|s| s.id == id)
+                    && model.detail_error.is_none();
+                if already_showing {
+                    render()
+                } else {
+                    // Remember the chosen feed (for the details header) from the
+                    // already-loaded library, so the page needs no extra fetch.
+                    model.selected_subscription =
+                        model.subscriptions.iter().find(|s| s.id == id).cloned();
+                    model.episodes.clear();
+                    model.detail_loading = true;
+                    model.detail_error = None;
+                    Command::request_from_shell(StorageOperation::ListEpisodesBySubscription {
+                        subscription_id: id.clone(),
+                    })
+                    .then_send(move |r| Event::EpisodesLoaded {
+                        subscription_id: id,
+                        result: Box::new(r),
+                    })
+                    .and(render())
+                }
+            }
+            Event::EpisodesLoaded {
+                subscription_id,
+                result,
+            } => {
+                // Drop a response for a feed we're no longer showing: a load left
+                // in flight by a previous selection must not overwrite the current
+                // one. The requested id is carried on the event rather than inferred
+                // from the rows, so an empty result still correlates correctly.
+                if model
+                    .selected_subscription
+                    .as_ref()
+                    .is_some_and(|s| s.id == subscription_id)
+                {
+                    model.detail_loading = false;
+                    match *result {
+                        StorageResult::Episodes(rows) => {
+                            model.episodes = rows;
+                            model.detail_error = None;
+                        }
+                        StorageResult::Error(e) => model.detail_error = Some(e),
+                        unexpected => {
+                            model.detail_error =
+                                Some(format!("unexpected storage result: {unexpected:?}"))
+                        }
+                    }
+                }
+                render()
+            }
+            Event::SetEpisodeSort(order) => {
+                // The sort is applied in view(), so this only records the choice
+                // and re-renders — no storage round-trip needed.
+                model.episode_sort = order;
+                render()
+            }
         }
     }
 
@@ -117,6 +192,77 @@ impl App for Pollux {
                 loading: model.loading,
                 error: model.error.clone(),
             },
+            subscription_detail: build_subscription_detail(model),
+        }
+    }
+}
+
+/// Builds the details-page view from the selected subscription and its episodes.
+/// Display order is owned here (like `subscriptions` above) so the core stays the
+/// single source of truth for sort order, independent of how the shell's SQL
+/// returned the rows.
+fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
+    let mut episodes: Vec<EpisodeSummary> = model.episodes.iter().map(episode_summary).collect();
+    sort_episodes(&mut episodes, model.episode_sort);
+
+    let (subscription_id, title, artwork_url) = match &model.selected_subscription {
+        Some(s) => (Some(s.id.clone()), s.title.clone(), s.artwork_url.clone()),
+        None => (None, String::new(), None),
+    };
+
+    SubscriptionDetailView {
+        subscription_id,
+        title,
+        artwork_url,
+        episodes,
+        sort_order: model.episode_sort,
+        loading: model.detail_loading,
+        error: model.detail_error.clone(),
+    }
+}
+
+/// Number of characters of stripped description shipped for the row preview. A row
+/// shows a single line, so this is well above what can be displayed; the rest is
+/// never processed (see `strip_html_preview`).
+const DESCRIPTION_PREVIEW_CHARS: usize = 200;
+
+/// Projects a stored `Episode` into its display `EpisodeSummary`, stripping a short
+/// plain-text preview of the description for the row while keeping the raw HTML for
+/// the detail page. The preview is bounded, so this is cheap to run per render.
+fn episode_summary(e: &Episode) -> EpisodeSummary {
+    EpisodeSummary {
+        id: e.id.clone(),
+        title: e.title.clone(),
+        description: e.description.clone(),
+        description_text: e
+            .description
+            .as_deref()
+            .map(|d| strip_html_preview(d, DESCRIPTION_PREVIEW_CHARS))
+            .filter(|s| !s.is_empty()),
+        pub_date: e.pub_date,
+        duration_secs: e.duration_secs,
+        artwork_url: e.artwork_url.clone(),
+        playback_status: e.playback_status.clone(),
+        playback_position_secs: e.playback_position_secs,
+        download_status: e.download_status.clone(),
+        download_progress: e.download_progress,
+    }
+}
+
+/// Sorts episodes in place for display. For both date orders, episodes with no
+/// `pub_date` sort last so undated items never crowd out the meaningful ordering.
+fn sort_episodes(episodes: &mut [EpisodeSummary], order: EpisodeSortOrder) {
+    match order {
+        EpisodeSortOrder::PubDateDesc => {
+            // Missing dates last, then newest first. `Reverse` gives the descending
+            // order without negating (which would overflow at i64::MIN).
+            episodes.sort_by_key(|e| (e.pub_date.is_none(), std::cmp::Reverse(e.pub_date)));
+        }
+        EpisodeSortOrder::PubDateAsc => {
+            episodes.sort_by_key(|e| (e.pub_date.is_none(), e.pub_date));
+        }
+        EpisodeSortOrder::TitleAsc => {
+            episodes.sort_by_cached_key(|e| e.title.to_lowercase());
         }
     }
 }
@@ -132,12 +278,18 @@ pub enum Event {
         result: Box<HttpResult>,
     },
     FeedSaved(Box<StorageResult>),
+    SelectSubscription(String),
+    EpisodesLoaded {
+        subscription_id: String,
+        result: Box<StorageResult>,
+    },
+    SetEpisodeSort(EpisodeSortOrder),
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::Subscription;
+    use crate::domain::{DownloadStatus, Episode, PlaybackStatus, Subscription};
     use crate::effect::Effect;
 
     fn make_subscription(id: &str, title: &str) -> Subscription {
@@ -150,6 +302,55 @@ mod tests {
             last_refreshed: None,
             created_at: 0,
         }
+    }
+
+    fn make_episode(id: &str, title: &str, pub_date: Option<i64>) -> Episode {
+        Episode {
+            id: id.to_string(),
+            feed_guid: format!("{id}-guid"),
+            subscription_id: "sub-id".to_string(),
+            title: title.to_string(),
+            description: None,
+            pub_date,
+            duration_secs: None,
+            enclosure_url: format!("https://example.com/{id}.mp3"),
+            artwork_url: None,
+            playback_status: PlaybackStatus::Unplayed,
+            playback_position_secs: None,
+            download_status: DownloadStatus::NotDownloaded,
+            download_progress: None,
+            is_flagged: false,
+            file_size_bytes: None,
+            local_path: None,
+        }
+    }
+
+    fn detail_titles(app: &Pollux, model: &Model) -> Vec<String> {
+        app.view(model)
+            .subscription_detail
+            .episodes
+            .into_iter()
+            .map(|e| e.title)
+            .collect()
+    }
+
+    /// Loads episodes through the real event, so the at-load projection (including
+    /// HTML stripping) is exercised — the shell never sets summaries directly. A
+    /// matching subscription is selected first, since the handler now correlates
+    /// the response to the current selection.
+    fn load_episodes(app: &Pollux, model: &mut Model, episodes: Vec<Episode>) {
+        let sub_id = episodes
+            .first()
+            .map(|e| e.subscription_id.clone())
+            .unwrap_or_else(|| "sub-id".to_string());
+        model.selected_subscription = Some(make_subscription(&sub_id, "Test Feed"));
+        let _ = app.update(
+            Event::EpisodesLoaded {
+                subscription_id: sub_id,
+                result: Box::new(StorageResult::Episodes(episodes)),
+            },
+            model,
+        );
     }
 
     fn view_titles(app: &Pollux, model: &Model) -> Vec<String> {
@@ -525,5 +726,315 @@ mod tests {
             view_titles(&app, &model),
             vec!["Alpha Podcast", "Zebra Podcast"]
         );
+    }
+
+    #[test]
+    fn select_subscription_sets_header_and_issues_storage_request() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions = vec![make_subscription("sub-id", "My Feed")];
+
+        let mut cmd = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+
+        assert!(model.detail_loading);
+        assert!(model.detail_error.is_none());
+
+        // The header comes from the already-loaded library, not a second fetch.
+        let view = app.view(&model);
+        assert_eq!(
+            view.subscription_detail.subscription_id.as_deref(),
+            Some("sub-id")
+        );
+        assert_eq!(view.subscription_detail.title, "My Feed");
+
+        let effects: Vec<Effect> = cmd.effects().collect();
+        let has_list = effects.iter().any(|e| {
+            matches!(
+                e,
+                Effect::Storage(r) if matches!(&r.operation,
+                    StorageOperation::ListEpisodesBySubscription { subscription_id }
+                        if subscription_id == "sub-id")
+            )
+        });
+        assert!(
+            has_list,
+            "expected a ListEpisodesBySubscription storage effect"
+        );
+        let has_render = effects.iter().any(|e| matches!(e, Effect::Render(_)));
+        assert!(has_render, "expected a render effect");
+    }
+
+    #[test]
+    fn episodes_loaded_populates_detail_view() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.selected_subscription = Some(make_subscription("sub-id", "Feed"));
+        model.detail_loading = true;
+
+        let episodes = vec![
+            make_episode("e1", "Episode One", Some(1_000)),
+            make_episode("e2", "Episode Two", Some(2_000)),
+        ];
+        let mut cmd = app.update(
+            Event::EpisodesLoaded {
+                subscription_id: "sub-id".to_string(),
+                result: Box::new(StorageResult::Episodes(episodes)),
+            },
+            &mut model,
+        );
+
+        assert!(!model.detail_loading);
+        assert!(model.detail_error.is_none());
+        cmd.expect_one_effect().expect_render();
+
+        let view = app.view(&model);
+        assert_eq!(view.subscription_detail.episodes.len(), 2);
+    }
+
+    #[test]
+    fn episodes_loaded_defaults_to_newest_first() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(
+            &app,
+            &mut model,
+            vec![
+                make_episode("old", "Old", Some(1_000)),
+                make_episode("new", "New", Some(3_000)),
+                make_episode("mid", "Mid", Some(2_000)),
+            ],
+        );
+
+        assert_eq!(detail_titles(&app, &model), vec!["New", "Mid", "Old"]);
+    }
+
+    #[test]
+    fn set_episode_sort_reorders_the_view() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(
+            &app,
+            &mut model,
+            vec![
+                make_episode("b", "Bravo", Some(3_000)),
+                make_episode("a", "Alpha", Some(1_000)),
+                make_episode("c", "Charlie", Some(2_000)),
+            ],
+        );
+
+        let _ = app.update(
+            Event::SetEpisodeSort(EpisodeSortOrder::PubDateAsc),
+            &mut model,
+        );
+        assert_eq!(model.episode_sort, EpisodeSortOrder::PubDateAsc);
+        assert_eq!(
+            detail_titles(&app, &model),
+            vec!["Alpha", "Charlie", "Bravo"]
+        );
+
+        let _ = app.update(
+            Event::SetEpisodeSort(EpisodeSortOrder::TitleAsc),
+            &mut model,
+        );
+        assert_eq!(
+            detail_titles(&app, &model),
+            vec!["Alpha", "Bravo", "Charlie"]
+        );
+
+        let _ = app.update(
+            Event::SetEpisodeSort(EpisodeSortOrder::PubDateDesc),
+            &mut model,
+        );
+        assert_eq!(
+            detail_titles(&app, &model),
+            vec!["Bravo", "Charlie", "Alpha"]
+        );
+    }
+
+    #[test]
+    fn episodes_without_pub_date_sort_last_in_both_date_orders() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(
+            &app,
+            &mut model,
+            vec![
+                make_episode("dated-old", "Dated Old", Some(1_000)),
+                make_episode("undated", "Undated", None),
+                make_episode("dated-new", "Dated New", Some(2_000)),
+            ],
+        );
+
+        model.episode_sort = EpisodeSortOrder::PubDateDesc;
+        assert_eq!(
+            detail_titles(&app, &model),
+            vec!["Dated New", "Dated Old", "Undated"],
+            "undated sorts last, newest first"
+        );
+
+        model.episode_sort = EpisodeSortOrder::PubDateAsc;
+        assert_eq!(
+            detail_titles(&app, &model),
+            vec!["Dated Old", "Dated New", "Undated"],
+            "undated sorts last, oldest first"
+        );
+    }
+
+    #[test]
+    fn episodes_loaded_storage_error_sets_detail_error() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.selected_subscription = Some(make_subscription("sub-id", "Feed"));
+        model.detail_loading = true;
+
+        let _ = app.update(
+            Event::EpisodesLoaded {
+                subscription_id: "sub-id".to_string(),
+                result: Box::new(StorageResult::Error("db gone".to_string())),
+            },
+            &mut model,
+        );
+
+        assert!(!model.detail_loading);
+        assert_eq!(model.detail_error.as_deref(), Some("db gone"));
+    }
+
+    #[test]
+    fn episodes_for_a_different_subscription_are_ignored() {
+        let app = Pollux;
+        let mut model = Model::default();
+        // The user has navigated on to another feed; a load for the previous one
+        // is still in flight.
+        model.selected_subscription = Some(make_subscription("current", "Current"));
+        model.detail_loading = true;
+
+        let stale = vec![make_episode("e1", "Stale Episode", Some(1_000))];
+        let _ = app.update(
+            Event::EpisodesLoaded {
+                subscription_id: "previous".to_string(),
+                result: Box::new(StorageResult::Episodes(stale)),
+            },
+            &mut model,
+        );
+
+        assert!(
+            model.episodes.is_empty(),
+            "a response for a feed we left must not populate the current one"
+        );
+        assert!(
+            model.detail_loading,
+            "a stale response must not clear the in-flight load's spinner"
+        );
+    }
+
+    #[test]
+    fn selecting_a_subscription_does_not_disturb_library_state() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions = vec![make_subscription("sub-id", "My Feed")];
+        model.loading = false;
+        model.error = Some("library error".to_string());
+
+        let _ = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+
+        // Detail load is in flight, but the library's own flags are untouched.
+        assert!(!model.loading);
+        assert_eq!(model.error.as_deref(), Some("library error"));
+        assert!(model.detail_loading);
+    }
+
+    #[test]
+    fn reselecting_the_current_subscription_does_not_reload() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions = vec![make_subscription("sub-id", "My Feed")];
+
+        // First selection loads the feed's episodes.
+        let _ = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+        assert!(!model.detail_loading);
+        assert_eq!(model.episodes.len(), 1);
+
+        // Re-selecting the same, already-loaded feed (e.g. on back-navigation)
+        // is a no-op: no storage request, list and loading state untouched.
+        let mut cmd = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+        assert!(!model.detail_loading, "must not re-enter the loading state");
+        assert_eq!(model.episodes.len(), 1, "list must be preserved");
+
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            !effects.iter().any(|e| matches!(e, Effect::Storage(_))),
+            "re-selecting the current feed must not re-query storage"
+        );
+        assert!(effects.iter().any(|e| matches!(e, Effect::Render(_))));
+    }
+
+    #[test]
+    fn reselecting_after_an_error_retries_the_load() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions = vec![make_subscription("sub-id", "My Feed")];
+
+        let _ = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+        let _ = app.update(
+            Event::EpisodesLoaded {
+                subscription_id: "sub-id".to_string(),
+                result: Box::new(StorageResult::Error("boom".to_string())),
+            },
+            &mut model,
+        );
+        assert!(model.detail_error.is_some());
+
+        // A failed load should not be sticky: re-selecting retries.
+        let mut cmd = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+        assert!(model.detail_loading);
+        assert!(
+            model.detail_error.is_none(),
+            "retry clears the previous error"
+        );
+
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            effects.iter().any(|e| matches!(
+                e,
+                Effect::Storage(r)
+                    if matches!(&r.operation, StorageOperation::ListEpisodesBySubscription { .. })
+            )),
+            "an errored load must be retryable"
+        );
+    }
+
+    #[test]
+    fn episode_summary_exposes_raw_and_stripped_description() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let mut episode = make_episode("e1", "Ep", Some(1_000));
+        episode.description = Some("<p>Hello <b>world</b></p>".to_string());
+        load_episodes(&app, &mut model, vec![episode]);
+
+        let summary = &app.view(&model).subscription_detail.episodes[0];
+        // Raw HTML is preserved for the detail page's rich rendering...
+        assert_eq!(
+            summary.description.as_deref(),
+            Some("<p>Hello <b>world</b></p>")
+        );
+        // ...and a plain-text version is provided for the row snippet.
+        assert_eq!(summary.description_text.as_deref(), Some("Hello world"));
+    }
+
+    #[test]
+    fn episode_summary_description_text_absent_when_no_description() {
+        let app = Pollux;
+        let mut model = Model::default();
+        // make_episode leaves description as None.
+        load_episodes(
+            &app,
+            &mut model,
+            vec![make_episode("e1", "Ep", Some(1_000))],
+        );
+
+        let summary = &app.view(&model).subscription_detail.episodes[0];
+        assert!(summary.description.is_none());
+        assert!(summary.description_text.is_none());
     }
 }

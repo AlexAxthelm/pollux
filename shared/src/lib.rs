@@ -5,6 +5,7 @@ pub mod domain;
 pub mod effect;
 mod feed_parser;
 pub mod ffi;
+mod html;
 pub mod model;
 pub mod view_model;
 
