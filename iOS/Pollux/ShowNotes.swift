@@ -8,6 +8,9 @@ import UIKit
 /// too costly to run every render (and must never run per-row in a long list).
 struct ShowNotesText: View {
     let html: String
+    /// Plain-text fallback (the core's stripped description) shown for the frame
+    /// before the first parse, and permanently if parsing fails. Never raw HTML.
+    var fallback: String?
 
     @State private var rendered: AttributedString?
 
@@ -17,9 +20,7 @@ struct ShowNotesText: View {
                 Text(rendered)
                     .tint(.accentColor)
             } else {
-                // Shown only for the brief moment before the first parse, or if
-                // parsing fails outright — better a readable fallback than blank.
-                Text(html)
+                Text(fallback ?? "")
                     .foregroundStyle(.primary)
             }
         }
