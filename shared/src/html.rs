@@ -1,11 +1,30 @@
-/// Reduces an HTML fragment to a single line of plain text, for compact snippets
-/// (e.g. an episode row's description preview).
-///
-/// This is deliberately not a real HTML parser: it drops anything between `<` and
-/// `>`, decodes a handful of common entities, and collapses whitespace. That is
-/// enough for a truncated one-line summary; the full show notes are rendered from
-/// the original HTML shell-side, where a real reader is available.
-pub fn strip_html(input: &str) -> String {
+/// A one-line plain-text preview of an HTML description, at most `max_chars`
+/// characters. Only a bounded prefix of the input is processed: an episode row
+/// shows a single line, so stripping an entire (possibly multi-KB) show note would
+/// be wasted work. This keeps the per-episode cost fixed regardless of how long
+/// the description is, so it is cheap to run in `view()` for a whole feed.
+pub fn strip_html_preview(input: &str, max_chars: usize) -> String {
+    // Tags and entities shrink when stripped, so read a generous multiple of
+    // max_chars to be sure enough visible text remains — but still a small,
+    // bounded amount however long the description is.
+    let budget = max_chars.saturating_mul(4).max(max_chars + 16);
+    let mut prefix: String = input.chars().take(budget).collect();
+    // A tag cut in half at the budget boundary would otherwise leak its '<';
+    // drop the dangling opener so it can't appear in the preview.
+    if let Some(open) = prefix.rfind('<') {
+        if !prefix[open..].contains('>') {
+            prefix.truncate(open);
+        }
+    }
+    strip_html(&prefix).chars().take(max_chars).collect()
+}
+
+/// Reduces an HTML fragment to a single line of plain text. Deliberately not a
+/// real HTML parser: it drops anything between `<` and `>`, decodes a handful of
+/// common entities, and collapses whitespace. Callers go through
+/// `strip_html_preview`; the full show notes are rendered from the original HTML
+/// shell-side, where a real reader is available.
+fn strip_html(input: &str) -> String {
     // Block/break tags become a space so adjacent blocks (</p><p>, <br>) don't run
     // their words together; inline tags (<b>, <i>, <a>) are dropped without a space
     // so they don't split a word they were only emphasizing. Whitespace is then
@@ -233,5 +252,33 @@ mod tests {
     fn empty_input_is_empty() {
         assert_eq!(strip_html(""), "");
         assert_eq!(strip_html("   "), "");
+    }
+
+    #[test]
+    fn preview_truncates_to_max_chars() {
+        assert_eq!(strip_html_preview("<p>Hello world</p>", 5), "Hello");
+        // Whole content when it already fits.
+        assert_eq!(strip_html_preview("<p>hi</p>", 100), "hi");
+        // Tags and entities are resolved before the length is measured.
+        assert_eq!(strip_html_preview("A &amp; B and more", 5), "A & B");
+    }
+
+    #[test]
+    fn preview_output_never_contains_markup() {
+        // Whatever the input (including a tag cut off at the end), the preview must
+        // not leak angle brackets.
+        for input in [
+            "plain text",
+            "<p>hello <b>there</b></p>",
+            "<a href=\"http://x\">link</a> and a good deal more text after it",
+            "trailing <partial",
+        ] {
+            let preview = strip_html_preview(input, 40);
+            assert!(
+                !preview.contains('<') && !preview.contains('>'),
+                "leaked markup for {input:?}: {preview:?}"
+            );
+            assert!(preview.chars().count() <= 40);
+        }
     }
 }

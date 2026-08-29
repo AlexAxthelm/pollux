@@ -7,7 +7,7 @@ use crate::capabilities::storage::{StorageOperation, StorageResult};
 use crate::domain::{Episode, EpisodeSortOrder};
 use crate::effect::Effect;
 use crate::feed_parser::parse_feed;
-use crate::html::strip_html;
+use crate::html::strip_html_preview;
 use crate::model::Model;
 use crate::view_model::{
     EpisodeSummary, LibraryView, SubscriptionDetailView, SubscriptionSummary, ViewModel,
@@ -122,7 +122,7 @@ impl App for Pollux {
                     // already-loaded library, so the page needs no extra fetch.
                     model.selected_subscription =
                         model.subscriptions.iter().find(|s| s.id == id).cloned();
-                    model.episode_summaries.clear();
+                    model.episodes.clear();
                     model.detail_loading = true;
                     model.detail_error = None;
                     Command::request_from_shell(StorageOperation::ListEpisodesBySubscription {
@@ -151,8 +151,7 @@ impl App for Pollux {
                     model.detail_loading = false;
                     match *result {
                         StorageResult::Episodes(rows) => {
-                            // Project once here (HTML stripping included), not per render.
-                            model.episode_summaries = rows.iter().map(episode_summary).collect();
+                            model.episodes = rows;
                             model.detail_error = None;
                         }
                         StorageResult::Error(e) => model.detail_error = Some(e),
@@ -203,8 +202,7 @@ impl App for Pollux {
 /// single source of truth for sort order, independent of how the shell's SQL
 /// returned the rows.
 fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
-    // Summaries were already projected at load time; here we only order them.
-    let mut episodes = model.episode_summaries.clone();
+    let mut episodes: Vec<EpisodeSummary> = model.episodes.iter().map(episode_summary).collect();
     sort_episodes(&mut episodes, model.episode_sort);
 
     let (subscription_id, title, artwork_url) = match &model.selected_subscription {
@@ -223,9 +221,14 @@ fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
     }
 }
 
-/// Projects a stored `Episode` into its display `EpisodeSummary`, stripping the
-/// description to plain text for the row preview while keeping the raw HTML for the
-/// detail page. Called once per episode when a feed's episodes load, not per render.
+/// Number of characters of stripped description shipped for the row preview. A row
+/// shows a single line, so this is well above what can be displayed; the rest is
+/// never processed (see `strip_html_preview`).
+const DESCRIPTION_PREVIEW_CHARS: usize = 200;
+
+/// Projects a stored `Episode` into its display `EpisodeSummary`, stripping a short
+/// plain-text preview of the description for the row while keeping the raw HTML for
+/// the detail page. The preview is bounded, so this is cheap to run per render.
 fn episode_summary(e: &Episode) -> EpisodeSummary {
     EpisodeSummary {
         id: e.id.clone(),
@@ -234,7 +237,7 @@ fn episode_summary(e: &Episode) -> EpisodeSummary {
         description_text: e
             .description
             .as_deref()
-            .map(strip_html)
+            .map(|d| strip_html_preview(d, DESCRIPTION_PREVIEW_CHARS))
             .filter(|s| !s.is_empty()),
         pub_date: e.pub_date,
         duration_secs: e.duration_secs,
@@ -915,7 +918,7 @@ mod tests {
         );
 
         assert!(
-            model.episode_summaries.is_empty(),
+            model.episodes.is_empty(),
             "a response for a feed we left must not populate the current one"
         );
         assert!(
@@ -950,13 +953,13 @@ mod tests {
         let _ = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
         load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
         assert!(!model.detail_loading);
-        assert_eq!(model.episode_summaries.len(), 1);
+        assert_eq!(model.episodes.len(), 1);
 
         // Re-selecting the same, already-loaded feed (e.g. on back-navigation)
         // is a no-op: no storage request, list and loading state untouched.
         let mut cmd = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
         assert!(!model.detail_loading, "must not re-enter the loading state");
-        assert_eq!(model.episode_summaries.len(), 1, "list must be preserved");
+        assert_eq!(model.episodes.len(), 1, "list must be preserved");
 
         let effects: Vec<Effect> = cmd.effects().collect();
         assert!(
