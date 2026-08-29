@@ -15,6 +15,18 @@ pub fn strip_html(input: &str) -> String {
     while let Some(lt) = rest.find('<') {
         without_tags.push_str(&rest[..lt]);
         let after = &rest[lt + 1..];
+
+        // Comments are skipped to their closing "-->", which can itself contain a
+        // '>' that must not be mistaken for the end of a tag. An unterminated
+        // comment runs to the end of the input, as browsers treat it.
+        if let Some(body) = after.strip_prefix("!--") {
+            rest = match body.find("-->") {
+                Some(end) => &body[end + 3..],
+                None => "",
+            };
+            continue;
+        }
+
         match after.find('>') {
             Some(gt) => {
                 if is_separating_tag(&after[..gt]) {
@@ -142,6 +154,15 @@ mod tests {
     fn separates_adjacent_blocks() {
         assert_eq!(strip_html("<p>one</p><p>two</p>"), "one two");
         assert_eq!(strip_html("line<br>break"), "line break");
+    }
+
+    #[test]
+    fn drops_comments_including_ones_containing_angle_brackets() {
+        // A '>' inside a comment must not end the comment early and leak text.
+        assert_eq!(strip_html("before<!-- a > b -->after"), "beforeafter");
+        assert_eq!(strip_html("x<!-- just a note -->y"), "xy");
+        // An unterminated comment runs to the end of the input.
+        assert_eq!(strip_html("keep<!-- oops"), "keep");
     }
 
     #[test]

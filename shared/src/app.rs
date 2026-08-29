@@ -104,6 +104,12 @@ impl App for Pollux {
                 // not reload it: that would clear the list and flash a spinner for
                 // no new data. Reload only when the selection changes, or when the
                 // previous load errored and should be retried.
+                //
+                // NOTE: this makes re-selection a no-op even if the feed's stored
+                // episodes changed since the last load. That is fine today because
+                // nothing refreshes an existing feed's episodes, but when a feed
+                // refresh/refetch lands it must trigger an explicit reload event
+                // rather than relying on re-selection. See docs/features/subscription.md.
                 let already_showing = model
                     .selected_subscription
                     .as_ref()
