@@ -127,45 +127,14 @@ actor DatabaseManager {
 
     private func upsertSubscription(_ sub: Subscription) async throws -> StorageResult {
         try await db.write { db in
-            try db.execute(
-                sql: """
-                INSERT INTO subscriptions
-                    (id, feed_url, title, artwork_url, description, last_refreshed, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(feed_url) DO UPDATE SET
-                    title = excluded.title,
-                    artwork_url = excluded.artwork_url,
-                    description = excluded.description,
-                    last_refreshed = excluded.last_refreshed
-                """,
-                arguments: [
-                    sub.id, sub.feedUrl, sub.title, sub.artworkUrl,
-                    sub.description, sub.lastRefreshed, sub.createdAt,
-                ],
-            )
+            try Self.upsertSubscriptionRow(sub, db: db)
         }
         return .success
     }
 
     private func upsertFeedWithEpisodes(subscription: Subscription, episodes: [Episode]) async throws -> StorageResult {
         try await db.write { db -> StorageResult in
-            try db.execute(
-                sql: """
-                INSERT INTO subscriptions
-                    (id, feed_url, title, artwork_url, description, last_refreshed, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(feed_url) DO UPDATE SET
-                    title = excluded.title,
-                    artwork_url = excluded.artwork_url,
-                    description = excluded.description,
-                    last_refreshed = excluded.last_refreshed
-                """,
-                arguments: [
-                    subscription.id, subscription.feedUrl, subscription.title,
-                    subscription.artworkUrl, subscription.description,
-                    subscription.lastRefreshed, subscription.createdAt,
-                ],
-            )
+            try Self.upsertSubscriptionRow(subscription, db: db)
             guard let subRow = try Row.fetchOne(
                 db,
                 sql: "SELECT * FROM subscriptions WHERE feed_url = ?",
@@ -256,6 +225,26 @@ actor DatabaseManager {
 // MARK: - Row mapping + status conversion
 
 private extension DatabaseManager {
+    static func upsertSubscriptionRow(_ subscription: Subscription, db: Database) throws {
+        try db.execute(
+            sql: """
+            INSERT INTO subscriptions
+                (id, feed_url, title, artwork_url, description, last_refreshed, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(feed_url) DO UPDATE SET
+                title = excluded.title,
+                artwork_url = excluded.artwork_url,
+                description = excluded.description,
+                last_refreshed = excluded.last_refreshed
+            """,
+            arguments: [
+                subscription.id, subscription.feedUrl, subscription.title,
+                subscription.artworkUrl, subscription.description,
+                subscription.lastRefreshed, subscription.createdAt,
+            ],
+        )
+    }
+
     static func upsertEpisodeRow(_ episode: Episode, subscriptionId: String, db: Database) throws {
         let playbackStr = playbackStatusString(episode.playbackStatus)
         let downloadStr = downloadStatusString(episode.downloadStatus)
