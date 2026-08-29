@@ -4,10 +4,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::capabilities::http::{HttpOperation, HttpResult};
 use crate::capabilities::storage::{StorageOperation, StorageResult};
+use crate::domain::EpisodeSortOrder;
 use crate::effect::Effect;
 use crate::feed_parser::parse_feed;
 use crate::model::Model;
-use crate::view_model::{LibraryView, SubscriptionSummary, ViewModel};
+use crate::view_model::{
+    EpisodeSummary, LibraryView, SubscriptionDetailView, SubscriptionSummary, ViewModel,
+};
 
 #[derive(Default)]
 pub struct Pollux;
@@ -94,6 +97,41 @@ impl App for Pollux {
                 }
                 render()
             }
+            Event::SelectSubscription(id) => {
+                // Remember the chosen feed (for the details header) from the
+                // already-loaded library, so the page needs no extra fetch for it.
+                model.selected_subscription =
+                    model.subscriptions.iter().find(|s| s.id == id).cloned();
+                model.episodes.clear();
+                model.detail_loading = true;
+                model.detail_error = None;
+                Command::request_from_shell(StorageOperation::ListEpisodesBySubscription {
+                    subscription_id: id,
+                })
+                .then_send(|r| Event::EpisodesLoaded(Box::new(r)))
+                .and(render())
+            }
+            Event::EpisodesLoaded(result) => {
+                model.detail_loading = false;
+                match *result {
+                    StorageResult::Episodes(rows) => {
+                        model.episodes = rows;
+                        model.detail_error = None;
+                    }
+                    StorageResult::Error(e) => model.detail_error = Some(e),
+                    unexpected => {
+                        model.detail_error =
+                            Some(format!("unexpected storage result: {unexpected:?}"))
+                    }
+                }
+                render()
+            }
+            Event::SetEpisodeSort(order) => {
+                // The sort is applied in view(), so this only records the choice
+                // and re-renders — no storage round-trip needed.
+                model.episode_sort = order;
+                render()
+            }
         }
     }
 
@@ -117,6 +155,63 @@ impl App for Pollux {
                 loading: model.loading,
                 error: model.error.clone(),
             },
+            subscription_detail: build_subscription_detail(model),
+        }
+    }
+}
+
+/// Builds the details-page view from the selected subscription and its episodes.
+/// Display order is owned here (like `subscriptions` above) so the core stays the
+/// single source of truth for sort order, independent of how the shell's SQL
+/// returned the rows.
+fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
+    let mut episodes: Vec<EpisodeSummary> = model
+        .episodes
+        .iter()
+        .map(|e| EpisodeSummary {
+            id: e.id.clone(),
+            title: e.title.clone(),
+            description: e.description.clone(),
+            pub_date: e.pub_date,
+            duration_secs: e.duration_secs,
+            artwork_url: e.artwork_url.clone(),
+            playback_status: e.playback_status.clone(),
+            playback_position_secs: e.playback_position_secs,
+            download_status: e.download_status.clone(),
+            download_progress: e.download_progress,
+        })
+        .collect();
+    sort_episodes(&mut episodes, model.episode_sort);
+
+    let (subscription_id, title, artwork_url) = match &model.selected_subscription {
+        Some(s) => (Some(s.id.clone()), s.title.clone(), s.artwork_url.clone()),
+        None => (None, String::new(), None),
+    };
+
+    SubscriptionDetailView {
+        subscription_id,
+        title,
+        artwork_url,
+        episodes,
+        sort_order: model.episode_sort,
+        loading: model.detail_loading,
+        error: model.detail_error.clone(),
+    }
+}
+
+/// Sorts episodes in place for display. For both date orders, episodes with no
+/// `pub_date` sort last so undated items never crowd out the meaningful ordering.
+fn sort_episodes(episodes: &mut [EpisodeSummary], order: EpisodeSortOrder) {
+    match order {
+        EpisodeSortOrder::PubDateDesc => {
+            // Missing dates last: key on (is_missing, negated date) ascending.
+            episodes.sort_by_key(|e| (e.pub_date.is_none(), e.pub_date.map(|d| -d)));
+        }
+        EpisodeSortOrder::PubDateAsc => {
+            episodes.sort_by_key(|e| (e.pub_date.is_none(), e.pub_date));
+        }
+        EpisodeSortOrder::TitleAsc => {
+            episodes.sort_by_cached_key(|e| e.title.to_lowercase());
         }
     }
 }
@@ -132,12 +227,15 @@ pub enum Event {
         result: Box<HttpResult>,
     },
     FeedSaved(Box<StorageResult>),
+    SelectSubscription(String),
+    EpisodesLoaded(Box<StorageResult>),
+    SetEpisodeSort(EpisodeSortOrder),
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::Subscription;
+    use crate::domain::{DownloadStatus, Episode, PlaybackStatus, Subscription};
     use crate::effect::Effect;
 
     fn make_subscription(id: &str, title: &str) -> Subscription {
@@ -150,6 +248,36 @@ mod tests {
             last_refreshed: None,
             created_at: 0,
         }
+    }
+
+    fn make_episode(id: &str, title: &str, pub_date: Option<i64>) -> Episode {
+        Episode {
+            id: id.to_string(),
+            feed_guid: format!("{id}-guid"),
+            subscription_id: "sub-id".to_string(),
+            title: title.to_string(),
+            description: None,
+            pub_date,
+            duration_secs: None,
+            enclosure_url: format!("https://example.com/{id}.mp3"),
+            artwork_url: None,
+            playback_status: PlaybackStatus::Unplayed,
+            playback_position_secs: None,
+            download_status: DownloadStatus::NotDownloaded,
+            download_progress: None,
+            is_flagged: false,
+            file_size_bytes: None,
+            local_path: None,
+        }
+    }
+
+    fn detail_titles(app: &Pollux, model: &Model) -> Vec<String> {
+        app.view(model)
+            .subscription_detail
+            .episodes
+            .into_iter()
+            .map(|e| e.title)
+            .collect()
     }
 
     fn view_titles(app: &Pollux, model: &Model) -> Vec<String> {
@@ -525,5 +653,172 @@ mod tests {
             view_titles(&app, &model),
             vec!["Alpha Podcast", "Zebra Podcast"]
         );
+    }
+
+    #[test]
+    fn select_subscription_sets_header_and_issues_storage_request() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions = vec![make_subscription("sub-id", "My Feed")];
+
+        let mut cmd = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+
+        assert!(model.detail_loading);
+        assert!(model.detail_error.is_none());
+
+        // The header comes from the already-loaded library, not a second fetch.
+        let view = app.view(&model);
+        assert_eq!(
+            view.subscription_detail.subscription_id.as_deref(),
+            Some("sub-id")
+        );
+        assert_eq!(view.subscription_detail.title, "My Feed");
+
+        let effects: Vec<Effect> = cmd.effects().collect();
+        let has_list = effects.iter().any(|e| {
+            matches!(
+                e,
+                Effect::Storage(r) if matches!(&r.operation,
+                    StorageOperation::ListEpisodesBySubscription { subscription_id }
+                        if subscription_id == "sub-id")
+            )
+        });
+        assert!(
+            has_list,
+            "expected a ListEpisodesBySubscription storage effect"
+        );
+        let has_render = effects.iter().any(|e| matches!(e, Effect::Render(_)));
+        assert!(has_render, "expected a render effect");
+    }
+
+    #[test]
+    fn episodes_loaded_populates_detail_view() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.detail_loading = true;
+
+        let episodes = vec![
+            make_episode("e1", "Episode One", Some(1_000)),
+            make_episode("e2", "Episode Two", Some(2_000)),
+        ];
+        let mut cmd = app.update(
+            Event::EpisodesLoaded(Box::new(StorageResult::Episodes(episodes))),
+            &mut model,
+        );
+
+        assert!(!model.detail_loading);
+        assert!(model.detail_error.is_none());
+        cmd.expect_one_effect().expect_render();
+
+        let view = app.view(&model);
+        assert_eq!(view.subscription_detail.episodes.len(), 2);
+    }
+
+    #[test]
+    fn episodes_loaded_defaults_to_newest_first() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.episodes = vec![
+            make_episode("old", "Old", Some(1_000)),
+            make_episode("new", "New", Some(3_000)),
+            make_episode("mid", "Mid", Some(2_000)),
+        ];
+
+        assert_eq!(detail_titles(&app, &model), vec!["New", "Mid", "Old"]);
+    }
+
+    #[test]
+    fn set_episode_sort_reorders_the_view() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.episodes = vec![
+            make_episode("b", "Bravo", Some(3_000)),
+            make_episode("a", "Alpha", Some(1_000)),
+            make_episode("c", "Charlie", Some(2_000)),
+        ];
+
+        let _ = app.update(
+            Event::SetEpisodeSort(EpisodeSortOrder::PubDateAsc),
+            &mut model,
+        );
+        assert_eq!(model.episode_sort, EpisodeSortOrder::PubDateAsc);
+        assert_eq!(
+            detail_titles(&app, &model),
+            vec!["Alpha", "Charlie", "Bravo"]
+        );
+
+        let _ = app.update(
+            Event::SetEpisodeSort(EpisodeSortOrder::TitleAsc),
+            &mut model,
+        );
+        assert_eq!(
+            detail_titles(&app, &model),
+            vec!["Alpha", "Bravo", "Charlie"]
+        );
+
+        let _ = app.update(
+            Event::SetEpisodeSort(EpisodeSortOrder::PubDateDesc),
+            &mut model,
+        );
+        assert_eq!(
+            detail_titles(&app, &model),
+            vec!["Bravo", "Charlie", "Alpha"]
+        );
+    }
+
+    #[test]
+    fn episodes_without_pub_date_sort_last_in_both_date_orders() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.episodes = vec![
+            make_episode("dated-old", "Dated Old", Some(1_000)),
+            make_episode("undated", "Undated", None),
+            make_episode("dated-new", "Dated New", Some(2_000)),
+        ];
+
+        model.episode_sort = EpisodeSortOrder::PubDateDesc;
+        assert_eq!(
+            detail_titles(&app, &model),
+            vec!["Dated New", "Dated Old", "Undated"],
+            "undated sorts last, newest first"
+        );
+
+        model.episode_sort = EpisodeSortOrder::PubDateAsc;
+        assert_eq!(
+            detail_titles(&app, &model),
+            vec!["Dated Old", "Dated New", "Undated"],
+            "undated sorts last, oldest first"
+        );
+    }
+
+    #[test]
+    fn episodes_loaded_storage_error_sets_detail_error() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.detail_loading = true;
+
+        let _ = app.update(
+            Event::EpisodesLoaded(Box::new(StorageResult::Error("db gone".to_string()))),
+            &mut model,
+        );
+
+        assert!(!model.detail_loading);
+        assert_eq!(model.detail_error.as_deref(), Some("db gone"));
+    }
+
+    #[test]
+    fn selecting_a_subscription_does_not_disturb_library_state() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions = vec![make_subscription("sub-id", "My Feed")];
+        model.loading = false;
+        model.error = Some("library error".to_string());
+
+        let _ = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+
+        // Detail load is in flight, but the library's own flags are untouched.
+        assert!(!model.loading);
+        assert_eq!(model.error.as_deref(), Some("library error"));
+        assert!(model.detail_loading);
     }
 }
