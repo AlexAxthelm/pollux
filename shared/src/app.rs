@@ -7,6 +7,7 @@ use crate::capabilities::storage::{StorageOperation, StorageResult};
 use crate::domain::EpisodeSortOrder;
 use crate::effect::Effect;
 use crate::feed_parser::parse_feed;
+use crate::html::strip_html;
 use crate::model::Model;
 use crate::view_model::{
     EpisodeSummary, LibraryView, SubscriptionDetailView, SubscriptionSummary, ViewModel,
@@ -172,6 +173,11 @@ fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
             id: e.id.clone(),
             title: e.title.clone(),
             description: e.description.clone(),
+            description_text: e
+                .description
+                .as_deref()
+                .map(strip_html)
+                .filter(|s| !s.is_empty()),
             pub_date: e.pub_date,
             duration_secs: e.duration_secs,
             artwork_url: e.artwork_url.clone(),
@@ -820,5 +826,35 @@ mod tests {
         assert!(!model.loading);
         assert_eq!(model.error.as_deref(), Some("library error"));
         assert!(model.detail_loading);
+    }
+
+    #[test]
+    fn episode_summary_exposes_raw_and_stripped_description() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let mut episode = make_episode("e1", "Ep", Some(1_000));
+        episode.description = Some("<p>Hello <b>world</b></p>".to_string());
+        model.episodes = vec![episode];
+
+        let summary = &app.view(&model).subscription_detail.episodes[0];
+        // Raw HTML is preserved for the detail page's rich rendering...
+        assert_eq!(
+            summary.description.as_deref(),
+            Some("<p>Hello <b>world</b></p>")
+        );
+        // ...and a plain-text version is provided for the row snippet.
+        assert_eq!(summary.description_text.as_deref(), Some("Hello world"));
+    }
+
+    #[test]
+    fn episode_summary_description_text_absent_when_no_description() {
+        let app = Pollux;
+        let mut model = Model::default();
+        // make_episode leaves description as None.
+        model.episodes = vec![make_episode("e1", "Ep", Some(1_000))];
+
+        let summary = &app.view(&model).subscription_detail.episodes[0];
+        assert!(summary.description.is_none());
+        assert!(summary.description_text.is_none());
     }
 }

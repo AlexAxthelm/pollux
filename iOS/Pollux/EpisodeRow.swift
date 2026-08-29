@@ -24,7 +24,7 @@ struct EpisodeRow: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if let description = episode.description, !description.isEmpty {
+                if let description = episode.descriptionText, !description.isEmpty {
                     Text(description)
                         .font(.caption)
                         .foregroundStyle(.secondary)

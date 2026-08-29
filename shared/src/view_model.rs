@@ -43,7 +43,10 @@ pub struct SubscriptionDetailView {
 pub struct EpisodeSummary {
     pub id: String,
     pub title: String,
+    /// Raw description (may contain HTML); the detail page renders it as rich text.
     pub description: Option<String>,
+    /// Plain-text description for compact previews (HTML stripped, core-side).
+    pub description_text: Option<String>,
     pub pub_date: Option<i64>,
     pub duration_secs: Option<u32>,
     pub artwork_url: Option<String>,
