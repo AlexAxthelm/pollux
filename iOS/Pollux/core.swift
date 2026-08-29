@@ -57,19 +57,63 @@ class Core: ObservableObject {
                 }
                 resolveAndDispatch(requestId: request.id, result: result)
             }
+
+        case let .http(operation):
+            let requestId = request.id
+            Task.detached { [weak self] in
+                let result = await Core.fetchHttp(operation)
+                await MainActor.run { [weak self] in
+                    self?.resolveAndDispatch(requestId: requestId, result: result)
+                }
+            }
         }
     }
 
-    private func resolveAndDispatch(requestId: UInt32, result: StorageResult) {
-        guard let resultBytes = try? result.bincodeSerialize() else {
-            fatalError("Failed to serialize StorageResult for request \(requestId)")
+    // MARK: - HTTP
+
+    private static func fetchHttp(_ operation: HttpOperation) async -> HttpResult {
+        switch operation {
+        case let .fetchFeed(url):
+            await fetchFeed(url: url)
         }
-        let newEffects = [UInt8](core.resolve(id: requestId, data: Data(resultBytes)))
+    }
+
+    private static func fetchFeed(url: String) async -> HttpResult {
+        guard let parsedURL = URL(string: url) else {
+            return .error("invalid URL: \(url)")
+        }
+        do {
+            let (data, response) = try await URLSession.shared.data(from: parsedURL)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            return .response(status: UInt16(clamping: status), body: Array(data))
+        } catch {
+            return .error(error.localizedDescription)
+        }
+    }
+
+    // MARK: - Resolve
+
+    private func resolveBytes(requestId: UInt32, bytes: [UInt8]) {
+        let newEffects = [UInt8](core.resolve(id: requestId, data: Data(bytes)))
         guard let newRequests: [Request] = try? .bincodeDeserialize(input: newEffects) else {
             fatalError("Failed to deserialize effects after resolving request \(requestId)")
         }
         for req in newRequests {
             processEffect(req)
         }
+    }
+
+    private func resolveAndDispatch(requestId: UInt32, result: StorageResult) {
+        guard let bytes = try? result.bincodeSerialize() else {
+            fatalError("Failed to serialize StorageResult for request \(requestId)")
+        }
+        resolveBytes(requestId: requestId, bytes: bytes)
+    }
+
+    private func resolveAndDispatch(requestId: UInt32, result: HttpResult) {
+        guard let bytes = try? result.bincodeSerialize() else {
+            fatalError("Failed to serialize HttpResult for request \(requestId)")
+        }
+        resolveBytes(requestId: requestId, bytes: bytes)
     }
 }

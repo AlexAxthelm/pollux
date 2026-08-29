@@ -1,5 +1,6 @@
 import App
 import Foundation
+import GRDB
 import Testing
 
 @testable import Pollux
@@ -34,7 +35,8 @@ private func makeEpisode(
     feedGuid: String? = nil,
     title: String = "Test Episode",
     playbackStatus: PlaybackStatus = .unplayed,
-    downloadStatus: DownloadStatus = .notDownloaded
+    downloadStatus: DownloadStatus = .notDownloaded,
+    fileSizeBytes: UInt64? = nil
 ) -> Episode {
     Episode(
         id: id,
@@ -51,7 +53,7 @@ private func makeEpisode(
         downloadStatus: downloadStatus,
         downloadProgress: nil,
         isFlagged: false,
-        fileSizeBytes: nil,
+        fileSizeBytes: fileSizeBytes,
         localPath: nil
     )
 }
@@ -305,9 +307,120 @@ struct DatabaseManagerTests {
         }
     }
 
+    // MARK: UpsertFeedWithEpisodes
+
+    @Test func upsertFeedWithEpisodes_createsNewSubscriptionAndEpisodes() async throws {
+        let db = try makeManager()
+        let sub = makeSubscription(id: "sub-new", title: "New Feed", feedUrl: "https://example.com/new.rss")
+        let ep1 = makeEpisode(id: "ep-1", subscriptionId: "sub-new", feedGuid: "guid-1", title: "Episode One")
+        let ep2 = makeEpisode(id: "ep-2", subscriptionId: "sub-new", feedGuid: "guid-2", title: "Episode Two")
+
+        let result = try await db.execute(.upsertFeedWithEpisodes(subscription: sub, episodes: [ep1, ep2]))
+        guard case .subscription(let saved) = result else {
+            Issue.record("Expected .subscription, got \(result)")
+            return
+        }
+        #expect(saved.title == "New Feed")
+        #expect(saved.feedUrl == "https://example.com/new.rss")
+
+        let epResult = try await db.execute(.listEpisodesBySubscription(subscriptionId: saved.id))
+        guard case .episodes(let eps) = epResult else { return }
+        #expect(eps.count == 2)
+        #expect(eps.map(\.subscriptionId).allSatisfy { $0 == saved.id })
+    }
+
+    @Test func upsertFeedWithEpisodes_refreshUpdatesMetadataAndPreservesId() async throws {
+        let db = try makeManager()
+        let feedUrl = "https://example.com/existing.rss"
+        let original = makeSubscription(id: "original-id", title: "Original Title", feedUrl: feedUrl)
+        try await db.execute(.upsertSubscription(original))
+
+        // Refresh: Rust sends a new UUID id but same feed_url
+        let refreshed = makeSubscription(id: UUID().uuidString, title: "Updated Title", feedUrl: feedUrl)
+        let ep = makeEpisode(id: "ep-1", subscriptionId: refreshed.id, feedGuid: "guid-1")
+
+        let result = try await db.execute(.upsertFeedWithEpisodes(subscription: refreshed, episodes: [ep]))
+        guard case .subscription(let saved) = result else {
+            Issue.record("Expected .subscription, got \(result)")
+            return
+        }
+        // Existing id must be preserved
+        #expect(saved.id == "original-id", "should preserve existing subscription id on refresh")
+        #expect(saved.title == "Updated Title")
+
+        // Episode should be linked to canonical id
+        let epResult = try await db.execute(.listEpisodesBySubscription(subscriptionId: "original-id"))
+        guard case .episodes(let eps) = epResult else { return }
+        #expect(eps.count == 1)
+        #expect(eps[0].subscriptionId == "original-id")
+    }
+
+    @Test func upsertFeedWithEpisodes_updatesExistingEpisodeMetadata() async throws {
+        let db = try makeManager()
+        let sub = makeSubscription(id: "sub-1", feedUrl: "https://example.com/feed.rss")
+        try await db.execute(.upsertSubscription(sub))
+
+        let ep = makeEpisode(id: "ep-1", subscriptionId: "sub-1", feedGuid: "stable-guid", title: "Old Title")
+        try await db.execute(.upsertEpisode(ep))
+
+        let updatedSub = makeSubscription(id: UUID().uuidString, feedUrl: "https://example.com/feed.rss")
+        let updatedEp = makeEpisode(id: UUID().uuidString, subscriptionId: updatedSub.id, feedGuid: "stable-guid", title: "New Title")
+        try await db.execute(.upsertFeedWithEpisodes(subscription: updatedSub, episodes: [updatedEp]))
+
+        let result = try await db.execute(.getEpisodeByFeedGuid(subscriptionId: "sub-1", feedGuid: "stable-guid"))
+        guard case .episode(let fetched) = result else { return }
+        #expect(fetched.title == "New Title")
+        // id should be preserved from original insert
+        #expect(fetched.id == "ep-1")
+    }
+
+    @Test func upsertFeedWithEpisodes_refreshUpdatesFileSize() async throws {
+        // file_size_bytes is feed metadata and can change when a publisher
+        // re-encodes an episode, so a refresh must not leave it stale.
+        let db = try makeManager()
+        let sub = makeSubscription(id: "sub-1", feedUrl: "https://example.com/feed.rss")
+        try await db.execute(.upsertSubscription(sub))
+
+        let ep = makeEpisode(
+            id: "ep-1", subscriptionId: "sub-1", feedGuid: "stable-guid", fileSizeBytes: 1000,
+        )
+        try await db.execute(.upsertEpisode(ep))
+
+        let refreshed = makeEpisode(
+            id: UUID().uuidString, subscriptionId: "sub-1", feedGuid: "stable-guid",
+            fileSizeBytes: 2000,
+        )
+        try await db.execute(.upsertFeedWithEpisodes(subscription: sub, episodes: [refreshed]))
+
+        let result = try await db.execute(
+            .getEpisodeByFeedGuid(subscriptionId: "sub-1", feedGuid: "stable-guid"),
+        )
+        guard case let .episode(fetched) = result else {
+            Issue.record("Expected .episode, got \(result)")
+            return
+        }
+        #expect(fetched.fileSizeBytes == 2000)
+        #expect(fetched.id == "ep-1", "refresh should preserve the original row")
+    }
+
+    @Test func upsertFeedWithEpisodes_noEpisodesIsValid() async throws {
+        let db = try makeManager()
+        let sub = makeSubscription(id: "sub-1", feedUrl: "https://example.com/empty.rss")
+
+        let result = try await db.execute(.upsertFeedWithEpisodes(subscription: sub, episodes: []))
+        guard case .subscription(let saved) = result else {
+            Issue.record("Expected .subscription, got \(result)")
+            return
+        }
+        #expect(saved.id == "sub-1")
+    }
+
     // MARK: Schema constraints
 
-    @Test func upsertEpisode_rejectsNegativeFileSize() async throws {
+    @Test func upsertEpisode_overflowFileSizeStoredAsNull() async throws {
+        // UInt64 values > Int64.max can't be stored as a non-negative Int64.
+        // The DB layer stores NULL rather than a negative value that would
+        // violate the file_size_bytes >= 0 constraint.
         let db = try makeManager()
         let sub = makeSubscription(id: "sub-1")
         try await db.execute(.upsertSubscription(sub))
@@ -318,11 +431,69 @@ struct DatabaseManagerTests {
             enclosureUrl: "https://example.com/ep.mp3", artworkUrl: nil,
             playbackStatus: .unplayed, playbackPositionSecs: nil,
             downloadStatus: .notDownloaded, downloadProgress: nil,
-            isFlagged: false, fileSizeBytes: UInt64(bitPattern: -1), localPath: nil
+            isFlagged: false, fileSizeBytes: UInt64.max, localPath: nil
         )
 
-        await #expect(throws: (any Error).self) {
-            try await db.execute(.upsertEpisode(ep))
+        try await db.execute(.upsertEpisode(ep))
+
+        let result = try await db.execute(.getEpisode(id: "ep-1"))
+        guard case .episode(let fetched) = result else {
+            Issue.record("Expected .episode, got \(result)")
+            return
         }
+        #expect(fetched.fileSizeBytes == nil, "overflow file size should be stored as NULL")
+    }
+
+    @Test func episode_outOfRangeDurationReadsAsNilNotCrash() async throws {
+        // duration_secs is UInt32 in the typed API, so an out-of-range value can
+        // only arrive from a later schema or external tooling. Plant one via raw
+        // SQL and confirm the read degrades to nil instead of trapping.
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".sqlite").path
+        let db = try DatabaseManager(path: path)
+        try await db.execute(.upsertSubscription(makeSubscription(id: "sub-1")))
+        try await db.execute(.upsertEpisode(
+            makeEpisode(id: "ep-1", subscriptionId: "sub-1", feedGuid: "g1"),
+        ))
+
+        let raw = try DatabasePool(path: path)
+        try await raw.write { db in
+            // 5_000_000_000 > UInt32.max (4_294_967_295)
+            try db.execute(sql: "UPDATE episodes SET duration_secs = 5000000000 WHERE id = 'ep-1'")
+        }
+
+        let result = try await db.execute(.getEpisode(id: "ep-1"))
+        guard case let .episode(fetched) = result else {
+            Issue.record("Expected .episode, got \(result)")
+            return
+        }
+        #expect(fetched.durationSecs == nil, "out-of-range duration should read as nil")
+    }
+
+    @Test func episode_outOfRangeDownloadProgressReadsAsNil() async throws {
+        // download_progress has a CHECK (0...100), so planting an out-of-range
+        // value requires bypassing it — standing in for a future schema that
+        // drops the bound or external tooling that ignores it. The read must
+        // degrade to nil, not silently wrap (300 -> 44) as truncation would.
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".sqlite").path
+        let db = try DatabaseManager(path: path)
+        try await db.execute(.upsertSubscription(makeSubscription(id: "sub-1")))
+        try await db.execute(.upsertEpisode(
+            makeEpisode(id: "ep-1", subscriptionId: "sub-1", feedGuid: "g1"),
+        ))
+
+        let raw = try DatabasePool(path: path)
+        try await raw.write { db in
+            try db.execute(sql: "PRAGMA ignore_check_constraints = ON")
+            try db.execute(sql: "UPDATE episodes SET download_progress = 300 WHERE id = 'ep-1'")
+        }
+
+        let result = try await db.execute(.getEpisode(id: "ep-1"))
+        guard case let .episode(fetched) = result else {
+            Issue.record("Expected .episode, got \(result)")
+            return
+        }
+        #expect(fetched.downloadProgress == nil, "out-of-range progress should read as nil")
     }
 }

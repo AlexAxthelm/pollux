@@ -20,6 +20,8 @@ targets:
     sources: [Pollux]
     info:
       path: Pollux/Info.plist
+      properties:
+        UILaunchScreen: {}
     dependencies:
       - package: Shared
       - package: App
@@ -33,5 +35,7 @@ targets:
     sources: [PolluxTests]
     dependencies:
       - target: Pollux
+      - package: GRDB
+        product: GRDB
     settings:
       GENERATE_INFOPLIST_FILE: YES

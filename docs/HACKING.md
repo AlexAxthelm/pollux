@@ -126,14 +126,25 @@ make ios-sim SIM_DEVICE_NAME="iPhone 16"
 ## Testing
 
 ```bash
-make test           # cargo test (Rust only)
-make rust-test      # same
+make test           # both suites: rust-test + ios-test
+make rust-test      # cargo test
+make ios-test       # xcodebuild test (Swift)
 ```
 
-Swift tests are not yet set up. Rust tests live alongside the source in
-`shared/src/app.rs` using standard `#[cfg(test)]` modules. Crux provides
-test helpers (`cmd.expect_one_effect().expect_render()`) that let you test
-the update function without a shell.
+Rust tests live alongside the source in `shared/src/app.rs` using standard
+`#[cfg(test)]` modules. Crux provides test helpers
+(`cmd.expect_one_effect().expect_render()`) that let you test the update
+function without a shell.
+
+Swift tests live in `iOS/PolluxTests/` and use the swift-testing framework
+(`import Testing`, with `@Suite` / `@Test` and `#expect` assertions) rather
+than XCTest. `iOS/PolluxTests/DatabaseManagerTests.swift` covers the
+`DatabaseManager` suite.
+
+`make ios-test` depends on `ios-build`, so it regenerates the Xcode project
+and runs against a simulator — you need an installed simulator runtime
+matching `SIM_DEVICE_NAME` (see [Run in simulator](#run-in-simulator) for
+overriding it).
 
 ---
 
