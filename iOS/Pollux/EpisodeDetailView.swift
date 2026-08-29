@@ -89,9 +89,7 @@ struct EpisodeDetailView: View {
             Text("Show notes")
                 .font(.headline)
             if let description = episode.description, !description.isEmpty {
-                Text(description)
-                    .font(.body)
-                    .foregroundStyle(.primary)
+                ShowNotesText(html: description)
             } else {
                 Text("No show notes.")
                     .font(.body)
