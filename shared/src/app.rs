@@ -120,24 +120,40 @@ impl App for Pollux {
                     model.detail_loading = true;
                     model.detail_error = None;
                     Command::request_from_shell(StorageOperation::ListEpisodesBySubscription {
-                        subscription_id: id,
+                        subscription_id: id.clone(),
                     })
-                    .then_send(|r| Event::EpisodesLoaded(Box::new(r)))
+                    .then_send(move |r| Event::EpisodesLoaded {
+                        subscription_id: id,
+                        result: Box::new(r),
+                    })
                     .and(render())
                 }
             }
-            Event::EpisodesLoaded(result) => {
-                model.detail_loading = false;
-                match *result {
-                    StorageResult::Episodes(rows) => {
-                        // Project once here (HTML stripping included), not per render.
-                        model.episode_summaries = rows.iter().map(episode_summary).collect();
-                        model.detail_error = None;
-                    }
-                    StorageResult::Error(e) => model.detail_error = Some(e),
-                    unexpected => {
-                        model.detail_error =
-                            Some(format!("unexpected storage result: {unexpected:?}"))
+            Event::EpisodesLoaded {
+                subscription_id,
+                result,
+            } => {
+                // Drop a response for a feed we're no longer showing: a load left
+                // in flight by a previous selection must not overwrite the current
+                // one. The requested id is carried on the event rather than inferred
+                // from the rows, so an empty result still correlates correctly.
+                if model
+                    .selected_subscription
+                    .as_ref()
+                    .is_some_and(|s| s.id == subscription_id)
+                {
+                    model.detail_loading = false;
+                    match *result {
+                        StorageResult::Episodes(rows) => {
+                            // Project once here (HTML stripping included), not per render.
+                            model.episode_summaries = rows.iter().map(episode_summary).collect();
+                            model.detail_error = None;
+                        }
+                        StorageResult::Error(e) => model.detail_error = Some(e),
+                        unexpected => {
+                            model.detail_error =
+                                Some(format!("unexpected storage result: {unexpected:?}"))
+                        }
                     }
                 }
                 render()
@@ -254,7 +270,10 @@ pub enum Event {
     },
     FeedSaved(Box<StorageResult>),
     SelectSubscription(String),
-    EpisodesLoaded(Box<StorageResult>),
+    EpisodesLoaded {
+        subscription_id: String,
+        result: Box<StorageResult>,
+    },
     SetEpisodeSort(EpisodeSortOrder),
 }
 
@@ -307,10 +326,20 @@ mod tests {
     }
 
     /// Loads episodes through the real event, so the at-load projection (including
-    /// HTML stripping) is exercised — the shell never sets summaries directly.
+    /// HTML stripping) is exercised — the shell never sets summaries directly. A
+    /// matching subscription is selected first, since the handler now correlates
+    /// the response to the current selection.
     fn load_episodes(app: &Pollux, model: &mut Model, episodes: Vec<Episode>) {
+        let sub_id = episodes
+            .first()
+            .map(|e| e.subscription_id.clone())
+            .unwrap_or_else(|| "sub-id".to_string());
+        model.selected_subscription = Some(make_subscription(&sub_id, "Test Feed"));
         let _ = app.update(
-            Event::EpisodesLoaded(Box::new(StorageResult::Episodes(episodes))),
+            Event::EpisodesLoaded {
+                subscription_id: sub_id,
+                result: Box::new(StorageResult::Episodes(episodes)),
+            },
             model,
         );
     }
@@ -730,6 +759,7 @@ mod tests {
     fn episodes_loaded_populates_detail_view() {
         let app = Pollux;
         let mut model = Model::default();
+        model.selected_subscription = Some(make_subscription("sub-id", "Feed"));
         model.detail_loading = true;
 
         let episodes = vec![
@@ -737,7 +767,10 @@ mod tests {
             make_episode("e2", "Episode Two", Some(2_000)),
         ];
         let mut cmd = app.update(
-            Event::EpisodesLoaded(Box::new(StorageResult::Episodes(episodes))),
+            Event::EpisodesLoaded {
+                subscription_id: "sub-id".to_string(),
+                result: Box::new(StorageResult::Episodes(episodes)),
+            },
             &mut model,
         );
 
@@ -842,15 +875,47 @@ mod tests {
     fn episodes_loaded_storage_error_sets_detail_error() {
         let app = Pollux;
         let mut model = Model::default();
+        model.selected_subscription = Some(make_subscription("sub-id", "Feed"));
         model.detail_loading = true;
 
         let _ = app.update(
-            Event::EpisodesLoaded(Box::new(StorageResult::Error("db gone".to_string()))),
+            Event::EpisodesLoaded {
+                subscription_id: "sub-id".to_string(),
+                result: Box::new(StorageResult::Error("db gone".to_string())),
+            },
             &mut model,
         );
 
         assert!(!model.detail_loading);
         assert_eq!(model.detail_error.as_deref(), Some("db gone"));
+    }
+
+    #[test]
+    fn episodes_for_a_different_subscription_are_ignored() {
+        let app = Pollux;
+        let mut model = Model::default();
+        // The user has navigated on to another feed; a load for the previous one
+        // is still in flight.
+        model.selected_subscription = Some(make_subscription("current", "Current"));
+        model.detail_loading = true;
+
+        let stale = vec![make_episode("e1", "Stale Episode", Some(1_000))];
+        let _ = app.update(
+            Event::EpisodesLoaded {
+                subscription_id: "previous".to_string(),
+                result: Box::new(StorageResult::Episodes(stale)),
+            },
+            &mut model,
+        );
+
+        assert!(
+            model.episode_summaries.is_empty(),
+            "a response for a feed we left must not populate the current one"
+        );
+        assert!(
+            model.detail_loading,
+            "a stale response must not clear the in-flight load's spinner"
+        );
     }
 
     #[test]
@@ -903,7 +968,10 @@ mod tests {
 
         let _ = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
         let _ = app.update(
-            Event::EpisodesLoaded(Box::new(StorageResult::Error("boom".to_string()))),
+            Event::EpisodesLoaded {
+                subscription_id: "sub-id".to_string(),
+                result: Box::new(StorageResult::Error("boom".to_string())),
+            },
             &mut model,
         );
         assert!(model.detail_error.is_some());
