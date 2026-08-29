@@ -12,6 +12,13 @@ enum EpisodeFormatting {
         return pubDateFormatter.string(from: date)
     }
 
+    /// "Aug 29, 2026 · 45m" — the formatted pub date and duration joined by a
+    /// middot, using whichever parts are present. Nil when neither is.
+    static func metaLine(pubDate: Int64?, durationSecs: UInt32?) -> String? {
+        let parts = [formatPubDate(pubDate), formatDuration(durationSecs)].compactMap(\.self)
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     /// A compact duration like "1h 23m", "45m", or "30s". Nil when absent or zero.
     static func formatDuration(_ seconds: UInt32?) -> String? {
         guard let seconds, seconds > 0 else { return nil }

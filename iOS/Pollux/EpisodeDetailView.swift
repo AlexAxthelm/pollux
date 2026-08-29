@@ -98,13 +98,8 @@ struct EpisodeDetailView: View {
         }
     }
 
-    /// "Aug 29, 2026 · 45m" — whichever parts are present.
     private var metaLine: String? {
-        let parts = [
-            EpisodeFormatting.formatPubDate(episode.pubDate),
-            EpisodeFormatting.formatDuration(episode.durationSecs),
-        ].compactMap(\.self)
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        EpisodeFormatting.metaLine(pubDate: episode.pubDate, durationSecs: episode.durationSecs)
     }
 }
 
