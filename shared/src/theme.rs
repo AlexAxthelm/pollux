@@ -37,9 +37,9 @@ pub enum ThemeMode {
 #[repr(C)]
 pub enum ThemeId {
     /// Defer entirely to the OS semantic colors — the app's appearance today.
-    #[default]
     System,
     /// Solarized (Ethan Schoonover), light + dark variants.
+    #[default]
     Solarized,
     /// Nord (Arctic Ice Studio), dark-only.
     Nord,
