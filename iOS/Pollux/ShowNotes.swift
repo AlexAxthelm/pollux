@@ -19,6 +19,7 @@ struct ShowNotesText: View {
         Group {
             if let rendered {
                 Text(rendered)
+                    .foregroundStyle(themeColors.text)
                     .tint(themeColors.accent)
             } else {
                 Text(fallback ?? "")

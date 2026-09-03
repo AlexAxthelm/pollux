@@ -19,9 +19,9 @@ token behind each role be documented here. This is that document.
 
 | Role (`themeColors.…`) | base16 | Used for | `System` theme resolves to |
 |---|---|---|---|
-| `background` | base00 | Screen background (applied at the app root) | `.systemBackground` |
-| `secondaryBackground` | base01 | Elevated/secondary surfaces (e.g. artwork placeholder fill + border) | `.secondarySystemBackground` |
-| `text` | base05 | Default foreground / body text | `.primary` |
+| `background` | base00 | Screen background (app root + each screen; list/scroll backgrounds hidden so it shows through) | `.systemBackground` |
+| `secondaryBackground` | base01 | Elevated surfaces: grouped list rows/cards, artwork placeholder fill + border | `.secondarySystemBackground` |
+| `text` | base05 | Default foreground / primary text (titles, body, show notes) | `.primary` |
 | `secondaryText` | base03 | Captions, metadata, inactive, badges | `.secondary` |
 | `accent` | base0D | Tint, links | `.accentColor` |
 | `error` | base08 | Error text | `.red` |
@@ -32,12 +32,28 @@ token behind each role be documented here. This is that document.
 currently `secondaryText` (unchanged from before theming). They exist so a later
 pass can color those states without touching the infrastructure.
 
+### How surfaces are themed
+
+The whole app follows the active theme, not just foreground text:
+
+- **Screen background** — each screen sets `.background(themeColors.background)`;
+  the app root does too, so pushed views inherit it.
+- **Lists** — `.scrollContentBackground(.hidden)` removes the system list
+  background so `background` shows through, and `.listRowBackground(...)` paints
+  rows (`secondaryBackground` for the grouped Library, `background` for the plain
+  episode list).
+- **Navigation bars** are left transparent (no `toolbarBackground` override — it
+  suppresses the large title), so the themed background shows behind them.
+- **Primary text** carries an explicit `.foregroundStyle(themeColors.text)`;
+  show-note HTML has its foreground color stripped (see `ShowNotes.swift`) so it
+  inherits the same token.
+
 ## The `System` theme reproduces today's appearance
 
 The default selection is `System` / `FollowSystem`. For it, `ThemeColors.resolve`
-returns the platform's own semantic colors (the right column above), so
-**foreground/text colors and the primary background are identical** to the app
-before theming landed. `Light` / `Dark` still force the OS appearance via
+returns the platform's own semantic colors (the right column above), so every
+themed surface maps back to its native system color and the app looks unchanged
+from before theming landed. `Light` / `Dark` still force the OS appearance via
 `preferredColorScheme`, so the System theme honors the mode selector too.
 
 ## Deliberate exceptions

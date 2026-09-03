@@ -45,6 +45,7 @@ struct EpisodeDetailView: View {
             Text(episode.title)
                 .font(.title3)
                 .fontWeight(.bold)
+                .foregroundStyle(themeColors.text)
             Text(feedTitle)
                 .font(.subheadline)
                 .foregroundStyle(themeColors.secondaryText)
@@ -89,6 +90,7 @@ struct EpisodeDetailView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Show notes")
                 .font(.headline)
+                .foregroundStyle(themeColors.text)
             if let description = episode.description, !description.isEmpty {
                 ShowNotesText(html: description, fallback: episode.descriptionText)
             } else {

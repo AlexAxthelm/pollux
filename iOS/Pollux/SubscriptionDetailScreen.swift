@@ -21,6 +21,7 @@ struct SubscriptionDetailScreen: View {
             Divider()
             content
         }
+        .background(themeColors.background)
         .navigationTitle(subscription.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -42,6 +43,7 @@ struct SubscriptionDetailScreen: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(subscription.title)
                     .font(.headline)
+                    .foregroundStyle(themeColors.text)
                     .lineLimit(2)
                 Text(episodeCountText)
                     .font(.caption)
@@ -73,8 +75,10 @@ struct SubscriptionDetailScreen: View {
                 NavigationLink(value: episode) {
                     EpisodeRow(episode: episode)
                 }
+                .listRowBackground(themeColors.background)
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
         }
     }
 

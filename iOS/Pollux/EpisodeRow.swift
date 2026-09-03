@@ -17,6 +17,7 @@ struct EpisodeRow: View {
                 Text(episode.title)
                     .font(.subheadline)
                     .fontWeight(.semibold)
+                    .foregroundStyle(themeColors.text)
                     .lineLimit(2)
 
                 if let meta = metaLine {

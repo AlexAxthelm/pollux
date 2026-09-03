@@ -23,8 +23,11 @@ struct ContentView: View {
                         List(core.view.library.subscriptions, id: \.id) { sub in
                             NavigationLink(value: sub) {
                                 Text(sub.title)
+                                    .foregroundStyle(themeColors.text)
                             }
+                            .listRowBackground(themeColors.secondaryBackground)
                         }
+                        .scrollContentBackground(.hidden)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -49,6 +52,7 @@ struct ContentView: View {
                 }
                 .padding()
             }
+            .background(themeColors.background)
             .navigationTitle("Library")
             .navigationDestination(for: SubscriptionSummary.self) { sub in
                 SubscriptionDetailScreen(core: core, subscription: sub)
