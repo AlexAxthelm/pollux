@@ -20,7 +20,7 @@ token behind each role be documented here. This is that document.
 | Role (`themeColors.…`) | base16 | Used for | `System` theme resolves to |
 |---|---|---|---|
 | `background` | base00 | Screen background (applied at the app root) | `.systemBackground` |
-| `secondaryBackground` | base01 | Elevated/secondary surfaces | `.secondarySystemBackground` |
+| `secondaryBackground` | base01 | Elevated/secondary surfaces (e.g. artwork placeholder fill + border) | `.secondarySystemBackground` |
 | `text` | base05 | Default foreground / body text | `.primary` |
 | `secondaryText` | base03 | Captions, metadata, inactive, badges | `.secondary` |
 | `accent` | base0D | Tint, links | `.accentColor` |
@@ -42,10 +42,6 @@ before theming landed. `Light` / `Dark` still force the OS appearance via
 
 ## Deliberate exceptions
 
-- **`.quaternary` fills** (e.g. the artwork placeholder in `ArtworkView.swift`)
-  stay as SwiftUI's translucent, adaptive `ShapeStyle`. There is no single base16
-  color that preserves the translucency, and these are faint, rarely-seen
-  surfaces. Only the real foreground colors on top of them are themed.
 - **`Color.debug`** (`DebugStyle.swift`) is intentionally *not* a theme color: it
   is a loud marker for not-yet-wired UI (`.stubbed()`) and must never be replaced
   by a semantic role — that would hide the "this does nothing" signal.

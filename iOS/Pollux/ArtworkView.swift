@@ -13,7 +13,7 @@ struct ArtworkView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(.quaternary, lineWidth: 0.5),
+                    .strokeBorder(themeColors.secondaryBackground, lineWidth: 0.5),
             )
     }
 
@@ -35,11 +35,10 @@ struct ArtworkView: View {
     }
 
     private var placeholder: some View {
-        // The fill and hairline border stay `.quaternary`: a translucent,
-        // adaptive `ShapeStyle` with no single base16 equivalent. Only the glyph,
-        // which is a real foreground color, is themed.
+        // Placeholder surface uses the secondary-background token (base01); the
+        // glyph on top uses the secondary-text token.
         Rectangle()
-            .fill(.quaternary)
+            .fill(themeColors.secondaryBackground)
             .overlay(
                 Image(systemName: "music.mic")
                     .foregroundStyle(themeColors.secondaryText),
