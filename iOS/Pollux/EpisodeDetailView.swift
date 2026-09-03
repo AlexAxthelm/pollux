@@ -31,6 +31,7 @@ struct EpisodeDetailView: View {
             }
             .padding()
         }
+        .background(themeColors.background)
         .navigationTitle(episode.title)
         .navigationBarTitleDisplayMode(.inline)
     }
