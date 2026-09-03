@@ -3,6 +3,7 @@ import SwiftUI
 /// Square podcast/episode artwork loaded from a URL, with a neutral placeholder
 /// while loading or when the URL is missing or fails.
 struct ArtworkView: View {
+    @Environment(\.themeColors) private var themeColors
     let urlString: String?
     var size: CGFloat = 56
 
@@ -34,11 +35,14 @@ struct ArtworkView: View {
     }
 
     private var placeholder: some View {
+        // The fill and hairline border stay `.quaternary`: a translucent,
+        // adaptive `ShapeStyle` with no single base16 equivalent. Only the glyph,
+        // which is a real foreground color, is themed.
         Rectangle()
             .fill(.quaternary)
             .overlay(
                 Image(systemName: "music.mic")
-                    .foregroundStyle(.secondary),
+                    .foregroundStyle(themeColors.secondaryText),
             )
     }
 }

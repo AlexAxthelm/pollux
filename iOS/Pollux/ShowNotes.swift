@@ -12,16 +12,17 @@ struct ShowNotesText: View {
     /// before the first parse, and permanently if parsing fails. Never raw HTML.
     var fallback: String?
 
+    @Environment(\.themeColors) private var themeColors
     @State private var rendered: AttributedString?
 
     var body: some View {
         Group {
             if let rendered {
                 Text(rendered)
-                    .tint(.accentColor)
+                    .tint(themeColors.accent)
             } else {
                 Text(fallback ?? "")
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(themeColors.text)
             }
         }
         .task(id: html) {

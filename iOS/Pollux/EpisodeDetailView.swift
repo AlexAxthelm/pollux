@@ -8,6 +8,7 @@ import SwiftUI
 /// ViewModel already carries it. A dedicated `GetEpisode` round-trip could replace
 /// this later if the detail page ever needs data the list doesn't ship.
 struct EpisodeDetailView: View {
+    @Environment(\.themeColors) private var themeColors
     let episode: EpisodeSummary
     let feedTitle: String
 
@@ -46,11 +47,11 @@ struct EpisodeDetailView: View {
                 .fontWeight(.bold)
             Text(feedTitle)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themeColors.secondaryText)
             if let meta = metaLine {
                 Text(meta)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themeColors.secondaryText)
             }
         }
     }
@@ -78,7 +79,7 @@ struct EpisodeDetailView: View {
                     .foregroundStyle(Color.debug)
                 Text("No playback engine yet")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themeColors.secondaryText)
             }
         }
         .frame(maxWidth: .infinity)
@@ -93,7 +94,7 @@ struct EpisodeDetailView: View {
             } else {
                 Text("No show notes.")
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themeColors.secondaryText)
             }
         }
     }
@@ -106,6 +107,7 @@ struct EpisodeDetailView: View {
 /// A feature section whose backend doesn't exist yet: DEBUG-tinted title + STUB
 /// badge so it's clearly non-functional.
 private struct PlaceholderSection: View {
+    @Environment(\.themeColors) private var themeColors
     let title: String
     let note: String
 
@@ -120,7 +122,7 @@ private struct PlaceholderSection: View {
             }
             Text(note)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themeColors.secondaryText)
         }
     }
 }
