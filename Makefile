@@ -52,6 +52,13 @@ swift-format-check:
 XCODE_PROJECT   := iOS/Pollux.xcodeproj
 XCODE_SCHEME    := Pollux
 
+# Pin DerivedData to a repo-local path (build/ is gitignored) so the built app is
+# always at a known location. xcodegen regenerates the .xcodeproj, which shifts
+# Xcode's default per-project DerivedData hash and leaves stale Pollux-<hash>/
+# builds behind — a naive `find | head -1` would then install an old binary.
+DERIVED_DATA    := $(CURDIR)/build/DerivedData
+APP_PATH        := $(DERIVED_DATA)/Build/Products/Debug-iphonesimulator/$(XCODE_SCHEME).app
+
 SIM_DEVICE_NAME := iPhone 14 Pro Max
 SIM_ID := $(shell \
 	xcrun simctl list devices available -j \
@@ -111,6 +118,7 @@ ios-xcodebuild: ios-build
 		-project $(XCODE_PROJECT) \
 		-scheme $(XCODE_SCHEME) \
 		-configuration Debug \
+		-derivedDataPath $(DERIVED_DATA) \
 		-destination 'platform=iOS Simulator,id=$(SIM_ID)' \
 		| xcbeautify
 
@@ -121,13 +129,8 @@ ios-dev: ios-build
 	xed iOS
 
 ios-sim: ios-xcodebuild
-	$(eval APP_PATH := $(shell find ~/Library/Developer/Xcode/DerivedData \
-		-name "$(XCODE_SCHEME).app" \
-		-path "*/Debug-iphonesimulator/*" \
-		-not -path "*/Index.noindex/*" \
-		2>/dev/null | head -1))
-	@[ -n "$(APP_PATH)" ] || \
-		{ echo "App not found in DerivedData."; exit 1; }
+	@[ -d "$(APP_PATH)" ] || \
+		{ echo "App not found at $(APP_PATH)."; exit 1; }
 	@[ -n "$(SIM_ID)" ] || \
 		{ echo "Simulator '$(SIM_DEVICE_NAME)' not found."; exit 1; }
 	@echo "Targeting: $(SIM_DEVICE_NAME) ($(SIM_ID))"
@@ -142,6 +145,7 @@ ios-test: ios-build
 	xcodebuild test \
 		-project $(XCODE_PROJECT) \
 		-scheme PolluxTests \
+		-derivedDataPath $(DERIVED_DATA) \
 		-destination 'platform=iOS Simulator,id=$(SIM_ID)' \
 		| xcbeautify
 
@@ -151,6 +155,7 @@ xcode-clean:
 	rm -rf $(XCODE_PROJECT)
 
 ios-clean: xcode-clean swift-generated-clean
+	rm -rf $(DERIVED_DATA)
 
 swift-generated-clean:
 	rm -rf iOS/generated

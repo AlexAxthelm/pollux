@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var core: Core
+    @Environment(\.themeColors) private var themeColors
     @State private var feedUrl = ""
     @State private var isSubscribing = false
     private var trimmedFeedUrl: String {
@@ -17,20 +18,23 @@ struct ContentView: View {
                         ProgressView()
                     } else if core.view.library.subscriptions.isEmpty {
                         Text("No podcasts yet")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeColors.secondaryText)
                     } else {
                         List(core.view.library.subscriptions, id: \.id) { sub in
                             NavigationLink(value: sub) {
                                 Text(sub.title)
+                                    .foregroundStyle(themeColors.text)
                             }
+                            .listRowBackground(themeColors.secondaryBackground)
                         }
+                        .scrollContentBackground(.hidden)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 if let error = core.view.library.error {
                     Text(error)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(themeColors.error)
                         .font(.caption)
                         .padding(.horizontal)
                 }
@@ -48,6 +52,7 @@ struct ContentView: View {
                 }
                 .padding()
             }
+            .background(themeColors.background)
             .navigationTitle("Library")
             .navigationDestination(for: SubscriptionSummary.self) { sub in
                 SubscriptionDetailScreen(core: core, subscription: sub)

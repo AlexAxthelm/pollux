@@ -8,6 +8,7 @@ import SwiftUI
 /// logic); the playback/download controls in each row are placeholders.
 struct SubscriptionDetailScreen: View {
     @ObservedObject var core: Core
+    @Environment(\.themeColors) private var themeColors
     let subscription: SubscriptionSummary
 
     private var detail: SubscriptionDetailView {
@@ -20,6 +21,7 @@ struct SubscriptionDetailScreen: View {
             Divider()
             content
         }
+        .background(themeColors.background)
         .navigationTitle(subscription.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -41,10 +43,11 @@ struct SubscriptionDetailScreen: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(subscription.title)
                     .font(.headline)
+                    .foregroundStyle(themeColors.text)
                     .lineLimit(2)
                 Text(episodeCountText)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themeColors.secondaryText)
             }
             Spacer(minLength: 0)
         }
@@ -57,7 +60,7 @@ struct SubscriptionDetailScreen: View {
         } else if let error = detail.error {
             centered {
                 Text(error)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(themeColors.error)
                     .font(.callout)
                     .multilineTextAlignment(.center)
                     .padding()
@@ -65,15 +68,17 @@ struct SubscriptionDetailScreen: View {
         } else if detail.episodes.isEmpty {
             centered {
                 Text("No episodes")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themeColors.secondaryText)
             }
         } else {
             List(detail.episodes, id: \.id) { episode in
                 NavigationLink(value: episode) {
                     EpisodeRow(episode: episode)
                 }
+                .listRowBackground(themeColors.background)
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
         }
     }
 

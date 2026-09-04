@@ -9,6 +9,7 @@ use crate::effect::Effect;
 use crate::feed_parser::parse_feed;
 use crate::html::strip_html_preview;
 use crate::model::Model;
+use crate::theme::{theme_view, ThemeId, ThemeMode};
 use crate::view_model::{
     EpisodeSummary, LibraryView, SubscriptionDetailView, SubscriptionSummary, ViewModel,
 };
@@ -169,6 +170,15 @@ impl App for Pollux {
                 model.episode_sort = order;
                 render()
             }
+            Event::SetTheme { id, mode } => {
+                // Records the theme choice and re-renders; resolution to platform
+                // colors happens shell-side. No UI emits this yet — it's the seam
+                // the Settings appearance section will use. Persistence hooks in
+                // there too (via the storage capability).
+                model.theme_id = id;
+                model.theme_mode = mode;
+                render()
+            }
         }
     }
 
@@ -193,6 +203,7 @@ impl App for Pollux {
                 error: model.error.clone(),
             },
             subscription_detail: build_subscription_detail(model),
+            theme: theme_view(model.theme_id, model.theme_mode),
         }
     }
 }
@@ -284,6 +295,12 @@ pub enum Event {
         result: Box<StorageResult>,
     },
     SetEpisodeSort(EpisodeSortOrder),
+    /// Change the active theme. Not yet emitted by any UI — the seam for the
+    /// Settings appearance section (see `docs/features/theme.md`).
+    SetTheme {
+        id: ThemeId,
+        mode: ThemeMode,
+    },
 }
 
 #[cfg(test)]
@@ -1020,6 +1037,38 @@ mod tests {
         );
         // ...and a plain-text version is provided for the row snippet.
         assert_eq!(summary.description_text.as_deref(), Some("Hello world"));
+    }
+
+    #[test]
+    fn default_view_projects_the_system_theme() {
+        let app = Pollux;
+        let model = Model::default();
+
+        let theme = app.view(&model).theme;
+        assert_eq!(theme.id, ThemeId::System);
+        assert_eq!(theme.mode, ThemeMode::FollowSystem);
+        assert!(theme.follows_system_colors);
+    }
+
+    #[test]
+    fn set_theme_updates_the_projected_theme() {
+        let app = Pollux;
+        let mut model = Model::default();
+
+        let mut cmd = app.update(
+            Event::SetTheme {
+                id: ThemeId::Solarized,
+                mode: ThemeMode::Dark,
+            },
+            &mut model,
+        );
+        cmd.expect_one_effect().expect_render();
+
+        let theme = app.view(&model).theme;
+        assert_eq!(theme.id, ThemeId::Solarized);
+        assert_eq!(theme.mode, ThemeMode::Dark);
+        assert!(!theme.follows_system_colors);
+        assert!(theme.has_dark_variant);
     }
 
     #[test]
