@@ -114,12 +114,16 @@ struct ThemeTests {
     @Test func luminanceClassifiesBackgrounds() {
         #expect(makePalette(background: "#002b36").isDarkBackground)
         #expect(makePalette(background: "#2e3440").isDarkBackground)
+        #expect(makePalette(background: "#0A0A0A").isDarkBackground) // uppercase hex parses
         #expect(!makePalette(background: "#fdf6e3").isDarkBackground)
         #expect(!makePalette(background: "#ffffff").isDarkBackground)
     }
 
-    // Malformed hex is treated as light — the safer default for system chrome.
+    // Malformed hex (non-hex chars, a stray sign, or wrong length) is treated as
+    // light — the safer default for system chrome, not a silently wrong color.
     @Test func malformedBackgroundIsNotDark() {
         #expect(!makePalette(background: "nothex").isDarkBackground)
+        #expect(!makePalette(background: "+12345").isDarkBackground) // sign prefix rejected
+        #expect(!makePalette(background: "#12345").isDarkBackground) // too short
     }
 }

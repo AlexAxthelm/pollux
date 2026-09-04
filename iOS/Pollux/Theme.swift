@@ -136,13 +136,15 @@ extension Base16Palette {
 // MARK: - Hex parsing
 
 /// Parses a base16 `#RRGGBB` (or `RRGGBB`) string into its 24-bit RGB value, or
-/// nil if malformed. Shared by `Color(base16:)` and the luminance check.
+/// nil if malformed. Shared by `Color(base16:)` and the luminance check. Requires
+/// exactly six hex digits: `UInt32(_:radix:)` alone would accept a leading sign
+/// (e.g. "+12345"), so the character set is validated explicitly.
 private func base16RGB(_ hex: String) -> UInt32? {
     let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
-    guard digits.count == 6, let value = UInt32(digits, radix: 16) else {
+    guard digits.count == 6, digits.allSatisfy(\.isHexDigit) else {
         return nil
     }
-    return value
+    return UInt32(digits, radix: 16)
 }
 
 extension Color {
