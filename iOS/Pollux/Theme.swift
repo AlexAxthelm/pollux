@@ -80,20 +80,23 @@ struct ThemeColors {
         self.warning = warning
     }
 
-    /// Resolves the active theme for the current OS appearance.
+    /// Resolves the active theme for the current OS appearance. Falls back to the
+    /// system colors for the System theme, which carries no palette.
     static func resolve(_ theme: ThemeView, colorScheme: ColorScheme) -> ThemeColors {
-        theme.followsSystemColors
-            ? .system
-            : ThemeColors(palette: theme.palette(for: colorScheme))
+        guard !theme.followsSystemColors, let palette = theme.palette(for: colorScheme) else {
+            return .system
+        }
+        return ThemeColors(palette: palette)
     }
 }
 
 // MARK: - ThemeView resolution
 
 extension ThemeView {
-    /// Picks the palette to apply given the pinned mode and the OS appearance.
-    /// A single-variant theme always uses `light` (which equals `dark`).
-    func palette(for colorScheme: ColorScheme) -> Base16Palette {
+    /// The palette to apply given the pinned mode and the OS appearance, or nil for
+    /// a theme that carries none (System, which uses OS colors). A single-variant
+    /// theme always uses `light` (which equals `dark`).
+    func palette(for colorScheme: ColorScheme) -> Base16Palette? {
         guard hasDarkVariant else { return light }
         switch mode {
         case .light: return light
@@ -110,7 +113,7 @@ extension ThemeView {
         // so system chrome (status bar, controls) matches it — otherwise a
         // dark-only theme under FollowSystem would draw light chrome on a light OS.
         guard hasDarkVariant else {
-            return light.isDarkBackground ? .dark : .light
+            return (light?.isDarkBackground ?? false) ? .dark : .light
         }
         switch mode {
         case .light: return .light

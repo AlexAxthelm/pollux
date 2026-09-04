@@ -80,8 +80,8 @@ struct ThemeTests {
             hasDark: true, mode: .followSystem,
             light: makePalette(background: "#ffffff"), dark: makePalette(background: "#000000"),
         )
-        #expect(view.palette(for: .light).base00 == "#ffffff")
-        #expect(view.palette(for: .dark).base00 == "#000000")
+        #expect(view.palette(for: .light)?.base00 == "#ffffff")
+        #expect(view.palette(for: .dark)?.base00 == "#000000")
     }
 
     @Test func pinnedModeIgnoresOSScheme() {
@@ -90,14 +90,14 @@ struct ThemeTests {
             light: makePalette(background: "#ffffff"), dark: makePalette(background: "#000000"),
         )
         // OS is light, but the dark palette is applied.
-        #expect(darkPinned.palette(for: .light).base00 == "#000000")
+        #expect(darkPinned.palette(for: .light)?.base00 == "#000000")
 
         let lightPinned = makeTheme(
             hasDark: true, mode: .light,
             light: makePalette(background: "#ffffff"), dark: makePalette(background: "#000000"),
         )
         // OS is dark, but the light palette is applied.
-        #expect(lightPinned.palette(for: .dark).base00 == "#ffffff")
+        #expect(lightPinned.palette(for: .dark)?.base00 == "#ffffff")
     }
 
     @Test func singleVariantAlwaysUsesLightPalette() {
@@ -106,7 +106,7 @@ struct ThemeTests {
             hasDark: false, mode: .light,
             light: only, dark: makePalette(background: "#ffffff"),
         )
-        #expect(view.palette(for: .dark).base00 == "#2e3440")
+        #expect(view.palette(for: .dark)?.base00 == "#2e3440")
     }
 
     // MARK: - isDarkBackground

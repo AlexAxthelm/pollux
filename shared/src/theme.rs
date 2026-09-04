@@ -96,7 +96,7 @@ impl Base16Palette {
 /// plus enough metadata for the shell to resolve a concrete palette: pick `light`
 /// or `dark` from `mode` + the OS scheme (respecting `has_dark_variant`), unless
 /// `follows_system_colors` is set, in which case the shell uses native OS colors
-/// and the palettes are unused.
+/// and the palettes are `None`.
 #[derive(Facet, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ThemeView {
     pub id: ThemeId,
@@ -106,8 +106,10 @@ pub struct ThemeView {
     pub follows_system_colors: bool,
     /// When false, the theme is single-variant: `light == dark` and `mode` is moot.
     pub has_dark_variant: bool,
-    pub light: Base16Palette,
-    pub dark: Base16Palette,
+    /// `None` for the System theme (which uses OS colors); `Some` otherwise. Kept
+    /// out of the projection when unused rather than shipped as dead placeholder data.
+    pub light: Option<Base16Palette>,
+    pub dark: Option<Base16Palette>,
 }
 
 impl Default for ThemeView {
@@ -125,8 +127,8 @@ pub fn theme_view(id: ThemeId, mode: ThemeMode) -> ThemeView {
             mode,
             follows_system_colors: true,
             has_dark_variant: true,
-            light: system_placeholder(),
-            dark: system_placeholder(),
+            light: None,
+            dark: None,
         },
         ThemeId::Solarized => ThemeView {
             id,
@@ -134,8 +136,8 @@ pub fn theme_view(id: ThemeId, mode: ThemeMode) -> ThemeView {
             mode,
             follows_system_colors: false,
             has_dark_variant: true,
-            light: solarized_light(),
-            dark: solarized_dark(),
+            light: Some(solarized_light()),
+            dark: Some(solarized_dark()),
         },
         ThemeId::Nord => {
             let palette = nord();
@@ -145,20 +147,11 @@ pub fn theme_view(id: ThemeId, mode: ThemeMode) -> ThemeView {
                 mode,
                 follows_system_colors: false,
                 has_dark_variant: false,
-                light: palette.clone(),
-                dark: palette,
+                light: Some(palette.clone()),
+                dark: Some(palette),
             }
         }
     }
-}
-
-/// Neutral grayscale stand-in for the System theme, whose palettes the shell never
-/// reads (it uses OS semantic colors). Present only so the projection is total.
-fn system_placeholder() -> Base16Palette {
-    Base16Palette::from_hex([
-        "#ffffff", "#f2f2f7", "#e5e5ea", "#c7c7cc", "#8e8e93", "#000000", "#1c1c1e", "#000000",
-        "#ff3b30", "#ff9500", "#ffcc00", "#34c759", "#5ac8fa", "#007aff", "#af52de", "#a2845e",
-    ])
 }
 
 /// Solarized light: base00 is the lightest background, base07 the darkest
@@ -207,19 +200,36 @@ mod tests {
         let view = theme_view(ThemeId::Solarized, ThemeMode::FollowSystem);
         assert!(!view.follows_system_colors);
         assert!(view.has_dark_variant);
+        let (Some(light), Some(dark)) = (view.light, view.dark) else {
+            panic!("a palette-backed theme must carry both variants");
+        };
         // base00 (background) flips between variants; the accent (base0D) is shared.
-        assert_ne!(view.light.base00, view.dark.base00);
-        assert_eq!(view.light.base00, view.dark.base07);
-        assert_eq!(view.light.base0d, view.dark.base0d);
+        assert_ne!(light.base00, dark.base00);
+        assert_eq!(light.base00, dark.base07);
+        assert_eq!(light.base0d, dark.base0d);
     }
 
     #[test]
     fn nord_is_single_variant() {
         let view = theme_view(ThemeId::Nord, ThemeMode::FollowSystem);
         assert!(!view.has_dark_variant);
+        assert!(
+            view.light.is_some(),
+            "a palette-backed theme carries palettes"
+        );
         assert_eq!(
             view.light, view.dark,
             "a single-variant theme has identical light and dark palettes"
+        );
+    }
+
+    #[test]
+    fn system_carries_no_palette_data() {
+        let view = theme_view(ThemeId::System, ThemeMode::FollowSystem);
+        assert!(view.follows_system_colors);
+        assert!(
+            view.light.is_none() && view.dark.is_none(),
+            "System uses OS colors, so it must not ship placeholder palettes"
         );
     }
 }
