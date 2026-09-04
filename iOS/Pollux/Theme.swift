@@ -105,38 +105,67 @@ extension ThemeView {
     /// The color scheme to force on the app, or nil to follow the OS. Applies to
     /// the `System` theme too (its semantic colors then resolve light or dark).
     var preferredColorScheme: ColorScheme? {
+        // A single-variant theme (e.g. Nord, dark-only) offers no light/dark
+        // choice, so `mode` is moot. Pin the scheme to the palette's own luminance
+        // so system chrome (status bar, controls) matches it — otherwise a
+        // dark-only theme under FollowSystem would draw light chrome on a light OS.
+        guard hasDarkVariant else {
+            return light.isDarkBackground ? .dark : .light
+        }
         switch mode {
-        case .light: .light
-        case .dark: .dark
-        case .followSystem: nil
+        case .light: return .light
+        case .dark: return .dark
+        case .followSystem: return nil
         }
     }
 }
 
+extension Base16Palette {
+    /// Whether base00 (the background) reads as dark, by perceived luminance.
+    /// Malformed hex is treated as light (the safer default for system chrome).
+    var isDarkBackground: Bool {
+        guard let rgb = base16RGB(base00) else { return false }
+        let red = Double((rgb >> 16) & 0xFF)
+        let green = Double((rgb >> 8) & 0xFF)
+        let blue = Double(rgb & 0xFF)
+        // Rec. 601 luma on a 0...255 scale; below the midpoint is a dark background.
+        return (0.299 * red + 0.587 * green + 0.114 * blue) < 127.5
+    }
+}
+
 // MARK: - Hex parsing
+
+/// Parses a base16 `#RRGGBB` (or `RRGGBB`) string into its 24-bit RGB value, or
+/// nil if malformed. Shared by `Color(base16:)` and the luminance check.
+private func base16RGB(_ hex: String) -> UInt32? {
+    let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+    guard digits.count == 6, let value = UInt32(digits, radix: 16) else {
+        return nil
+    }
+    return value
+}
 
 extension Color {
     /// Parses a base16 `#RRGGBB` (or `RRGGBB`) hex string in the sRGB space.
     /// Falls back to a neutral gray on malformed input — the built-in palettes are
     /// always valid, so this only guards against a future bad custom value.
     init(base16 hex: String) {
-        let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
-        guard digits.count == 6, let value = UInt32(digits, radix: 16) else {
+        guard let rgb = base16RGB(hex) else {
             self = .gray
             return
         }
         self = Color(
             .sRGB,
-            red: Double((value >> 16) & 0xFF) / 255.0,
-            green: Double((value >> 8) & 0xFF) / 255.0,
-            blue: Double(value & 0xFF) / 255.0,
+            red: Double((rgb >> 16) & 0xFF) / 255,
+            green: Double((rgb >> 8) & 0xFF) / 255,
+            blue: Double(rgb & 0xFF) / 255,
             opacity: 1,
         )
     }
 }
 
 extension EnvironmentValues {
-    // The active theme's semantic colors. Injected at the app root; read by views
-    // with `@Environment(\.themeColors)`.
+    /// The active theme's semantic colors. Injected at the app root; read by views
+    /// with `@Environment(\.themeColors)`.
     @Entry var themeColors: ThemeColors = .system
 }
