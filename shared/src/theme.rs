@@ -95,21 +95,19 @@ impl Base16Palette {
 /// Read-only projection of the active theme for the shell. Carries the palettes
 /// plus enough metadata for the shell to resolve a concrete one: for a dual-variant
 /// theme, pick `light` or `dark` from `mode` + the OS scheme; for a single-variant
-/// theme, use the one present slot; for System (`follows_system_colors`), use the
-/// platform's native colors (both palettes `None`).
+/// theme, use the one present slot; for System (both palettes `None`), use the
+/// platform's native colors.
 #[derive(Facet, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ThemeView {
     pub id: ThemeId,
     pub name: String,
     pub mode: ThemeMode,
-    /// When true, ignore the palettes and use the platform's semantic colors.
-    pub follows_system_colors: bool,
-    /// The light and dark palettes. Both `None` for System (which uses OS colors);
-    /// both `Some` for a dual-variant theme; exactly one `Some` for a single-variant
-    /// theme (e.g. Nord is dark-only). A single-variant theme declares its
-    /// appearance by which slot it fills, so the shell can pin the scheme to it —
-    /// no light/dark detection needed. Kept out of the projection when unused
-    /// rather than shipped as dead placeholder data.
+    /// The light and dark palettes, and the sole signal of a theme's structure:
+    /// both `None` means System (use OS colors); both `Some` is a dual-variant
+    /// theme; exactly one `Some` is a single-variant theme (e.g. Nord is dark-only)
+    /// that declares its appearance by which slot it fills, so the shell can pin the
+    /// scheme to it — no light/dark detection needed. Kept out of the projection
+    /// when unused rather than shipped as dead placeholder data.
     pub light: Option<Base16Palette>,
     pub dark: Option<Base16Palette>,
 }
@@ -127,7 +125,6 @@ pub fn theme_view(id: ThemeId, mode: ThemeMode) -> ThemeView {
             id,
             name: "System".to_string(),
             mode,
-            follows_system_colors: true,
             light: None,
             dark: None,
         },
@@ -135,7 +132,6 @@ pub fn theme_view(id: ThemeId, mode: ThemeMode) -> ThemeView {
             id,
             name: "Solarized".to_string(),
             mode,
-            follows_system_colors: false,
             light: Some(solarized_light()),
             dark: Some(solarized_dark()),
         },
@@ -143,7 +139,6 @@ pub fn theme_view(id: ThemeId, mode: ThemeMode) -> ThemeView {
             id,
             name: "Nord".to_string(),
             mode,
-            follows_system_colors: false,
             // Dark-only: only the dark slot is filled, which declares its appearance.
             light: None,
             dark: Some(nord()),
@@ -187,15 +182,14 @@ mod tests {
         assert_eq!(view.id, ThemeId::System);
         assert_eq!(view.mode, ThemeMode::FollowSystem);
         assert!(
-            view.follows_system_colors,
-            "System must defer to OS semantic colors"
+            view.light.is_none() && view.dark.is_none(),
+            "System defers to OS colors: it ships no palettes"
         );
     }
 
     #[test]
     fn solarized_is_two_variant_with_reversed_backgrounds() {
         let view = theme_view(ThemeId::Solarized, ThemeMode::FollowSystem);
-        assert!(!view.follows_system_colors);
         let (Some(light), Some(dark)) = (view.light, view.dark) else {
             panic!("a dual-variant theme must carry both variants");
         };
@@ -218,7 +212,6 @@ mod tests {
     #[test]
     fn system_carries_no_palette_data() {
         let view = theme_view(ThemeId::System, ThemeMode::FollowSystem);
-        assert!(view.follows_system_colors);
         assert!(
             view.light.is_none() && view.dark.is_none(),
             "System uses OS colors, so it must not ship placeholder palettes"

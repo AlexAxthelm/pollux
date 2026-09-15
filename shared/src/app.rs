@@ -1047,7 +1047,7 @@ mod tests {
         let theme = app.view(&model).theme;
         assert_eq!(theme.id, ThemeId::System);
         assert_eq!(theme.mode, ThemeMode::FollowSystem);
-        assert!(theme.follows_system_colors);
+        assert!(theme.light.is_none() && theme.dark.is_none());
     }
 
     #[test]
@@ -1067,7 +1067,6 @@ mod tests {
         let theme = app.view(&model).theme;
         assert_eq!(theme.id, ThemeId::Solarized);
         assert_eq!(theme.mode, ThemeMode::Dark);
-        assert!(!theme.follows_system_colors);
         assert!(theme.light.is_some() && theme.dark.is_some());
     }
 

@@ -9,15 +9,15 @@ import UIKit
 // it maps base16 tokens to SwiftUI `Color`s, exposes them as a semantic set via
 // the environment (`\.themeColors`), and is injected once at the app root.
 //
-// The `System` theme (`followsSystemColors`) resolves to the platform's own
-// semantic colors, so it reproduces the app's appearance before theming landed.
+// The `System` theme (no palettes) resolves to the platform's own semantic
+// colors, so it reproduces the app's appearance before theming landed.
 
 // MARK: - Semantic color set
 
 /// The semantic roles the UI paints with. Only the base16 tokens actually used by
 /// the app are surfaced (per the spec); the mapping is documented in
 /// `docs/features/theme-semantic-mapping.md`.
-struct ThemeColors {
+struct ThemeColors: Equatable {
     /// Screen background — base00.
     let background: Color
     /// Elevated/secondary surface (cards, placeholders) — base01.
@@ -65,9 +65,9 @@ struct ThemeColors {
     }
 
     /// Resolves the active theme for the current OS appearance. Falls back to the
-    /// system colors for the System theme, which carries no palette.
+    /// system colors when the theme carries no palette (System).
     static func resolve(_ theme: ThemeView, colorScheme: ColorScheme) -> ThemeColors {
-        guard !theme.followsSystemColors, let palette = theme.palette(for: colorScheme) else {
+        guard let palette = theme.palette(for: colorScheme) else {
             return .system
         }
         return .from(palette: palette)

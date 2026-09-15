@@ -20,13 +20,11 @@ struct ThemeTests {
         light: Base16Palette?,
         dark: Base16Palette?,
         mode: ThemeMode = .followSystem,
-        followsSystemColors: Bool = false,
     ) -> ThemeView {
         ThemeView(
             id: .solarized,
             name: "Test",
             mode: mode,
-            followsSystemColors: followsSystemColors,
             light: light,
             dark: dark,
         )
@@ -72,10 +70,10 @@ struct ThemeTests {
     }
 
     @Test func systemHonorsMode() {
-        let followOS = makeTheme(light: nil, dark: nil, mode: .followSystem, followsSystemColors: true)
+        let followOS = makeTheme(light: nil, dark: nil, mode: .followSystem)
         #expect(followOS.preferredColorScheme == nil)
 
-        let forcedDark = makeTheme(light: nil, dark: nil, mode: .dark, followsSystemColors: true)
+        let forcedDark = makeTheme(light: nil, dark: nil, mode: .dark)
         #expect(forcedDark.preferredColorScheme == .dark)
     }
 
@@ -118,9 +116,25 @@ struct ThemeTests {
     }
 
     @Test func systemThemeHasNoPalette() {
-        let view = makeTheme(light: nil, dark: nil, followsSystemColors: true)
+        let view = makeTheme(light: nil, dark: nil)
         #expect(view.palette(for: .light) == nil)
         #expect(view.palette(for: .dark) == nil)
+    }
+
+    // MARK: - ThemeColors.resolve
+
+    @Test func resolveUsesSystemColorsWhenThemeHasNoPalette() {
+        let system = makeTheme(light: nil, dark: nil)
+        #expect(ThemeColors.resolve(system, colorScheme: .light) == .system)
+        #expect(ThemeColors.resolve(system, colorScheme: .dark) == .system)
+    }
+
+    @Test func resolveBuildsColorsFromTheSelectedPalette() {
+        let light = makePalette(background: "#ffffff")
+        let dark = makePalette(background: "#000000")
+        let view = makeTheme(light: light, dark: dark, mode: .followSystem)
+        #expect(ThemeColors.resolve(view, colorScheme: .dark) == .from(palette: dark))
+        #expect(ThemeColors.resolve(view, colorScheme: .light) == .from(palette: light))
     }
 
     // MARK: - base16RGB parsing
