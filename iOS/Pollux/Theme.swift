@@ -48,36 +48,20 @@ struct ThemeColors {
         warning: .orange,
     )
 
-    /// Builds the semantic set from a resolved base16 palette.
-    init(palette: Base16Palette) {
-        background = Color(base16: palette.base00)
-        secondaryBackground = Color(base16: palette.base01)
-        text = Color(base16: palette.base05)
-        secondaryText = Color(base16: palette.base03)
-        accent = Color(base16: palette.base0d)
-        error = Color(base16: palette.base08)
-        success = Color(base16: palette.base0b)
-        warning = Color(base16: palette.base0a)
-    }
-
-    private init(
-        background: Color,
-        secondaryBackground: Color,
-        text: Color,
-        secondaryText: Color,
-        accent: Color,
-        error: Color,
-        success: Color,
-        warning: Color,
-    ) {
-        self.background = background
-        self.secondaryBackground = secondaryBackground
-        self.text = text
-        self.secondaryText = secondaryText
-        self.accent = accent
-        self.error = error
-        self.success = success
-        self.warning = warning
+    /// Builds the semantic set from a resolved base16 palette. A static factory
+    /// (not an initializer) so the struct keeps its synthesized memberwise init,
+    /// which `system` uses directly.
+    static func from(palette: Base16Palette) -> ThemeColors {
+        ThemeColors(
+            background: Color(base16: palette.base00),
+            secondaryBackground: Color(base16: palette.base01),
+            text: Color(base16: palette.base05),
+            secondaryText: Color(base16: palette.base03),
+            accent: Color(base16: palette.base0d),
+            error: Color(base16: palette.base08),
+            success: Color(base16: palette.base0b),
+            warning: Color(base16: palette.base0a),
+        )
     }
 
     /// Resolves the active theme for the current OS appearance. Falls back to the
@@ -86,7 +70,7 @@ struct ThemeColors {
         guard !theme.followsSystemColors, let palette = theme.palette(for: colorScheme) else {
             return .system
         }
-        return ThemeColors(palette: palette)
+        return .from(palette: palette)
     }
 }
 
