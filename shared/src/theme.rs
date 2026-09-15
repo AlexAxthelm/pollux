@@ -17,8 +17,8 @@ use serde::{Deserialize, Serialize};
 
 /// Whether a theme is pinned to its light or dark variant, or follows the OS.
 ///
-/// A theme with only one variant (e.g. Nord, dark-only) ignores this — the shell
-/// uses `has_dark_variant` to know when the choice is meaningful.
+/// A single-variant theme (only one of `light`/`dark` present, e.g. Nord) ignores
+/// this — the choice is meaningful only when both variants exist.
 #[derive(Facet, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[repr(C)]
 pub enum ThemeMode {
@@ -92,11 +92,11 @@ impl Base16Palette {
     }
 }
 
-/// Read-only projection of the active theme for the shell. Carries both variants
-/// plus enough metadata for the shell to resolve a concrete palette: pick `light`
-/// or `dark` from `mode` + the OS scheme (respecting `has_dark_variant`), unless
-/// `follows_system_colors` is set, in which case the shell uses native OS colors
-/// and the palettes are `None`.
+/// Read-only projection of the active theme for the shell. Carries the palettes
+/// plus enough metadata for the shell to resolve a concrete one: for a dual-variant
+/// theme, pick `light` or `dark` from `mode` + the OS scheme; for a single-variant
+/// theme, use the one present slot; for System (`follows_system_colors`), use the
+/// platform's native colors (both palettes `None`).
 #[derive(Facet, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ThemeView {
     pub id: ThemeId,
@@ -104,10 +104,12 @@ pub struct ThemeView {
     pub mode: ThemeMode,
     /// When true, ignore the palettes and use the platform's semantic colors.
     pub follows_system_colors: bool,
-    /// When false, the theme is single-variant: `light == dark` and `mode` is moot.
-    pub has_dark_variant: bool,
-    /// `None` for the System theme (which uses OS colors); `Some` otherwise. Kept
-    /// out of the projection when unused rather than shipped as dead placeholder data.
+    /// The light and dark palettes. Both `None` for System (which uses OS colors);
+    /// both `Some` for a dual-variant theme; exactly one `Some` for a single-variant
+    /// theme (e.g. Nord is dark-only). A single-variant theme declares its
+    /// appearance by which slot it fills, so the shell can pin the scheme to it —
+    /// no light/dark detection needed. Kept out of the projection when unused
+    /// rather than shipped as dead placeholder data.
     pub light: Option<Base16Palette>,
     pub dark: Option<Base16Palette>,
 }
@@ -126,7 +128,6 @@ pub fn theme_view(id: ThemeId, mode: ThemeMode) -> ThemeView {
             name: "System".to_string(),
             mode,
             follows_system_colors: true,
-            has_dark_variant: true,
             light: None,
             dark: None,
         },
@@ -135,22 +136,18 @@ pub fn theme_view(id: ThemeId, mode: ThemeMode) -> ThemeView {
             name: "Solarized".to_string(),
             mode,
             follows_system_colors: false,
-            has_dark_variant: true,
             light: Some(solarized_light()),
             dark: Some(solarized_dark()),
         },
-        ThemeId::Nord => {
-            let palette = nord();
-            ThemeView {
-                id,
-                name: "Nord".to_string(),
-                mode,
-                follows_system_colors: false,
-                has_dark_variant: false,
-                light: Some(palette.clone()),
-                dark: Some(palette),
-            }
-        }
+        ThemeId::Nord => ThemeView {
+            id,
+            name: "Nord".to_string(),
+            mode,
+            follows_system_colors: false,
+            // Dark-only: only the dark slot is filled, which declares its appearance.
+            light: None,
+            dark: Some(nord()),
+        },
     }
 }
 
@@ -199,9 +196,8 @@ mod tests {
     fn solarized_is_two_variant_with_reversed_backgrounds() {
         let view = theme_view(ThemeId::Solarized, ThemeMode::FollowSystem);
         assert!(!view.follows_system_colors);
-        assert!(view.has_dark_variant);
         let (Some(light), Some(dark)) = (view.light, view.dark) else {
-            panic!("a palette-backed theme must carry both variants");
+            panic!("a dual-variant theme must carry both variants");
         };
         // base00 (background) flips between variants; the accent (base0D) is shared.
         assert_ne!(light.base00, dark.base00);
@@ -210,17 +206,13 @@ mod tests {
     }
 
     #[test]
-    fn nord_is_single_variant() {
+    fn nord_is_dark_only() {
         let view = theme_view(ThemeId::Nord, ThemeMode::FollowSystem);
-        assert!(!view.has_dark_variant);
         assert!(
-            view.light.is_some(),
-            "a palette-backed theme carries palettes"
+            view.light.is_none(),
+            "Nord is dark-only: it fills only the dark slot"
         );
-        assert_eq!(
-            view.light, view.dark,
-            "a single-variant theme has identical light and dark palettes"
-        );
+        assert!(view.dark.is_some());
     }
 
     #[test]

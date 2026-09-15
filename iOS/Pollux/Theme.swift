@@ -95,54 +95,47 @@ struct ThemeColors {
 extension ThemeView {
     /// The palette to apply given the pinned mode and the OS appearance, or nil for
     /// a theme that carries none (System, which uses OS colors). A single-variant
-    /// theme always uses `light` (which equals `dark`).
+    /// theme uses its one present palette; a dual-variant theme picks by mode + OS.
     func palette(for colorScheme: ColorScheme) -> Base16Palette? {
-        guard hasDarkVariant else { return light }
-        switch mode {
-        case .light: return light
-        case .dark: return dark
-        case .followSystem: return colorScheme == .dark ? dark : light
+        switch (light, dark) {
+        case let (.some(light), .some(dark)):
+            switch mode {
+            case .light: light
+            case .dark: dark
+            case .followSystem: colorScheme == .dark ? dark : light
+            }
+        case (.some(let palette), nil), (nil, let .some(palette)):
+            palette
+        case (nil, nil):
+            nil
         }
     }
 
-    /// The color scheme to force on the app, or nil to follow the OS. Applies to
-    /// the `System` theme too (its semantic colors then resolve light or dark).
+    /// The color scheme to force on the app, or nil to follow the OS. A
+    /// single-variant theme pins the scheme to the appearance it declares — the slot
+    /// it fills — so system chrome matches; a dual-variant or System theme honors the
+    /// mode selector instead.
     var preferredColorScheme: ColorScheme? {
-        // A single-variant theme (e.g. Nord, dark-only) offers no light/dark
-        // choice, so `mode` is moot. Pin the scheme to the palette's own luminance
-        // so system chrome (status bar, controls) matches it — otherwise a
-        // dark-only theme under FollowSystem would draw light chrome on a light OS.
-        guard hasDarkVariant else {
-            return (light?.isDarkBackground ?? false) ? .dark : .light
+        switch (light, dark) {
+        case (.some, nil): .light // light-only
+        case (nil, .some): .dark // dark-only (e.g. Nord)
+        case (.some, .some), (nil, nil): // dual-variant or System
+            switch mode {
+            case .light: .light
+            case .dark: .dark
+            case .followSystem: nil
+            }
         }
-        switch mode {
-        case .light: return .light
-        case .dark: return .dark
-        case .followSystem: return nil
-        }
-    }
-}
-
-extension Base16Palette {
-    /// Whether base00 (the background) reads as dark, by perceived luminance.
-    /// Malformed hex is treated as light (the safer default for system chrome).
-    var isDarkBackground: Bool {
-        guard let rgb = base16RGB(base00) else { return false }
-        let red = Double((rgb >> 16) & 0xFF)
-        let green = Double((rgb >> 8) & 0xFF)
-        let blue = Double(rgb & 0xFF)
-        // Rec. 601 luma on a 0...255 scale; below the midpoint is a dark background.
-        return (0.299 * red + 0.587 * green + 0.114 * blue) < 127.5
     }
 }
 
 // MARK: - Hex parsing
 
 /// Parses a base16 `#RRGGBB` (or `RRGGBB`) string into its 24-bit RGB value, or
-/// nil if malformed. Shared by `Color(base16:)` and the luminance check. Requires
-/// exactly six hex digits: `UInt32(_:radix:)` alone would accept a leading sign
-/// (e.g. "+12345"), so the character set is validated explicitly.
-private func base16RGB(_ hex: String) -> UInt32? {
+/// nil if malformed. Requires exactly six hex digits: `UInt32(_:radix:)` alone
+/// would accept a leading sign (e.g. "+12345"), so the character set is validated
+/// explicitly. Internal so it can be unit-tested directly.
+func base16RGB(_ hex: String) -> UInt32? {
     let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
     guard digits.count == 6, digits.allSatisfy(\.isHexDigit) else {
         return nil

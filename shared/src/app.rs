@@ -1068,7 +1068,7 @@ mod tests {
         assert_eq!(theme.id, ThemeId::Solarized);
         assert_eq!(theme.mode, ThemeMode::Dark);
         assert!(!theme.follows_system_colors);
-        assert!(theme.has_dark_variant);
+        assert!(theme.light.is_some() && theme.dark.is_some());
     }
 
     #[test]
