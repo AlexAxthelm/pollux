@@ -110,14 +110,14 @@ actor DatabaseManager {
 
     private func listSubscriptions() throws -> StorageResult {
         let rows = try db.read { db -> [Row] in
-            return try Row.fetchAll(db, sql: "SELECT * FROM subscriptions ORDER BY title COLLATE NOCASE")
+            try Row.fetchAll(db, sql: "SELECT * FROM subscriptions ORDER BY title COLLATE NOCASE")
         }
         return .subscriptions(rows.map(Self.subscription(from:)))
     }
 
     private func getSubscription(id: String) throws -> StorageResult {
         let row = try db.read { db -> Row? in
-            return try Row.fetchOne(
+            try Row.fetchOne(
                 db, sql: "SELECT * FROM subscriptions WHERE id = ?", arguments: [id],
             )
         }
@@ -174,7 +174,7 @@ actor DatabaseManager {
 
     private func getEpisode(id: String) throws -> StorageResult {
         let row = try db.read { db -> Row? in
-            return try Row.fetchOne(db, sql: "SELECT * FROM episodes WHERE id = ?", arguments: [id])
+            try Row.fetchOne(db, sql: "SELECT * FROM episodes WHERE id = ?", arguments: [id])
         }
         guard let row else { return .notFound }
         return .episode(Self.episode(from: row))
@@ -182,7 +182,7 @@ actor DatabaseManager {
 
     private func listEpisodesBySubscription(subscriptionId: String) throws -> StorageResult {
         let rows = try db.read { db -> [Row] in
-            return try Row.fetchAll(
+            try Row.fetchAll(
                 db,
                 sql: "SELECT * FROM episodes WHERE subscription_id = ? ORDER BY pub_date DESC",
                 arguments: [subscriptionId],
@@ -193,7 +193,7 @@ actor DatabaseManager {
 
     private func getEpisodeByFeedGuid(subscriptionId: String, feedGuid: String) throws -> StorageResult {
         let row = try db.read { db -> Row? in
-            return try Row.fetchOne(
+            try Row.fetchOne(
                 db,
                 sql: "SELECT * FROM episodes WHERE subscription_id = ? AND feed_guid = ?",
                 arguments: [subscriptionId, feedGuid],
