@@ -115,16 +115,19 @@ extension ThemeView {
 
 // MARK: - Hex parsing
 
-/// Parses a base16 `#RRGGBB` (or `RRGGBB`) string into its 24-bit RGB value, or
-/// nil if malformed. Requires exactly six hex digits: `UInt32(_:radix:)` alone
-/// would accept a leading sign (e.g. "+12345"), so the character set is validated
-/// explicitly. Internal so it can be unit-tested directly.
-func base16RGB(_ hex: String) -> UInt32? {
-    let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
-    guard digits.count == 6, digits.allSatisfy(\.isHexDigit) else {
-        return nil
+/// base16 hex parsing, namespaced so the helper isn't a bare module-global.
+enum Base16 {
+    /// Parses a `#RRGGBB` (or `RRGGBB`) string into its 24-bit RGB value, or nil if
+    /// malformed. Requires exactly six hex digits: `UInt32(_:radix:)` alone would
+    /// accept a leading sign (e.g. "+12345"), so the character set is validated
+    /// explicitly. Internal so it can be unit-tested directly.
+    static func rgb(_ hex: String) -> UInt32? {
+        let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        guard digits.count == 6, digits.allSatisfy(\.isHexDigit) else {
+            return nil
+        }
+        return UInt32(digits, radix: 16)
     }
-    return UInt32(digits, radix: 16)
 }
 
 extension Color {
@@ -132,7 +135,7 @@ extension Color {
     /// Falls back to a neutral gray on malformed input — the built-in palettes are
     /// always valid, so this only guards against a future bad custom value.
     init(base16 hex: String) {
-        guard let rgb = base16RGB(hex) else {
+        guard let rgb = Base16.rgb(hex) else {
             self = .gray
             return
         }

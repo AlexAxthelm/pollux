@@ -137,18 +137,18 @@ struct ThemeTests {
         #expect(ThemeColors.resolve(view, colorScheme: .light) == .from(palette: light))
     }
 
-    // MARK: - base16RGB parsing
+    // MARK: - Base16.rgb parsing
 
-    @Test func base16RGBParsesValidHex() {
-        #expect(base16RGB("#0a1b2c") == 0x0A1B2C)
-        #expect(base16RGB("0A1B2C") == 0x0A1B2C) // no leading '#', uppercase
-        #expect(base16RGB("#ffffff") == 0xFFFFFF)
+    @Test func base16ParsesValidHex() {
+        #expect(Base16.rgb("#0a1b2c") == 0x0A1B2C)
+        #expect(Base16.rgb("0A1B2C") == 0x0A1B2C) // no leading '#', uppercase
+        #expect(Base16.rgb("#ffffff") == 0xFFFFFF)
     }
 
-    @Test func base16RGBRejectsMalformedHex() {
-        #expect(base16RGB("nothex") == nil) // non-hex characters
-        #expect(base16RGB("+12345") == nil) // leading sign UInt32 would otherwise accept
-        #expect(base16RGB("#12345") == nil) // too short
-        #expect(base16RGB("#1234567") == nil) // too long
+    @Test func base16RejectsMalformedHex() {
+        #expect(Base16.rgb("nothex") == nil) // non-hex characters
+        #expect(Base16.rgb("+12345") == nil) // leading sign UInt32 would otherwise accept
+        #expect(Base16.rgb("#12345") == nil) // too short
+        #expect(Base16.rgb("#1234567") == nil) // too long
     }
 }
