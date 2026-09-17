@@ -1,0 +1,157 @@
+import App
+import SwiftUI
+import UIKit
+
+// Resolves the core's active `ThemeView` into the concrete colors the UI reads.
+//
+// The core owns palette *data* (base16 tokens; see `docs/features/theme.md` and
+// `docs/features/theme-semantic-mapping.md`); this layer is the shell's half:
+// it maps base16 tokens to SwiftUI `Color`s, exposes them as a semantic set via
+// the environment (`\.themeColors`), and is injected once at the app root.
+//
+// The `System` theme (no palettes) resolves to the platform's own semantic
+// colors, so it reproduces the app's appearance before theming landed.
+
+// MARK: - Semantic color set
+
+/// The semantic roles the UI paints with. Only the base16 tokens actually used by
+/// the app are surfaced (per the spec); the mapping is documented in
+/// `docs/features/theme-semantic-mapping.md`.
+struct ThemeColors: Equatable {
+    /// Screen background — base00.
+    let background: Color
+    /// Elevated/secondary surface (cards, placeholders) — base01.
+    let secondaryBackground: Color
+    /// Default foreground / body text — base05.
+    let text: Color
+    /// De-emphasized text (captions, metadata, inactive) — base04. (base03, the
+    /// base16 "comments" color, is intentionally too low-contrast for text.)
+    let secondaryText: Color
+    /// Accent / links / tint — base0D.
+    let accent: Color
+    /// Errors — base08.
+    let error: Color
+    /// Success — base0B.
+    let success: Color
+    /// Warnings — base0A.
+    let warning: Color
+
+    /// The platform's own semantic colors — the appearance the app had before
+    /// theming. Used for the `System` theme, and as the environment default.
+    static let system = ThemeColors(
+        background: Color(uiColor: .systemBackground),
+        secondaryBackground: Color(uiColor: .secondarySystemBackground),
+        text: .primary,
+        secondaryText: .secondary,
+        accent: .accentColor,
+        error: .red,
+        success: .green,
+        warning: .orange,
+    )
+
+    /// Builds the semantic set from a resolved base16 palette. A static factory
+    /// (not an initializer) so the struct keeps its synthesized memberwise init,
+    /// which `system` uses directly.
+    static func from(palette: Base16Palette) -> ThemeColors {
+        ThemeColors(
+            background: Color(base16: palette.base00),
+            secondaryBackground: Color(base16: palette.base01),
+            text: Color(base16: palette.base05),
+            secondaryText: Color(base16: palette.base04),
+            accent: Color(base16: palette.base0d),
+            error: Color(base16: palette.base08),
+            success: Color(base16: palette.base0b),
+            warning: Color(base16: palette.base0a),
+        )
+    }
+
+    /// Resolves the active theme for the current OS appearance. Falls back to the
+    /// system colors when the theme carries no palette (System).
+    static func resolve(_ theme: ThemeView, colorScheme: ColorScheme) -> ThemeColors {
+        guard let palette = theme.palette(for: colorScheme) else {
+            return .system
+        }
+        return .from(palette: palette)
+    }
+}
+
+// MARK: - ThemeView resolution
+
+extension ThemeView {
+    /// The palette to apply given the pinned mode and the OS appearance, or nil for
+    /// a theme that carries none (System, which uses OS colors). A single-variant
+    /// theme uses its one present palette; a dual-variant theme picks by mode + OS.
+    func palette(for colorScheme: ColorScheme) -> Base16Palette? {
+        switch (light, dark) {
+        case let (.some(light), .some(dark)):
+            switch mode {
+            case .light: light
+            case .dark: dark
+            case .followSystem: colorScheme == .dark ? dark : light
+            }
+        case (.some(let palette), nil), (nil, let .some(palette)):
+            palette
+        case (nil, nil):
+            nil
+        }
+    }
+
+    /// The color scheme to force on the app, or nil to follow the OS. A
+    /// single-variant theme pins the scheme to the appearance it declares — the slot
+    /// it fills — so system chrome matches; a dual-variant or System theme honors the
+    /// mode selector instead.
+    var preferredColorScheme: ColorScheme? {
+        switch (light, dark) {
+        case (.some, nil): .light // light-only
+        case (nil, .some): .dark // dark-only (e.g. Nord)
+        case (.some, .some), (nil, nil): // dual-variant or System
+            switch mode {
+            case .light: .light
+            case .dark: .dark
+            case .followSystem: nil
+            }
+        }
+    }
+}
+
+// MARK: - Hex parsing
+
+/// base16 hex parsing, namespaced so the helper isn't a bare module-global.
+enum Base16 {
+    /// Parses a `#RRGGBB` (or `RRGGBB`) string into its 24-bit RGB value, or nil if
+    /// malformed. Requires exactly six hex digits: `UInt32(_:radix:)` alone would
+    /// accept a leading sign (e.g. "+12345"), so the character set is validated
+    /// explicitly. Internal so it can be unit-tested directly.
+    static func rgb(_ hex: String) -> UInt32? {
+        let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        guard digits.count == 6, digits.allSatisfy(\.isHexDigit) else {
+            return nil
+        }
+        return UInt32(digits, radix: 16)
+    }
+}
+
+extension Color {
+    /// Parses a base16 `#RRGGBB` (or `RRGGBB`) hex string in the sRGB space.
+    /// Falls back to a neutral gray on malformed input — the built-in palettes are
+    /// always valid, so this only guards against a future bad custom value.
+    init(base16 hex: String) {
+        guard let rgb = Base16.rgb(hex) else {
+            self = .gray
+            return
+        }
+        self = Color(
+            .sRGB,
+            red: Double((rgb >> 16) & 0xFF) / 255,
+            green: Double((rgb >> 8) & 0xFF) / 255,
+            blue: Double(rgb & 0xFF) / 255,
+            opacity: 1,
+        )
+    }
+}
+
+extension EnvironmentValues {
+    /// The active theme's semantic colors. Injected at the app root; read by views
+    /// with `@Environment(\.themeColors)`.
+    @Entry var themeColors: ThemeColors = .system
+}

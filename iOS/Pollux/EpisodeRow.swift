@@ -6,6 +6,7 @@ import SwiftUI
 /// whose engines don't exist yet (play, download, more-actions) are rendered as
 /// DEBUG-tinted, disabled placeholders — see `DebugStyle.swift`.
 struct EpisodeRow: View {
+    @Environment(\.themeColors) private var themeColors
     let episode: EpisodeSummary
 
     var body: some View {
@@ -16,18 +17,19 @@ struct EpisodeRow: View {
                 Text(episode.title)
                     .font(.subheadline)
                     .fontWeight(.semibold)
+                    .foregroundStyle(themeColors.text)
                     .lineLimit(2)
 
                 if let meta = metaLine {
                     Text(meta)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themeColors.secondaryText)
                 }
 
                 if let description = episode.descriptionText, !description.isEmpty {
                     Text(description)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themeColors.secondaryText)
                         .lineLimit(1)
                 }
 
@@ -118,15 +120,16 @@ struct EpisodeRow: View {
     }
 }
 
-/// A compact read-only status indicator (real data, semantic colors).
+/// A compact read-only status indicator (real data, theme colors).
 private struct StatusBadge: View {
+    @Environment(\.themeColors) private var themeColors
     let systemImage: String
     let text: String
 
     var body: some View {
         Label(text, systemImage: systemImage)
             .font(.caption2)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(themeColors.secondaryText)
             .labelStyle(.titleAndIcon)
     }
 }
