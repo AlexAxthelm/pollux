@@ -14,6 +14,9 @@
 
 use facet::Facet;
 use serde::{Deserialize, Serialize};
+// Imported for its associated `COUNT` const (used by the `ThemeId::ALL` guard),
+// without binding the name so the `strum::EnumCount` derive stays unambiguous.
+use strum::EnumCount as _;
 
 /// Whether a theme is pinned to its light or dark variant, or follows the OS.
 ///
@@ -33,7 +36,9 @@ pub enum ThemeMode {
 
 /// A built-in theme. `Custom` (user-edited hex, persisted) is a future addition;
 /// adding a palette is just a new variant plus its data in [`theme_view`].
-#[derive(Facet, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(
+    Facet, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default, strum::EnumCount,
+)]
 #[repr(C)]
 pub enum ThemeId {
     /// Defer entirely to the OS semantic colors — the app's appearance today.
@@ -48,9 +53,16 @@ pub enum ThemeId {
 impl ThemeId {
     /// Every built-in theme, in display order — the single place that enumerates
     /// them, for the Settings selector and for tests that sweep all themes. Adding
-    /// a theme means a new variant, its arm in [`theme_view`], and an entry here.
+    /// a theme means a new variant, its arm in [`theme_view`], and an entry here;
+    /// the assertion below makes the last step compile-enforced.
     pub const ALL: [ThemeId; 3] = [ThemeId::System, ThemeId::Solarized, ThemeId::Nord];
 }
+
+// `ThemeId::ALL` must list every variant. `strum::EnumCount` derives the true count
+// from the enum, so adding a variant without extending `ALL` (and bumping its
+// length) fails to compile here rather than silently dropping the theme from the
+// contrast sweep and the Settings selector.
+const _: () = assert!(ThemeId::ALL.len() == ThemeId::COUNT);
 
 /// A base16 palette: sixteen colors as `#RRGGBB` hex strings, base00 (background)
 /// through base0F. The shell parses these into platform colors; invalid strings
