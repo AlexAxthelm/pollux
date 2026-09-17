@@ -8,6 +8,7 @@ class Core: ObservableObject {
 
     private var core: CoreFfi
     private let db: DatabaseManager
+    private let downloads: DownloadManager
 
     init() {
         core = CoreFfi()
@@ -15,6 +16,11 @@ class Core: ObservableObject {
             db = try DatabaseManager()
         } catch {
             fatalError("Failed to initialize DatabaseManager: \(error)")
+        }
+        do {
+            downloads = try DownloadManager()
+        } catch {
+            fatalError("Failed to initialize DownloadManager: \(error)")
         }
         guard let view = try? ViewModel.bincodeDeserialize(input: [UInt8](core.view())) else {
             fatalError("Failed to deserialize initial ViewModel from core")
@@ -66,6 +72,15 @@ class Core: ObservableObject {
                     self?.resolveAndDispatch(requestId: requestId, result: result)
                 }
             }
+
+        case let .download(operation):
+            // The heavy I/O runs on the DownloadManager actor's executor; awaiting
+            // it from a MainActor task only parks the continuation, so this doesn't
+            // block the UI (same shape as the storage arm above).
+            Task { @MainActor in
+                let result = await downloads.perform(operation)
+                resolveAndDispatch(requestId: request.id, result: result)
+            }
         }
     }
 
@@ -113,6 +128,13 @@ class Core: ObservableObject {
     private func resolveAndDispatch(requestId: UInt32, result: HttpResult) {
         guard let bytes = try? result.bincodeSerialize() else {
             fatalError("Failed to serialize HttpResult for request \(requestId)")
+        }
+        resolveBytes(requestId: requestId, bytes: bytes)
+    }
+
+    private func resolveAndDispatch(requestId: UInt32, result: DownloadResult) {
+        guard let bytes = try? result.bincodeSerialize() else {
+            fatalError("Failed to serialize DownloadResult for request \(requestId)")
         }
         resolveBytes(requestId: requestId, bytes: bytes)
     }

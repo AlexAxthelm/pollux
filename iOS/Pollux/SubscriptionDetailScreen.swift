@@ -28,7 +28,7 @@ struct SubscriptionDetailScreen: View {
             }
         }
         .navigationDestination(for: EpisodeSummary.self) { episode in
-            EpisodeDetailView(episode: episode, feedTitle: subscription.title)
+            EpisodeDetailView(core: core, episode: episode, feedTitle: subscription.title)
         }
         .task(id: subscription.id) {
             core.update(.selectSubscription(subscription.id))
@@ -70,7 +70,11 @@ struct SubscriptionDetailScreen: View {
         } else {
             List(detail.episodes, id: \.id) { episode in
                 NavigationLink(value: episode) {
-                    EpisodeRow(episode: episode)
+                    EpisodeRow(
+                        episode: episode,
+                        onDownload: { core.update(.downloadEpisode($0)) },
+                        onDeleteDownload: { core.update(.deleteDownload($0)) },
+                    )
                 }
             }
             .listStyle(.plain)

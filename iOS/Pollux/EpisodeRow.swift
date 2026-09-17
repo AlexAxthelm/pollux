@@ -1,12 +1,16 @@
 import App
 import SwiftUI
 
-/// One episode in the subscription details list. Shows only stored data (art,
-/// title, date, duration, description, read-only played/download status). Controls
-/// whose engines don't exist yet (play, download, more-actions) are rendered as
-/// DEBUG-tinted, disabled placeholders — see `DebugStyle.swift`.
+/// One episode in the subscription details list. Shows stored data (art, title,
+/// date, duration, description, read-only played/download status) and a working
+/// download control. Playback and more-actions remain DEBUG-tinted, disabled
+/// placeholders because their engines don't exist yet — see `DebugStyle.swift`.
 struct EpisodeRow: View {
     let episode: EpisodeSummary
+    /// Queue this episode for download (or retry a failed one).
+    let onDownload: (String) -> Void
+    /// Remove this episode's downloaded file.
+    let onDeleteDownload: (String) -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -64,17 +68,58 @@ struct EpisodeRow: View {
         }
     }
 
-    /// Play + more-actions: no playback engine or download manager exists yet, so
-    /// these are inert placeholders (DEBUG tint + 🚫 overlay), not wired to fake
-    /// behavior.
+    /// Trailing controls: a working download control plus the still-stubbed play
+    /// and more-actions buttons (their engines don't exist yet). `.borderless`
+    /// keeps the download button from also triggering the row's NavigationLink.
     private var placeholderControls: some View {
         HStack(spacing: 12) {
             Image(systemName: "play.circle.fill")
                 .font(.title2)
                 .stubbed()
+            downloadControl
             Image(systemName: "ellipsis.circle")
                 .font(.title2)
                 .stubbed()
+        }
+    }
+
+    /// The download affordance, driven by the episode's current download status.
+    /// Actionable states are real buttons; transient/terminal states are indicators.
+    @ViewBuilder private var downloadControl: some View {
+        switch episode.downloadStatus {
+        case .notDownloaded:
+            Button { onDownload(episode.id) } label: {
+                Image(systemName: "arrow.down.circle").font(.title2)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Download episode")
+        case .failed:
+            Button { onDownload(episode.id) } label: {
+                Image(systemName: "arrow.clockwise.circle").font(.title2)
+            }
+            .buttonStyle(.borderless)
+            .tint(.orange)
+            .accessibilityLabel("Retry download")
+        case .queued:
+            Image(systemName: "clock")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Queued for download")
+        case .downloading:
+            ProgressView()
+                .accessibilityLabel("Downloading")
+        case .downloaded:
+            Button { onDeleteDownload(episode.id) } label: {
+                Image(systemName: "trash.circle").font(.title2)
+            }
+            .buttonStyle(.borderless)
+            .tint(.gray)
+            .accessibilityLabel("Delete download")
+        case .removedFromFeed:
+            Image(systemName: "xmark.circle")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Removed from feed")
         }
     }
 

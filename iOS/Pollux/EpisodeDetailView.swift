@@ -1,15 +1,22 @@
 import App
 import SwiftUI
 
-/// Full-page view for a single episode. Renders the stored metadata and show
-/// notes; the transport controls, chapters, and bookmarks are DEBUG-marked
-/// placeholders because their engines (playback, chapters, bookmarks) don't exist
-/// yet. The episode is passed in from the list rather than re-fetched — the list's
-/// ViewModel already carries it. A dedicated `GetEpisode` round-trip could replace
-/// this later if the detail page ever needs data the list doesn't ship.
+/// Full-page view for a single episode. Renders the stored metadata, show notes,
+/// and a working download control; transport controls, chapters, and bookmarks are
+/// DEBUG-marked placeholders because their engines don't exist yet. Static metadata
+/// is taken from the `episode` snapshot passed in from the list, but the download
+/// state is read live from `core.view` so it updates while the page is open.
 struct EpisodeDetailView: View {
+    @ObservedObject var core: Core
     let episode: EpisodeSummary
     let feedTitle: String
+
+    /// The current version of this episode from the core, so download-state changes
+    /// show up here without re-navigating. Falls back to the injected snapshot if
+    /// the list is no longer the selected feed.
+    private var liveEpisode: EpisodeSummary {
+        core.view.subscriptionDetail.episodes.first { $0.id == episode.id } ?? episode
+    }
 
     var body: some View {
         ScrollView {
@@ -17,6 +24,7 @@ struct EpisodeDetailView: View {
                 artworkHeader
                 titleBlock
                 playbackControls
+                downloadSection
                 Divider()
                 showNotes
                 PlaceholderSection(
@@ -82,6 +90,46 @@ struct EpisodeDetailView: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// Working download control, driven by the live download status.
+    @ViewBuilder private var downloadSection: some View {
+        switch liveEpisode.downloadStatus {
+        case .notDownloaded:
+            Button { core.update(.downloadEpisode(episode.id)) } label: {
+                Label("Download episode", systemImage: "arrow.down.circle")
+            }
+        case .queued:
+            Label("Queued for download", systemImage: "clock")
+                .foregroundStyle(.secondary)
+        case .downloading:
+            Label {
+                Text("Downloading…")
+            } icon: {
+                ProgressView()
+            }
+        case .downloaded:
+            HStack {
+                Label("Downloaded", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Spacer()
+                Button(role: .destructive) {
+                    core.update(.deleteDownload(episode.id))
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        case .failed:
+            HStack {
+                Label("Download failed", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+                Spacer()
+                Button("Retry") { core.update(.downloadEpisode(episode.id)) }
+            }
+        case .removedFromFeed:
+            Label("Removed from feed", systemImage: "xmark.circle")
+                .foregroundStyle(.secondary)
+        }
     }
 
     private var showNotes: some View {

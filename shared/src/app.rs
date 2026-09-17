@@ -2,9 +2,10 @@ use crux_core::{render::render, App, Command};
 use facet::Facet;
 use serde::{Deserialize, Serialize};
 
+use crate::capabilities::download::{DownloadOperation, DownloadResult};
 use crate::capabilities::http::{HttpOperation, HttpResult};
 use crate::capabilities::storage::{StorageOperation, StorageResult};
-use crate::domain::{Episode, EpisodeSortOrder};
+use crate::domain::{DownloadStatus, Episode, EpisodeSortOrder};
 use crate::effect::Effect;
 use crate::feed_parser::parse_feed;
 use crate::html::strip_html_preview;
@@ -169,6 +170,130 @@ impl App for Pollux {
                 model.episode_sort = order;
                 render()
             }
+            Event::DownloadEpisode(episode_id) => {
+                // Only actionable for an episode we have loaded (the details list
+                // today). Already-queued/downloading episodes are a no-op so a
+                // double-tap can't enqueue twice.
+                let status = model
+                    .episodes
+                    .iter()
+                    .find(|e| e.id == episode_id)
+                    .map(|e| e.download_status.clone());
+                match status {
+                    None | Some(DownloadStatus::Queued) | Some(DownloadStatus::Downloading) => {
+                        render()
+                    }
+                    _ if !download_allowed(model) => {
+                        // Fail-on-full: unlimited today, so this is unreachable.
+                        // When a storage cap exists this is where a download is
+                        // refused up front and marked Failed instead of started.
+                        set_download_state(model, &episode_id, DownloadStatus::Failed, None, None);
+                        persist_download_state(&episode_id, DownloadStatus::Failed, None, None)
+                            .and(render())
+                    }
+                    _ => {
+                        set_download_state(model, &episode_id, DownloadStatus::Queued, None, None);
+                        model.download_queue.push(episode_id.clone());
+                        let persist =
+                            persist_download_state(&episode_id, DownloadStatus::Queued, None, None);
+                        persist.and(maybe_start_next(model)).and(render())
+                    }
+                }
+            }
+            Event::DownloadFinished { episode_id, result } => match *result {
+                DownloadResult::Completed {
+                    local_path,
+                    size_bytes,
+                } => {
+                    finish_active(model, &episode_id);
+                    set_download_state(
+                        model,
+                        &episode_id,
+                        DownloadStatus::Downloaded,
+                        Some(local_path.clone()),
+                        Some(size_bytes),
+                    );
+                    let persist = persist_download_state(
+                        &episode_id,
+                        DownloadStatus::Downloaded,
+                        Some(local_path),
+                        Some(size_bytes),
+                    );
+                    persist.and(maybe_start_next(model)).and(render())
+                }
+                DownloadResult::Error(_) => {
+                    finish_active(model, &episode_id);
+                    set_download_state(model, &episode_id, DownloadStatus::Failed, None, None);
+                    let persist =
+                        persist_download_state(&episode_id, DownloadStatus::Failed, None, None);
+                    persist.and(maybe_start_next(model)).and(render())
+                }
+                // Progress is not consumed in the status-only pass; Deleted never
+                // arrives here (it resolves DeleteDownload instead).
+                DownloadResult::Progress { .. } | DownloadResult::Deleted => render(),
+            },
+            Event::DeleteDownload(episode_id) => {
+                let local_path = model
+                    .episodes
+                    .iter()
+                    .find(|e| e.id == episode_id)
+                    .and_then(|e| e.local_path.clone());
+                match local_path {
+                    Some(path) => {
+                        let id = episode_id.clone();
+                        Command::request_from_shell(DownloadOperation::Delete { local_path: path })
+                            .then_send(move |r| Event::DownloadDeleted {
+                                episode_id: id.clone(),
+                                result: Box::new(r),
+                            })
+                            .and(render())
+                    }
+                    None => {
+                        // Nothing on disk (e.g. a Failed row): normalize to
+                        // NotDownloaded without a filesystem round-trip.
+                        set_download_state(
+                            model,
+                            &episode_id,
+                            DownloadStatus::NotDownloaded,
+                            None,
+                            None,
+                        );
+                        persist_download_state(
+                            &episode_id,
+                            DownloadStatus::NotDownloaded,
+                            None,
+                            None,
+                        )
+                        .and(render())
+                    }
+                }
+            }
+            Event::DownloadDeleted { episode_id, result } => match *result {
+                DownloadResult::Deleted => {
+                    set_download_state(
+                        model,
+                        &episode_id,
+                        DownloadStatus::NotDownloaded,
+                        None,
+                        None,
+                    );
+                    persist_download_state(&episode_id, DownloadStatus::NotDownloaded, None, None)
+                        .and(render())
+                }
+                DownloadResult::Error(e) => {
+                    // The file couldn't be removed; leave the row as-is and surface
+                    // why on the details page rather than lying about the state.
+                    model.detail_error = Some(e);
+                    render()
+                }
+                DownloadResult::Completed { .. } | DownloadResult::Progress { .. } => render(),
+            },
+            Event::DownloadStatePersisted(result) => {
+                if let StorageResult::Error(e) = *result {
+                    model.detail_error = Some(e);
+                }
+                render()
+            }
         }
     }
 
@@ -267,6 +392,105 @@ fn sort_episodes(episodes: &mut [EpisodeSummary], order: EpisodeSortOrder) {
     }
 }
 
+/// Pre-download storage check. Unlimited today — the user-configurable soft cap
+/// arrives with the Settings screen (see ROADMAP follow-ups). Device-full is not
+/// predicted here; it surfaces as the shell's write failing (`DownloadResult::Error`
+/// → `Failed`), which is the fail-on-full behavior the storage spec calls for.
+fn download_allowed(_model: &Model) -> bool {
+    true
+}
+
+/// Applies a download-state transition to the in-memory episode, if it's loaded.
+///
+/// `SelectSubscription` is intentionally idempotent (it won't reload the feed
+/// already on screen), so a status change written only to storage would not show
+/// up on the details page. Mutating `model.episodes` in place is what lets `view()`
+/// reproject the new state without a reload — see the note at `SelectSubscription`.
+/// `local_path`/`size_bytes`/`progress` are set (or cleared) together with the
+/// status so the row never keeps a path for a file that isn't there.
+fn set_download_state(
+    model: &mut Model,
+    episode_id: &str,
+    status: DownloadStatus,
+    local_path: Option<String>,
+    size_bytes: Option<u64>,
+) {
+    if let Some(episode) = model.episodes.iter_mut().find(|e| e.id == episode_id) {
+        episode.download_status = status;
+        episode.local_path = local_path;
+        episode.file_size_bytes = size_bytes;
+        // No live percentage in the status-only pass; keep the column NULL rather
+        // than leaving a stale value from a previous download.
+        episode.download_progress = None;
+    }
+}
+
+/// Persists a download-state transition through the storage capability. The result
+/// is checked for errors (via `DownloadStatePersisted`) but success is silent — the
+/// UI already reflects the change from `set_download_state`, so persistence is only
+/// about durability across restarts.
+fn persist_download_state(
+    episode_id: &str,
+    status: DownloadStatus,
+    local_path: Option<String>,
+    size_bytes: Option<u64>,
+) -> Command<Effect, Event> {
+    Command::request_from_shell(StorageOperation::UpdateDownloadState {
+        episode_id: episode_id.to_string(),
+        status,
+        local_path,
+        size_bytes,
+        progress: None,
+    })
+    .then_send(|r| Event::DownloadStatePersisted(Box::new(r)))
+}
+
+/// Clears the in-flight marker when the active download reaches a terminal state.
+fn finish_active(model: &mut Model, episode_id: &str) {
+    if model.downloading.as_deref() == Some(episode_id) {
+        model.downloading = None;
+    }
+}
+
+/// Starts the next queued download if nothing is in flight (serial: one at a time).
+/// Returns the command that marks the episode `Downloading`, persists that, and
+/// issues the shell download whose result comes back as `DownloadFinished`. A no-op
+/// (empty command) when a download is already running or the queue is empty.
+fn maybe_start_next(model: &mut Model) -> Command<Effect, Event> {
+    if model.downloading.is_some() {
+        return Command::done();
+    }
+    let Some(episode_id) = model.download_queue.first().cloned() else {
+        return Command::done();
+    };
+    model.download_queue.remove(0);
+
+    // The enclosure URL comes from the loaded episode. If it's no longer loaded,
+    // drop this queue entry and try the next one rather than stalling the queue.
+    let Some(url) = model
+        .episodes
+        .iter()
+        .find(|e| e.id == episode_id)
+        .map(|e| e.enclosure_url.clone())
+    else {
+        return maybe_start_next(model);
+    };
+
+    model.downloading = Some(episode_id.clone());
+    set_download_state(model, &episode_id, DownloadStatus::Downloading, None, None);
+
+    let persist = persist_download_state(&episode_id, DownloadStatus::Downloading, None, None);
+    let download = Command::request_from_shell(DownloadOperation::Download {
+        episode_id: episode_id.clone(),
+        url,
+    })
+    .then_send(move |r| Event::DownloadFinished {
+        episode_id: episode_id.clone(),
+        result: Box::new(r),
+    });
+    persist.and(download)
+}
+
 #[derive(Facet, Serialize, Deserialize, Clone, Debug)]
 #[repr(C)]
 pub enum Event {
@@ -284,6 +508,23 @@ pub enum Event {
         result: Box<StorageResult>,
     },
     SetEpisodeSort(EpisodeSortOrder),
+    /// Queue an episode's audio for download (or retry a failed one).
+    DownloadEpisode(String),
+    /// Remove a downloaded (or failed) episode's local file.
+    DeleteDownload(String),
+    /// Terminal result of a shell download for `episode_id`.
+    DownloadFinished {
+        episode_id: String,
+        result: Box<DownloadResult>,
+    },
+    /// Terminal result of a shell delete for `episode_id`.
+    DownloadDeleted {
+        episode_id: String,
+        result: Box<DownloadResult>,
+    },
+    /// Result of persisting a download-state transition. Success is silent; an
+    /// error is surfaced on the details page (downloads are driven from there).
+    DownloadStatePersisted(Box<StorageResult>),
 }
 
 #[cfg(test)]
@@ -1036,5 +1277,269 @@ mod tests {
         let summary = &app.view(&model).subscription_detail.episodes[0];
         assert!(summary.description.is_none());
         assert!(summary.description_text.is_none());
+    }
+
+    // --- Download manager ---
+
+    fn model_episode_status(model: &Model, id: &str) -> DownloadStatus {
+        model
+            .episodes
+            .iter()
+            .find(|e| e.id == id)
+            .map(|e| e.download_status.clone())
+            .expect("episode should be loaded")
+    }
+
+    fn has_download_effect_for(effects: &[Effect], episode_id: &str) -> bool {
+        effects.iter().any(|e| {
+            matches!(
+                e,
+                Effect::Download(r) if matches!(&r.operation,
+                    DownloadOperation::Download { episode_id: id, .. } if id == episode_id)
+            )
+        })
+    }
+
+    #[test]
+    fn download_episode_marks_downloading_and_issues_download_effect() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+
+        let mut cmd = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+
+        // Serial: nothing else in flight, so it starts immediately.
+        assert_eq!(model.downloading.as_deref(), Some("e1"));
+        assert_eq!(
+            model_episode_status(&model, "e1"),
+            DownloadStatus::Downloading
+        );
+        assert!(
+            model.download_queue.is_empty(),
+            "the only item should be in flight, not queued"
+        );
+
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            has_download_effect_for(&effects, "e1"),
+            "expected a Download effect for e1"
+        );
+
+        // The details page reflects the new state without any re-selection — the
+        // in-place model update is what makes idempotent SelectSubscription safe.
+        let view = app.view(&model);
+        assert_eq!(
+            view.subscription_detail.episodes[0].download_status,
+            DownloadStatus::Downloading
+        );
+    }
+
+    #[test]
+    fn second_download_stays_queued_while_one_is_in_flight() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(
+            &app,
+            &mut model,
+            vec![
+                make_episode("e1", "First", Some(2)),
+                make_episode("e2", "Second", Some(1)),
+            ],
+        );
+
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        let mut cmd = app.update(Event::DownloadEpisode("e2".to_string()), &mut model);
+
+        // e1 is still the one downloading; e2 waits its turn.
+        assert_eq!(model.downloading.as_deref(), Some("e1"));
+        assert_eq!(model_episode_status(&model, "e2"), DownloadStatus::Queued);
+        assert_eq!(model.download_queue, vec!["e2".to_string()]);
+
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            !has_download_effect_for(&effects, "e2"),
+            "a second download must not start while one is in flight (serial)"
+        );
+    }
+
+    #[test]
+    fn download_completed_marks_downloaded_and_starts_next() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(
+            &app,
+            &mut model,
+            vec![
+                make_episode("e1", "First", Some(2)),
+                make_episode("e2", "Second", Some(1)),
+            ],
+        );
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        let _ = app.update(Event::DownloadEpisode("e2".to_string()), &mut model);
+
+        let mut cmd = app.update(
+            Event::DownloadFinished {
+                episode_id: "e1".to_string(),
+                result: Box::new(DownloadResult::Completed {
+                    local_path: "Downloads/e1.mp3".to_string(),
+                    size_bytes: 4_096,
+                }),
+            },
+            &mut model,
+        );
+
+        // e1 is done, with its file recorded.
+        assert_eq!(
+            model_episode_status(&model, "e1"),
+            DownloadStatus::Downloaded
+        );
+        let e1 = model
+            .episodes
+            .iter()
+            .find(|e| e.id == "e1")
+            .expect("e1 should be loaded");
+        assert_eq!(e1.local_path.as_deref(), Some("Downloads/e1.mp3"));
+        assert_eq!(e1.file_size_bytes, Some(4_096));
+
+        // The queue drains to e2.
+        assert_eq!(model.downloading.as_deref(), Some("e2"));
+        assert_eq!(
+            model_episode_status(&model, "e2"),
+            DownloadStatus::Downloading
+        );
+        assert!(model.download_queue.is_empty());
+
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            has_download_effect_for(&effects, "e2"),
+            "finishing one download should start the next queued one"
+        );
+    }
+
+    #[test]
+    fn download_error_marks_failed_and_still_drains_queue() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(
+            &app,
+            &mut model,
+            vec![
+                make_episode("e1", "First", Some(2)),
+                make_episode("e2", "Second", Some(1)),
+            ],
+        );
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        let _ = app.update(Event::DownloadEpisode("e2".to_string()), &mut model);
+
+        let mut cmd = app.update(
+            Event::DownloadFinished {
+                episode_id: "e1".to_string(),
+                result: Box::new(DownloadResult::Error("disk full".to_string())),
+            },
+            &mut model,
+        );
+
+        assert_eq!(model_episode_status(&model, "e1"), DownloadStatus::Failed);
+        // A failure must not stall the queue — the next episode still starts.
+        assert_eq!(model.downloading.as_deref(), Some("e2"));
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(has_download_effect_for(&effects, "e2"));
+    }
+
+    #[test]
+    fn delete_download_issues_delete_effect_then_resets_on_result() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let mut downloaded = make_episode("e1", "Ep", Some(1));
+        downloaded.download_status = DownloadStatus::Downloaded;
+        downloaded.local_path = Some("Downloads/e1.mp3".to_string());
+        downloaded.file_size_bytes = Some(4_096);
+        load_episodes(&app, &mut model, vec![downloaded]);
+
+        // Deleting a downloaded episode goes to the shell first (best-effort file
+        // removal), so the row stays Downloaded until the delete result comes back.
+        let mut cmd = app.update(Event::DeleteDownload("e1".to_string()), &mut model);
+        assert_eq!(
+            model_episode_status(&model, "e1"),
+            DownloadStatus::Downloaded
+        );
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            effects.iter().any(|e| matches!(
+                e,
+                Effect::Download(r) if matches!(&r.operation,
+                    DownloadOperation::Delete { local_path } if local_path == "Downloads/e1.mp3")
+            )),
+            "expected a Delete effect carrying the stored path"
+        );
+
+        // The shell reports the file gone.
+        let _ = app.update(
+            Event::DownloadDeleted {
+                episode_id: "e1".to_string(),
+                result: Box::new(DownloadResult::Deleted),
+            },
+            &mut model,
+        );
+        assert_eq!(
+            model_episode_status(&model, "e1"),
+            DownloadStatus::NotDownloaded
+        );
+        let e1 = model
+            .episodes
+            .iter()
+            .find(|e| e.id == "e1")
+            .expect("e1 should be loaded");
+        assert!(e1.local_path.is_none(), "path must be cleared after delete");
+        assert!(e1.file_size_bytes.is_none());
+    }
+
+    #[test]
+    fn delete_without_a_local_file_normalizes_immediately() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let mut failed = make_episode("e1", "Ep", Some(1));
+        failed.download_status = DownloadStatus::Failed;
+        load_episodes(&app, &mut model, vec![failed]);
+
+        // A Failed row has no file, so there's no shell round-trip — it just resets.
+        let mut cmd = app.update(Event::DeleteDownload("e1".to_string()), &mut model);
+        assert_eq!(
+            model_episode_status(&model, "e1"),
+            DownloadStatus::NotDownloaded
+        );
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            !effects.iter().any(|e| matches!(e, Effect::Download(_))),
+            "no file means no Delete effect"
+        );
+    }
+
+    #[test]
+    fn download_persist_error_surfaces_on_details_page() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let _ = app.update(
+            Event::DownloadStatePersisted(Box::new(StorageResult::Error("db locked".to_string()))),
+            &mut model,
+        );
+        assert_eq!(model.detail_error.as_deref(), Some("db locked"));
+    }
+
+    #[test]
+    fn redownloading_an_in_flight_episode_is_a_noop() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+
+        // Tapping download again while it's downloading must not re-enqueue.
+        let mut cmd = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        assert!(model.download_queue.is_empty());
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            !has_download_effect_for(&effects, "e1"),
+            "a redundant download request must not issue a second fetch"
+        );
     }
 }

@@ -230,6 +230,55 @@ struct DatabaseManagerTests {
         #expect(fetched.playbackPositionSecs == largePosition)
     }
 
+    @Test func updateDownloadState_recordsDownloadedFileMetadata() async throws {
+        let db = try makeManager()
+        try await db.execute(.upsertSubscription(makeSubscription(id: "sub-1")))
+        try await db.execute(.upsertEpisode(makeEpisode(id: "ep-1", subscriptionId: "sub-1")))
+
+        try await db.execute(
+            .updateDownloadState(
+                episodeId: "ep-1", status: .downloaded,
+                localPath: "Downloads/ep-1.mp3", sizeBytes: 4096, progress: nil,
+            ))
+
+        let result = try await db.execute(.getEpisode(id: "ep-1"))
+        guard case let .episode(fetched) = result else {
+            Issue.record("Expected .episode, got \(result)")
+            return
+        }
+        #expect(fetched.downloadStatus == .downloaded)
+        #expect(fetched.localPath == "Downloads/ep-1.mp3")
+        #expect(fetched.fileSizeBytes == 4096)
+    }
+
+    @Test func updateDownloadState_clearsFileMetadataOnReset() async throws {
+        let db = try makeManager()
+        try await db.execute(.upsertSubscription(makeSubscription(id: "sub-1")))
+        try await db.execute(.upsertEpisode(makeEpisode(id: "ep-1", subscriptionId: "sub-1")))
+
+        // Download, then delete: the reset must null out the path and size so no
+        // stale file reference survives.
+        try await db.execute(
+            .updateDownloadState(
+                episodeId: "ep-1", status: .downloaded,
+                localPath: "Downloads/ep-1.mp3", sizeBytes: 4096, progress: nil,
+            ))
+        try await db.execute(
+            .updateDownloadState(
+                episodeId: "ep-1", status: .notDownloaded,
+                localPath: nil, sizeBytes: nil, progress: nil,
+            ))
+
+        let result = try await db.execute(.getEpisode(id: "ep-1"))
+        guard case let .episode(fetched) = result else {
+            Issue.record("Expected .episode, got \(result)")
+            return
+        }
+        #expect(fetched.downloadStatus == .notDownloaded)
+        #expect(fetched.localPath == nil)
+        #expect(fetched.fileSizeBytes == nil)
+    }
+
     @Test func deleteSubscription_cascadesToEpisodes() async throws {
         let db = try makeManager()
         let sub = makeSubscription(id: "sub-1")
