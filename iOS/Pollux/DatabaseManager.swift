@@ -111,6 +111,8 @@ actor DatabaseManager {
             try getEpisode(id: id)
         case let .listEpisodesBySubscription(subscriptionId):
             try listEpisodesBySubscription(subscriptionId: subscriptionId)
+        case .listPendingDownloads:
+            try listPendingDownloads()
         case let .getEpisodeByFeedGuid(subscriptionId, feedGuid):
             try getEpisodeByFeedGuid(subscriptionId: subscriptionId, feedGuid: feedGuid)
         case let .updatePlaybackStatus(episodeId, status, positionSecs):
@@ -205,6 +207,20 @@ actor DatabaseManager {
                 db,
                 sql: "SELECT * FROM episodes WHERE subscription_id = ? ORDER BY pub_date DESC",
                 arguments: [subscriptionId],
+            )
+        }
+        return .episodes(rows.map(Self.episode(from:)))
+    }
+
+    private func listPendingDownloads() throws -> StorageResult {
+        let rows = try db.read { db -> [Row] in
+            try Row.fetchAll(
+                db,
+                sql: """
+                SELECT * FROM episodes
+                WHERE download_status IN ('Downloading', 'Queued')
+                ORDER BY pub_date
+                """,
             )
         }
         return .episodes(rows.map(Self.episode(from:)))

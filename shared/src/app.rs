@@ -9,7 +9,7 @@ use crate::domain::{DownloadStatus, Episode, EpisodeSortOrder};
 use crate::effect::Effect;
 use crate::feed_parser::parse_feed;
 use crate::html::strip_html_preview;
-use crate::model::{DownloadProgress, Model};
+use crate::model::{DownloadProgress, Model, QueuedDownload};
 use crate::view_model::{
     EpisodeSummary, LibraryView, SubscriptionDetailView, SubscriptionSummary, ViewModel,
 };
@@ -27,9 +27,14 @@ impl App for Pollux {
         match event {
             Event::Started => {
                 model.loading = true;
-                Command::request_from_shell(StorageOperation::ListSubscriptions)
-                    .then_send(|r| Event::SubscriptionsLoaded(Box::new(r)))
-                    .and(render())
+                let subscriptions =
+                    Command::request_from_shell(StorageOperation::ListSubscriptions)
+                        .then_send(|r| Event::SubscriptionsLoaded(Box::new(r)));
+                // Rebuild the download queue for anything a previous session left
+                // mid-download, and resume it.
+                let pending = Command::request_from_shell(StorageOperation::ListPendingDownloads)
+                    .then_send(|r| Event::PendingDownloadsLoaded(Box::new(r)));
+                subscriptions.and(pending).and(render())
             }
             Event::SubscriptionsLoaded(result) => {
                 model.loading = false;
@@ -44,6 +49,37 @@ impl App for Pollux {
                     }
                 }
                 render()
+            }
+            Event::PendingDownloadsLoaded(result) => {
+                // Rebuild the queue from downloads a prior session left in flight and
+                // resume them. Partial files don't survive a quit, so each restarts
+                // from scratch. Best-effort: an error here just leaves nothing queued.
+                let mut cmd = Command::done();
+                if let StorageResult::Episodes(rows) = *result {
+                    for episode in rows {
+                        let already = model.downloading.as_deref() == Some(episode.id.as_str())
+                            || model
+                                .download_queue
+                                .iter()
+                                .any(|q| q.episode_id == episode.id);
+                        if already {
+                            continue;
+                        }
+                        // Normalize to Queued so an item waiting behind others no
+                        // longer reads as "Downloading" in the DB.
+                        cmd = cmd.and(persist_download_state(
+                            &episode.id,
+                            DownloadStatus::Queued,
+                            None,
+                            None,
+                        ));
+                        model.download_queue.push(QueuedDownload {
+                            episode_id: episode.id,
+                            url: episode.enclosure_url,
+                        });
+                    }
+                }
+                cmd.and(maybe_start_next(model)).and(render())
             }
             Event::FetchFeed(url) => {
                 model.loading = true;
@@ -174,16 +210,16 @@ impl App for Pollux {
                 // Only actionable for an episode we have loaded (the details list
                 // today). Already-queued/downloading episodes are a no-op so a
                 // double-tap can't enqueue twice.
-                let status = model
+                let found = model
                     .episodes
                     .iter()
                     .find(|e| e.id == episode_id)
-                    .map(|e| e.download_status.clone());
-                match status {
-                    None | Some(DownloadStatus::Queued) | Some(DownloadStatus::Downloading) => {
-                        render()
-                    }
-                    _ if !download_allowed(model) => {
+                    .map(|e| (e.download_status.clone(), e.enclosure_url.clone()));
+                match found {
+                    None
+                    | Some((DownloadStatus::Queued, _))
+                    | Some((DownloadStatus::Downloading, _)) => render(),
+                    Some(_) if !download_allowed(model) => {
                         // Fail-on-full: unlimited today, so this is unreachable.
                         // When a storage cap exists this is where a download is
                         // refused up front and marked Failed instead of started.
@@ -191,9 +227,12 @@ impl App for Pollux {
                         persist_download_state(&episode_id, DownloadStatus::Failed, None, None)
                             .and(render())
                     }
-                    _ => {
+                    Some((_, url)) => {
                         set_download_state(model, &episode_id, DownloadStatus::Queued, None, None);
-                        model.download_queue.push(episode_id.clone());
+                        model.download_queue.push(QueuedDownload {
+                            episode_id: episode_id.clone(),
+                            url,
+                        });
                         let persist =
                             persist_download_state(&episode_id, DownloadStatus::Queued, None, None);
                         persist.and(maybe_start_next(model)).and(render())
@@ -492,21 +531,12 @@ fn maybe_start_next(model: &mut Model) -> Command<Effect, Event> {
     if model.downloading.is_some() {
         return Command::done();
     }
-    let Some(episode_id) = model.download_queue.first().cloned() else {
+    if model.download_queue.is_empty() {
         return Command::done();
-    };
-    model.download_queue.remove(0);
-
-    // The enclosure URL comes from the loaded episode. If it's no longer loaded,
-    // drop this queue entry and try the next one rather than stalling the queue.
-    let Some(url) = model
-        .episodes
-        .iter()
-        .find(|e| e.id == episode_id)
-        .map(|e| e.enclosure_url.clone())
-    else {
-        return maybe_start_next(model);
-    };
+    }
+    // The queue entry carries the URL, so a download can start without its feed's
+    // episodes being loaded (e.g. a resume at launch).
+    let QueuedDownload { episode_id, url } = model.download_queue.remove(0);
 
     model.downloading = Some(episode_id.clone());
     // A fresh download starts with no progress until the shell reports the first bytes.
@@ -530,6 +560,9 @@ fn maybe_start_next(model: &mut Model) -> Command<Effect, Event> {
 pub enum Event {
     Started,
     SubscriptionsLoaded(Box<StorageResult>),
+    /// Episodes left `Downloading`/`Queued` by a previous session, loaded at launch
+    /// so their downloads can be re-enqueued and resumed.
+    PendingDownloadsLoaded(Box<StorageResult>),
     FetchFeed(String),
     FeedFetched {
         url: String,
@@ -670,12 +703,21 @@ mod tests {
         assert!(model.loading);
 
         let effects: Vec<Effect> = cmd.effects().collect();
-        assert_eq!(effects.len(), 2);
+        // ListSubscriptions + ListPendingDownloads + render.
+        assert_eq!(effects.len(), 3);
 
         let has_storage = effects
             .iter()
             .any(|e| matches!(e, Effect::Storage(r) if matches!(r.operation, StorageOperation::ListSubscriptions)));
         assert!(has_storage, "expected a ListSubscriptions storage effect");
+
+        let has_pending = effects
+            .iter()
+            .any(|e| matches!(e, Effect::Storage(r) if matches!(r.operation, StorageOperation::ListPendingDownloads)));
+        assert!(
+            has_pending,
+            "expected a ListPendingDownloads storage effect to resume interrupted downloads"
+        );
 
         let has_render = effects.iter().any(|e| matches!(e, Effect::Render(_)));
         assert!(has_render, "expected a render effect");
@@ -1331,6 +1373,14 @@ mod tests {
             .expect("episode should be loaded")
     }
 
+    fn queued_ids(model: &Model) -> Vec<String> {
+        model
+            .download_queue
+            .iter()
+            .map(|q| q.episode_id.clone())
+            .collect()
+    }
+
     fn has_download_effect_for(effects: &[Effect], episode_id: &str) -> bool {
         effects.iter().any(|e| {
             matches!(
@@ -1394,7 +1444,7 @@ mod tests {
         // e1 is still the one downloading; e2 waits its turn.
         assert_eq!(model.downloading.as_deref(), Some("e1"));
         assert_eq!(model_episode_status(&model, "e2"), DownloadStatus::Queued);
-        assert_eq!(model.download_queue, vec!["e2".to_string()]);
+        assert_eq!(queued_ids(&model), vec!["e2"]);
 
         let effects: Vec<Effect> = cmd.effects().collect();
         assert!(
@@ -1642,6 +1692,51 @@ mod tests {
         );
         let summary = &app.view(&model).subscription_detail.episodes[0];
         assert!(summary.download_received_bytes.is_none());
+    }
+
+    #[test]
+    fn pending_downloads_are_reenqueued_and_resumed_on_load() {
+        let app = Pollux;
+        let mut model = Model::default();
+
+        // Two episodes a previous session left mid-download (their feed is not
+        // loaded — mirroring a cold start before any subscription is selected).
+        let mut e1 = make_episode("e1", "First", Some(2));
+        e1.download_status = DownloadStatus::Downloading;
+        let mut e2 = make_episode("e2", "Second", Some(1));
+        e2.download_status = DownloadStatus::Queued;
+
+        let mut cmd = app.update(
+            Event::PendingDownloadsLoaded(Box::new(StorageResult::Episodes(vec![e1, e2]))),
+            &mut model,
+        );
+
+        // Serial: the first resumes, the rest wait — even though model.episodes is
+        // empty, because the queue carries the URL.
+        assert_eq!(model.downloading.as_deref(), Some("e1"));
+        assert_eq!(queued_ids(&model), vec!["e2"]);
+
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            has_download_effect_for(&effects, "e1"),
+            "an interrupted download should resume at launch"
+        );
+    }
+
+    #[test]
+    fn pending_downloads_loaded_empty_is_a_noop() {
+        let app = Pollux;
+        let mut model = Model::default();
+
+        let mut cmd = app.update(
+            Event::PendingDownloadsLoaded(Box::new(StorageResult::Episodes(vec![]))),
+            &mut model,
+        );
+
+        assert!(model.downloading.is_none());
+        assert!(model.download_queue.is_empty());
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(!effects.iter().any(|e| matches!(e, Effect::Download(_))));
     }
 
     #[test]

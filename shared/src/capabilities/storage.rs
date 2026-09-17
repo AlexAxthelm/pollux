@@ -22,6 +22,10 @@ pub enum StorageOperation {
     ListEpisodesBySubscription {
         subscription_id: String,
     },
+    /// Every episode currently marked `Downloading` or `Queued`, across all feeds.
+    /// Used at launch to rebuild the download queue for downloads interrupted by a
+    /// previous quit.
+    ListPendingDownloads,
     GetEpisodeByFeedGuid {
         subscription_id: String,
         feed_guid: String,

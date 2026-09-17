@@ -279,6 +279,32 @@ struct DatabaseManagerTests {
         #expect(fetched.fileSizeBytes == nil)
     }
 
+    @Test func listPendingDownloads_returnsOnlyInFlightEpisodes() async throws {
+        let db = try makeManager()
+        try await db.execute(.upsertSubscription(makeSubscription(id: "sub-1")))
+
+        // One of each download status; only Downloading + Queued should come back.
+        let statuses: [(String, DownloadStatus)] = [
+            ("ep-notdl", .notDownloaded),
+            ("ep-queued", .queued),
+            ("ep-downloading", .downloading),
+            ("ep-downloaded", .downloaded),
+            ("ep-failed", .failed),
+        ]
+        for (id, status) in statuses {
+            try await db.execute(.upsertEpisode(
+                makeEpisode(id: id, subscriptionId: "sub-1", feedGuid: "g-\(id)", downloadStatus: status),
+            ))
+        }
+
+        let result = try await db.execute(.listPendingDownloads)
+        guard case let .episodes(eps) = result else {
+            Issue.record("Expected .episodes, got \(result)")
+            return
+        }
+        #expect(Set(eps.map(\.id)) == ["ep-queued", "ep-downloading"])
+    }
+
     @Test func deleteSubscription_cascadesToEpisodes() async throws {
         let db = try makeManager()
         let sub = makeSubscription(id: "sub-1")
