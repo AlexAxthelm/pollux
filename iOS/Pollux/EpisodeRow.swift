@@ -22,11 +22,7 @@ struct EpisodeRow: View {
                     .fontWeight(.semibold)
                     .lineLimit(2)
 
-                if let meta = metaLine {
-                    Text(meta)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                metaRow
 
                 if let description = episode.descriptionText, !description.isEmpty {
                     Text(description)
@@ -49,19 +45,59 @@ struct EpisodeRow: View {
         EpisodeFormatting.metaLine(pubDate: episode.pubDate, durationSecs: episode.durationSecs)
     }
 
+    /// The date·duration line — except while downloading, when it is replaced by a
+    /// progress indicator. A downloaded episode gets a small filled-download glyph
+    /// ahead of the date so status reads inline instead of on its own badge line.
+    @ViewBuilder private var metaRow: some View {
+        if episode.downloadStatus == .downloading {
+            downloadingLine
+        } else {
+            HStack(spacing: 4) {
+                if episode.downloadStatus == .downloaded {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Downloaded")
+                }
+                if let meta = metaLine {
+                    Text(meta)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    /// In-progress download: a determinate bar when the size is known, otherwise a
+    /// spinner with whatever byte count we have. Replaces the date·duration line.
+    @ViewBuilder private var downloadingLine: some View {
+        let progress = EpisodeFormatting.downloadProgress(
+            received: episode.downloadReceivedBytes,
+            total: episode.downloadTotalBytes,
+        )
+        if let progress, let fraction = progress.fraction {
+            ProgressView(value: fraction)
+                .accessibilityLabel("Downloading \(Int(fraction * 100)) percent")
+        } else {
+            HStack(spacing: 6) {
+                ProgressView()
+                Text(progress?.label ?? "Downloading…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityLabel("Downloading \(progress?.label ?? "")")
+        }
+    }
+
     @ViewBuilder private var statusRow: some View {
         let playback = playbackBadge
-        let download = downloadBadge
-        if playback != nil || download != nil || playbackPositionText != nil {
+        if playback != nil || playbackPositionText != nil {
             HStack(spacing: 10) {
                 if let playback {
                     StatusBadge(systemImage: playback.icon, text: playback.text)
                 }
                 if let positionText = playbackPositionText {
                     StatusBadge(systemImage: "clock.arrow.circlepath", text: positionText)
-                }
-                if let download {
-                    StatusBadge(systemImage: download.icon, text: download.text)
                 }
             }
             .padding(.top, 2)
@@ -106,19 +142,9 @@ struct EpisodeRow: View {
                 .foregroundStyle(.secondary)
                 .accessibilityLabel("Queued for download")
         case .downloading:
-            if let progress = EpisodeFormatting.downloadProgress(
-                received: episode.downloadReceivedBytes,
-                total: episode.downloadTotalBytes,
-            ), let fraction = progress.fraction {
-                Text("\(Int(fraction * 100))%")
-                    .font(.caption2)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Downloading \(Int(fraction * 100)) percent")
-            } else {
-                ProgressView()
-                    .accessibilityLabel("Downloading")
-            }
+            // Progress lives on the meta line while downloading, so the trailing
+            // slot stays empty rather than duplicating it with a percentage.
+            EmptyView()
         case .downloaded:
             Button { onDeleteDownload(episode.id) } label: {
                 Image(systemName: "trash.circle").font(.title2)
@@ -154,23 +180,6 @@ struct EpisodeRow: View {
             return nil
         }
         return "at \(position)"
-    }
-
-    private var downloadBadge: (icon: String, text: String)? {
-        switch episode.downloadStatus {
-        case .notDownloaded:
-            nil
-        case .queued:
-            ("clock", "Queued")
-        case .downloading:
-            ("arrow.down.circle", "Downloading")
-        case .downloaded:
-            ("arrow.down.circle.fill", "Downloaded")
-        case .failed:
-            ("exclamationmark.triangle", "Failed")
-        case .removedFromFeed:
-            ("xmark.circle", "Removed")
-        }
     }
 }
 
