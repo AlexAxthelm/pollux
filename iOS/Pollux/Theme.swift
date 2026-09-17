@@ -24,7 +24,8 @@ struct ThemeColors: Equatable {
     let secondaryBackground: Color
     /// Default foreground / body text — base05.
     let text: Color
-    /// De-emphasized text (captions, metadata, inactive) — base03.
+    /// De-emphasized text (captions, metadata, inactive) — base04. (base03, the
+    /// base16 "comments" color, is intentionally too low-contrast for text.)
     let secondaryText: Color
     /// Accent / links / tint — base0D.
     let accent: Color
@@ -56,7 +57,7 @@ struct ThemeColors: Equatable {
             background: Color(base16: palette.base00),
             secondaryBackground: Color(base16: palette.base01),
             text: Color(base16: palette.base05),
-            secondaryText: Color(base16: palette.base03),
+            secondaryText: Color(base16: palette.base04),
             accent: Color(base16: palette.base0d),
             error: Color(base16: palette.base08),
             success: Color(base16: palette.base0b),

@@ -22,7 +22,7 @@ token behind each role be documented here. This is that document.
 | `background` | base00 | Screen background (app root + each screen; list/scroll backgrounds hidden so it shows through) | `.systemBackground` |
 | `secondaryBackground` | base01 | Elevated surfaces: grouped list rows/cards, artwork placeholder fill + border | `.secondarySystemBackground` |
 | `text` | base05 | Default foreground / primary text (titles, body, show notes) | `.primary` |
-| `secondaryText` | base03 | Captions, metadata, inactive, badges | `.secondary` |
+| `secondaryText` | base04 | Captions, metadata, inactive, badges | `.secondary` |
 | `accent` | base0D | Tint, links | `.accentColor` |
 | `error` | base08 | Error text | `.red` |
 | `success` | base0B | Success state (reserved) | `.green` |
@@ -47,6 +47,32 @@ The whole app follows the active theme, not just foreground text:
 - **Primary text** carries an explicit `.foregroundStyle(themeColors.text)`;
   show-note HTML has its foreground color stripped (see `ShowNotes.swift`) so it
   inherits the same token.
+
+## Accessibility (WCAG contrast) — known limitations
+
+The built-in **Solarized** and **Nord** palettes are canonical developer color
+schemes, not palettes designed to meet WCAG AA (4.5:1 for normal text) for app
+UI. Current status:
+
+- **`text` (base05)** clears AA (≥4.5:1) against the background on every built-in
+  theme. A core test guards this
+  (`built_in_text_tokens_stay_legible_on_the_background` in `shared/src/theme.rs`).
+- **`secondaryText` (base04)** clears AA on Solarized dark and Nord, but is only
+  ~4.1:1 on Solarized light — just under AA for small text, though a large jump
+  from base03's ~2.9:1. It was moved off **base03** (base16's intentionally
+  low-contrast "comments" color, ~1.7:1 on Nord) precisely for this reason. The
+  test enforces at least the 3:1 large-text/UI bar so it can't regress toward
+  base03.
+- **`error` (base08)** and **`accent`/links (base0D)** are the palette's own red
+  and blue. Several combinations fall below 4.5:1 (e.g. Solarized-light error
+  ~4.3:1, Nord error ~3.1:1, Solarized links ~3.4–4.1:1). Forcing these to AA
+  would recolor them away from the palettes' identity, so they are left as-is.
+
+**Planned follow-up:** ship one or more curated, WCAG-AA-compliant built-in
+themes alongside the canonical palettes (and extend the contrast test to the
+colored roles once a palette claims full compliance). The default **System**
+theme already inherits the OS's accessible semantic colors, so this affects only
+users who opt into a canonical palette.
 
 ## The `System` theme reproduces today's appearance
 

@@ -45,6 +45,13 @@ pub enum ThemeId {
     Nord,
 }
 
+impl ThemeId {
+    /// Every built-in theme, in display order — the single place that enumerates
+    /// them, for the Settings selector and for tests that sweep all themes. Adding
+    /// a theme means a new variant, its arm in [`theme_view`], and an entry here.
+    pub const ALL: [ThemeId; 3] = [ThemeId::System, ThemeId::Solarized, ThemeId::Nord];
+}
+
 /// A base16 palette: sixteen colors as `#RRGGBB` hex strings, base00 (background)
 /// through base0F. The shell parses these into platform colors; invalid strings
 /// are the shell's problem to tolerate, not the core's to prevent.
@@ -175,6 +182,64 @@ fn nord() -> Base16Palette {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// sRGB channel (0–255) to linear light, per WCAG.
+    fn linear(channel: u8) -> f64 {
+        let s = f64::from(channel) / 255.0;
+        if s <= 0.03928 {
+            s / 12.92
+        } else {
+            ((s + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
+    /// WCAG relative luminance of a `#RRGGBB` hex string.
+    fn relative_luminance(hex: &str) -> f64 {
+        let h = hex.trim_start_matches('#');
+        let parse = |s: &str| u8::from_str_radix(s, 16).unwrap_or(0);
+        0.2126 * linear(parse(&h[0..2]))
+            + 0.7152 * linear(parse(&h[2..4]))
+            + 0.0722 * linear(parse(&h[4..6]))
+    }
+
+    /// WCAG contrast ratio between two `#RRGGBB` colors (1.0–21.0).
+    fn contrast(a: &str, b: &str) -> f64 {
+        let (la, lb) = (relative_luminance(a), relative_luminance(b));
+        let (hi, lo) = if la > lb { (la, lb) } else { (lb, la) };
+        (hi + 0.05) / (lo + 0.05)
+    }
+
+    #[test]
+    fn built_in_text_tokens_stay_legible_on_the_background() {
+        // Sweep every built-in theme from the single source of truth (`ThemeId::ALL`)
+        // and check each palette it ships (both variants of a dual theme; the one
+        // slot of a single-variant theme; System has none, so it's skipped). Adding
+        // a theme automatically extends this test.
+        //
+        // The shell paints `text` with base05 and `secondaryText` with base04 (see
+        // docs/features/theme-semantic-mapping.md). Primary text must clear WCAG AA
+        // (4.5:1); secondary text must clear the 3:1 large-text/UI bar — canonical
+        // palettes can't always reach 4.5:1 for de-emphasized text (that gap is
+        // documented, with more accessible themes planned). base03 (the "comments"
+        // color) must never back text: it fails even 3:1.
+        for id in ThemeId::ALL {
+            let view = theme_view(id, ThemeMode::FollowSystem);
+            for palette in view.light.iter().chain(view.dark.iter()) {
+                let text = contrast(&palette.base00, &palette.base05);
+                assert!(
+                    text >= 4.5,
+                    "{}: text (base05) is only {text:.2}:1 on base00",
+                    view.name
+                );
+                let secondary = contrast(&palette.base00, &palette.base04);
+                assert!(
+                    secondary >= 3.0,
+                    "{}: secondaryText (base04) is only {secondary:.2}:1 on base00",
+                    view.name
+                );
+            }
+        }
+    }
 
     #[test]
     fn default_theme_is_system_following_the_os() {
