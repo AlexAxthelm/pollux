@@ -205,13 +205,23 @@ mod tests {
         }
     }
 
+    /// Parses `#RRGGBB` (or `RRGGBB`) into its `(r, g, b)` bytes. Validates before
+    /// slicing so a typo'd palette hex fails with a message naming the value,
+    /// rather than an opaque byte-index panic.
+    fn rgb(hex: &str) -> (u8, u8, u8) {
+        let h = hex.strip_prefix('#').unwrap_or(hex);
+        assert!(
+            h.len() == 6 && h.bytes().all(|b| b.is_ascii_hexdigit()),
+            "invalid palette hex: {hex:?}"
+        );
+        let byte = |s: &str| u8::from_str_radix(s, 16).unwrap_or(0);
+        (byte(&h[0..2]), byte(&h[2..4]), byte(&h[4..6]))
+    }
+
     /// WCAG relative luminance of a `#RRGGBB` hex string.
     fn relative_luminance(hex: &str) -> f64 {
-        let h = hex.trim_start_matches('#');
-        let parse = |s: &str| u8::from_str_radix(s, 16).unwrap_or(0);
-        0.2126 * linear(parse(&h[0..2]))
-            + 0.7152 * linear(parse(&h[2..4]))
-            + 0.0722 * linear(parse(&h[4..6]))
+        let (r, g, b) = rgb(hex);
+        0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
     }
 
     /// WCAG contrast ratio between two `#RRGGBB` colors (1.0–21.0).
