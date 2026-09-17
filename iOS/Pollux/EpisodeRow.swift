@@ -106,8 +106,19 @@ struct EpisodeRow: View {
                 .foregroundStyle(.secondary)
                 .accessibilityLabel("Queued for download")
         case .downloading:
-            ProgressView()
-                .accessibilityLabel("Downloading")
+            if let progress = EpisodeFormatting.downloadProgress(
+                received: episode.downloadReceivedBytes,
+                total: episode.downloadTotalBytes,
+            ), let fraction = progress.fraction {
+                Text("\(Int(fraction * 100))%")
+                    .font(.caption2)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Downloading \(Int(fraction * 100)) percent")
+            } else {
+                ProgressView()
+                    .accessibilityLabel("Downloading")
+            }
         case .downloaded:
             Button { onDeleteDownload(episode.id) } label: {
                 Image(systemName: "trash.circle").font(.title2)

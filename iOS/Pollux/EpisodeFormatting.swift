@@ -35,10 +35,33 @@ enum EpisodeFormatting {
         return "\(secs)s"
     }
 
+    /// Live download progress for display. Returns nil before any bytes are known.
+    /// `fraction` is 0...1 when the total size is known (nil → show an indeterminate
+    /// indicator); `label` is a byte summary like "12.3 MB / 45.6 MB", or just
+    /// "12.3 MB" when the server didn't report a total.
+    static func downloadProgress(
+        received: UInt64?, total: UInt64?,
+    ) -> (fraction: Double?, label: String)? {
+        guard let received else { return nil }
+        let receivedText = byteFormatter.string(fromByteCount: Int64(clamping: received))
+        if let total, total > 0 {
+            let totalText = byteFormatter.string(fromByteCount: Int64(clamping: total))
+            let fraction = min(1.0, Double(received) / Double(total))
+            return (fraction, "\(receivedText) / \(totalText)")
+        }
+        return (nil, receivedText)
+    }
+
     private static let pubDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
+        return formatter
+    }()
+
+    private static let byteFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
         return formatter
     }()
 }

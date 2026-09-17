@@ -76,9 +76,26 @@ class Core: ObservableObject {
         case let .download(operation):
             // The heavy I/O runs on the DownloadManager actor's executor; awaiting
             // it from a MainActor task only parks the continuation, so this doesn't
-            // block the UI (same shape as the storage arm above).
+            // block the UI (same shape as the storage arm above). Live byte progress
+            // comes back through the onProgress callback as ordinary DownloadProgress
+            // events while the one-shot request is still in flight.
+            let progressEpisodeId: String? = {
+                if case let .download(episodeId, _) = operation {
+                    return episodeId
+                }
+                return nil
+            }()
             Task { @MainActor in
-                let result = await downloads.perform(operation)
+                let result = await downloads.perform(operation) { [weak self] received, total in
+                    guard let progressEpisodeId else { return }
+                    Task { @MainActor in
+                        self?.update(.downloadProgress(
+                            episodeId: progressEpisodeId,
+                            receivedBytes: received,
+                            totalBytes: total,
+                        ))
+                    }
+                }
                 resolveAndDispatch(requestId: request.id, result: result)
             }
         }

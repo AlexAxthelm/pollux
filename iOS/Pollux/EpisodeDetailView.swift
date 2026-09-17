@@ -103,10 +103,27 @@ struct EpisodeDetailView: View {
             Label("Queued for download", systemImage: "clock")
                 .foregroundStyle(.secondary)
         case .downloading:
-            Label {
-                Text("Downloading…")
-            } icon: {
-                ProgressView()
+            if let progress = EpisodeFormatting.downloadProgress(
+                received: liveEpisode.downloadReceivedBytes,
+                total: liveEpisode.downloadTotalBytes,
+            ) {
+                VStack(alignment: .leading, spacing: 6) {
+                    if let fraction = progress.fraction {
+                        ProgressView(value: fraction)
+                    } else {
+                        ProgressView()
+                    }
+                    Text(progress.label)
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Label {
+                    Text("Downloading…")
+                } icon: {
+                    ProgressView()
+                }
             }
         case .downloaded:
             HStack {

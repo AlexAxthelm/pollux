@@ -9,7 +9,7 @@ use crate::domain::{DownloadStatus, Episode, EpisodeSortOrder};
 use crate::effect::Effect;
 use crate::feed_parser::parse_feed;
 use crate::html::strip_html_preview;
-use crate::model::Model;
+use crate::model::{DownloadProgress, Model};
 use crate::view_model::{
     EpisodeSummary, LibraryView, SubscriptionDetailView, SubscriptionSummary, ViewModel,
 };
@@ -200,6 +200,24 @@ impl App for Pollux {
                     }
                 }
             }
+            Event::DownloadProgress {
+                episode_id,
+                received_bytes,
+                total_bytes,
+            } => {
+                // Track only the active download's progress; drop a late or stale
+                // report for an episode that already finished or was superseded.
+                if model.downloading.as_deref() == Some(episode_id.as_str()) {
+                    model.active_download_progress = Some(DownloadProgress {
+                        episode_id,
+                        received_bytes,
+                        total_bytes,
+                    });
+                    render()
+                } else {
+                    Command::done()
+                }
+            }
             Event::DownloadFinished { episode_id, result } => match *result {
                 DownloadResult::Completed {
                     local_path,
@@ -228,9 +246,8 @@ impl App for Pollux {
                         persist_download_state(&episode_id, DownloadStatus::Failed, None, None);
                     persist.and(maybe_start_next(model)).and(render())
                 }
-                // Progress is not consumed in the status-only pass; Deleted never
-                // arrives here (it resolves DeleteDownload instead).
-                DownloadResult::Progress { .. } | DownloadResult::Deleted => render(),
+                // Deleted never arrives here (it resolves DeleteDownload instead).
+                DownloadResult::Deleted => render(),
             },
             Event::DeleteDownload(episode_id) => {
                 let local_path = model
@@ -286,7 +303,7 @@ impl App for Pollux {
                     model.detail_error = Some(e);
                     render()
                 }
-                DownloadResult::Completed { .. } | DownloadResult::Progress { .. } => render(),
+                DownloadResult::Completed { .. } => render(),
             },
             Event::DownloadStatePersisted(result) => {
                 if let StorageResult::Error(e) = *result {
@@ -330,6 +347,16 @@ fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
     let mut episodes: Vec<EpisodeSummary> = model.episodes.iter().map(episode_summary).collect();
     sort_episodes(&mut episodes, model.episode_sort);
 
+    // Overlay the in-flight download's live byte progress onto its row. Progress is
+    // transient runtime state (not stored on the Episode), so it is injected here at
+    // projection time for the one episode currently downloading.
+    if let Some(progress) = model.active_download_progress.as_ref() {
+        if let Some(summary) = episodes.iter_mut().find(|e| e.id == progress.episode_id) {
+            summary.download_received_bytes = Some(progress.received_bytes);
+            summary.download_total_bytes = progress.total_bytes;
+        }
+    }
+
     let (subscription_id, title, artwork_url) = match &model.selected_subscription {
         Some(s) => (Some(s.id.clone()), s.title.clone(), s.artwork_url.clone()),
         None => (None, String::new(), None),
@@ -370,7 +397,10 @@ fn episode_summary(e: &Episode) -> EpisodeSummary {
         playback_status: e.playback_status.clone(),
         playback_position_secs: e.playback_position_secs,
         download_status: e.download_status.clone(),
-        download_progress: e.download_progress,
+        // Live progress is overlaid in `build_subscription_detail` for the active
+        // download only; every other row ships without it.
+        download_received_bytes: None,
+        download_total_bytes: None,
     }
 }
 
@@ -445,10 +475,12 @@ fn persist_download_state(
     .then_send(|r| Event::DownloadStatePersisted(Box::new(r)))
 }
 
-/// Clears the in-flight marker when the active download reaches a terminal state.
+/// Clears the in-flight marker (and its live progress) when the active download
+/// reaches a terminal state.
 fn finish_active(model: &mut Model, episode_id: &str) {
     if model.downloading.as_deref() == Some(episode_id) {
         model.downloading = None;
+        model.active_download_progress = None;
     }
 }
 
@@ -477,6 +509,8 @@ fn maybe_start_next(model: &mut Model) -> Command<Effect, Event> {
     };
 
     model.downloading = Some(episode_id.clone());
+    // A fresh download starts with no progress until the shell reports the first bytes.
+    model.active_download_progress = None;
     set_download_state(model, &episode_id, DownloadStatus::Downloading, None, None);
 
     let persist = persist_download_state(&episode_id, DownloadStatus::Downloading, None, None);
@@ -512,6 +546,13 @@ pub enum Event {
     DownloadEpisode(String),
     /// Remove a downloaded (or failed) episode's local file.
     DeleteDownload(String),
+    /// Live byte progress for the in-flight download, reported by the shell while
+    /// the one-shot download request is still running. Transient — not persisted.
+    DownloadProgress {
+        episode_id: String,
+        received_bytes: u64,
+        total_bytes: Option<u64>,
+    },
     /// Terminal result of a shell download for `episode_id`.
     DownloadFinished {
         episode_id: String,
@@ -1524,6 +1565,83 @@ mod tests {
             &mut model,
         );
         assert_eq!(model.detail_error.as_deref(), Some("db locked"));
+    }
+
+    #[test]
+    fn download_progress_overlays_bytes_on_the_active_episode() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+
+        let _ = app.update(
+            Event::DownloadProgress {
+                episode_id: "e1".to_string(),
+                received_bytes: 512,
+                total_bytes: Some(1024),
+            },
+            &mut model,
+        );
+
+        let summary = &app.view(&model).subscription_detail.episodes[0];
+        assert_eq!(summary.download_received_bytes, Some(512));
+        assert_eq!(summary.download_total_bytes, Some(1024));
+    }
+
+    #[test]
+    fn download_progress_for_an_inactive_episode_is_ignored() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+
+        // Nothing is downloading, so a stray progress report must not stick.
+        let _ = app.update(
+            Event::DownloadProgress {
+                episode_id: "e1".to_string(),
+                received_bytes: 10,
+                total_bytes: None,
+            },
+            &mut model,
+        );
+
+        assert!(model.active_download_progress.is_none());
+        let summary = &app.view(&model).subscription_detail.episodes[0];
+        assert!(summary.download_received_bytes.is_none());
+    }
+
+    #[test]
+    fn progress_is_cleared_when_the_download_finishes() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        let _ = app.update(
+            Event::DownloadProgress {
+                episode_id: "e1".to_string(),
+                received_bytes: 512,
+                total_bytes: Some(1024),
+            },
+            &mut model,
+        );
+        assert!(model.active_download_progress.is_some());
+
+        let _ = app.update(
+            Event::DownloadFinished {
+                episode_id: "e1".to_string(),
+                result: Box::new(DownloadResult::Completed {
+                    local_path: "Downloads/e1.mp3".to_string(),
+                    size_bytes: 1024,
+                }),
+            },
+            &mut model,
+        );
+
+        assert!(
+            model.active_download_progress.is_none(),
+            "progress must be cleared once the download ends"
+        );
+        let summary = &app.view(&model).subscription_detail.episodes[0];
+        assert!(summary.download_received_bytes.is_none());
     }
 
     #[test]

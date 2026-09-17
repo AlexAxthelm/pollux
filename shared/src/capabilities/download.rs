@@ -20,14 +20,6 @@ pub enum DownloadOperation {
 #[derive(Facet, Serialize, Deserialize, Clone, Debug)]
 #[repr(C)]
 pub enum DownloadResult {
-    /// Interim progress for an in-flight download. Defined from the start so live
-    /// progress reporting is an additive change (the shell can resolve a streamed
-    /// request with these before the terminal `Completed`); the core does not act
-    /// on it in the status-only first pass.
-    Progress {
-        episode_id: String,
-        percent: u8,
-    },
     /// The download finished; the file is at `local_path` (relative to the app's
     /// storage root, resolved to absolute by the shell) and is `size_bytes` long.
     Completed {
@@ -38,6 +30,12 @@ pub enum DownloadResult {
     Deleted,
     Error(String),
 }
+
+// Interim download progress is NOT a `DownloadResult`: it is reported by the shell
+// as an ordinary `Event::DownloadProgress` (received/total bytes) while the one-shot
+// `Download` request is still in flight. That keeps the download a simple one-shot
+// (terminal Completed/Error) and keeps progress — which is transient and never
+// persisted — out of the storage-backed result type.
 
 impl Operation for DownloadOperation {
     type Output = DownloadResult;

@@ -53,5 +53,10 @@ pub struct EpisodeSummary {
     pub playback_status: PlaybackStatus,
     pub playback_position_secs: Option<u32>,
     pub download_status: DownloadStatus,
-    pub download_progress: Option<u8>,
+    /// Live download progress, present only for the episode currently downloading.
+    /// `received`/`total` are byte counts; `total` is absent when the server didn't
+    /// report a size, in which case the shell shows an indeterminate indicator.
+    /// Transient and never persisted (see `Model::active_download_progress`).
+    pub download_received_bytes: Option<u64>,
+    pub download_total_bytes: Option<u64>,
 }
