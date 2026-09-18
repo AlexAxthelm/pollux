@@ -100,30 +100,38 @@ struct EpisodeDetailView: View {
                 Label("Download episode", systemImage: "arrow.down.circle")
             }
         case .queued:
-            Label("Queued for download", systemImage: "clock")
-                .foregroundStyle(.secondary)
+            HStack {
+                Label("Queued for download", systemImage: "clock")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                cancelButton
+            }
         case .downloading:
-            if let progress = EpisodeFormatting.downloadProgress(
-                received: liveEpisode.downloadReceivedBytes,
-                total: liveEpisode.downloadTotalBytes,
-            ) {
+            HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
-                    if let fraction = progress.fraction {
-                        ProgressView(value: fraction)
+                    if let progress = EpisodeFormatting.downloadProgress(
+                        received: liveEpisode.downloadReceivedBytes,
+                        total: liveEpisode.downloadTotalBytes,
+                    ) {
+                        if let fraction = progress.fraction {
+                            ProgressView(value: fraction)
+                        } else {
+                            ProgressView()
+                        }
+                        Text(progress.label)
+                            .font(.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
                     } else {
-                        ProgressView()
+                        Label {
+                            Text("Downloading…")
+                        } icon: {
+                            ProgressView()
+                        }
                     }
-                    Text(progress.label)
-                        .font(.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
                 }
-            } else {
-                Label {
-                    Text("Downloading…")
-                } icon: {
-                    ProgressView()
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                cancelButton
             }
         case .downloaded:
             HStack {
@@ -147,6 +155,18 @@ struct EpisodeDetailView: View {
             Label("Removed from feed", systemImage: "xmark.circle")
                 .foregroundStyle(.secondary)
         }
+    }
+
+    /// Small cancel affordance shown beside the progress bar (and the queued row).
+    private var cancelButton: some View {
+        Button(role: .destructive) {
+            core.update(.cancelDownload(episode.id))
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(.title2)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel("Cancel download")
     }
 
     private var showNotes: some View {
