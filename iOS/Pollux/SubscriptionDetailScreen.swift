@@ -76,8 +76,46 @@ struct SubscriptionDetailScreen: View {
                         onDeleteDownload: { core.update(.deleteDownload($0)) },
                     )
                 }
+                // Spec default: short swipe-right → Download / Delete. This is the
+                // one actionable swipe today (flag / mark-played have no engine yet);
+                // it becomes user-configurable when Settings lands.
+                .swipeActions(edge: .leading, allowsFullSwipe: fullSwipeAllowed(episode)) {
+                    downloadSwipeButton(for: episode)
+                }
             }
             .listStyle(.plain)
+        }
+    }
+
+    /// Leading-swipe download action, mirroring the row's menu: an action for the
+    /// states where one applies, nothing for the rest (there is no cancel yet).
+    @ViewBuilder private func downloadSwipeButton(for episode: EpisodeSummary) -> some View {
+        switch episode.downloadStatus {
+        case .notDownloaded:
+            Button { core.update(.downloadEpisode(episode.id)) } label: {
+                Label("Download", systemImage: "arrow.down.circle")
+            }
+            .tint(.blue)
+        case .failed:
+            Button { core.update(.downloadEpisode(episode.id)) } label: {
+                Label("Retry", systemImage: "arrow.clockwise.circle")
+            }
+            .tint(.orange)
+        case .downloaded:
+            Button(role: .destructive) { core.update(.deleteDownload(episode.id)) } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        case .queued, .downloading, .removedFromFeed:
+            EmptyView()
+        }
+    }
+
+    /// Full-swipe commits the action without tapping. Allowed for downloading (safe,
+    /// re-downloadable) but not for deleting, so a stray long swipe can't wipe a file.
+    private func fullSwipeAllowed(_ episode: EpisodeSummary) -> Bool {
+        switch episode.downloadStatus {
+        case .notDownloaded, .failed: true
+        default: false
         }
     }
 
