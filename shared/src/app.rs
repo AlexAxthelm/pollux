@@ -285,9 +285,68 @@ impl App for Pollux {
                         persist_download_state(&episode_id, DownloadStatus::Failed, None, None);
                     persist.and(maybe_start_next(model)).and(render())
                 }
+                DownloadResult::Cancelled => {
+                    // The shell cancelled the task and flushed the partial file, so
+                    // the episode goes back to not-downloaded and the queue drains on.
+                    finish_active(model, &episode_id);
+                    set_download_state(
+                        model,
+                        &episode_id,
+                        DownloadStatus::NotDownloaded,
+                        None,
+                        None,
+                    );
+                    let persist = persist_download_state(
+                        &episode_id,
+                        DownloadStatus::NotDownloaded,
+                        None,
+                        None,
+                    );
+                    persist.and(maybe_start_next(model)).and(render())
+                }
                 // Deleted never arrives here (it resolves DeleteDownload instead).
                 DownloadResult::Deleted => render(),
             },
+            Event::CancelDownload(episode_id) => {
+                if model.downloading.as_deref() == Some(episode_id.as_str()) {
+                    // Active download: ask the shell to cancel the task and flush the
+                    // partial file. The in-flight Download request then resolves as
+                    // Cancelled (handled above), which finalizes the state.
+                    Command::request_from_shell(DownloadOperation::Cancel {
+                        episode_id: episode_id.clone(),
+                    })
+                    .then_send(|r| Event::DownloadCanceled(Box::new(r)))
+                    .and(render())
+                } else if let Some(pos) = model
+                    .download_queue
+                    .iter()
+                    .position(|q| q.episode_id == episode_id)
+                {
+                    // Queued but not started: just drop it from the queue and reset —
+                    // nothing is running and no file exists yet.
+                    model.download_queue.remove(pos);
+                    set_download_state(
+                        model,
+                        &episode_id,
+                        DownloadStatus::NotDownloaded,
+                        None,
+                        None,
+                    );
+                    persist_download_state(&episode_id, DownloadStatus::NotDownloaded, None, None)
+                        .and(render())
+                } else {
+                    // Not downloading and not queued — nothing to cancel.
+                    render()
+                }
+            }
+            Event::DownloadCanceled(result) => {
+                // Best-effort: the reset rides on the Download request's Cancelled
+                // resolution; only surface a failure to cancel here.
+                if let DownloadResult::Error(e) = *result {
+                    model.detail_error = Some(e);
+                }
+                render()
+            }
             Event::DeleteDownload(episode_id) => {
                 let local_path = model
                     .episodes
@@ -342,7 +401,9 @@ impl App for Pollux {
                     model.detail_error = Some(e);
                     render()
                 }
-                DownloadResult::Completed { .. } => render(),
+                // Only Deleted/Error arrive from a Delete request; the rest are
+                // unreachable but keep the match total.
+                DownloadResult::Completed { .. } | DownloadResult::Cancelled => render(),
             },
             Event::DownloadStatePersisted(result) => {
                 if let StorageResult::Error(e) = *result {
@@ -579,6 +640,12 @@ pub enum Event {
     DownloadEpisode(String),
     /// Remove a downloaded (or failed) episode's local file.
     DeleteDownload(String),
+    /// Stop an in-flight or queued download and reset the episode to not-downloaded.
+    CancelDownload(String),
+    /// Result of asking the shell to cancel an in-flight download. The state reset
+    /// rides on the `Download` request resolving `Cancelled`; this only surfaces a
+    /// cancel error.
+    DownloadCanceled(Box<DownloadResult>),
     /// Live byte progress for the in-flight download, reported by the shell while
     /// the one-shot download request is still running. Transient — not persisted.
     DownloadProgress {
@@ -1737,6 +1804,98 @@ mod tests {
         assert!(model.download_queue.is_empty());
         let effects: Vec<Effect> = cmd.effects().collect();
         assert!(!effects.iter().any(|e| matches!(e, Effect::Download(_))));
+    }
+
+    #[test]
+    fn cancel_active_download_requests_a_shell_cancel() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        assert_eq!(model.downloading.as_deref(), Some("e1"));
+
+        let mut cmd = app.update(Event::CancelDownload("e1".to_string()), &mut model);
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            effects.iter().any(|e| matches!(
+                e,
+                Effect::Download(r) if matches!(&r.operation,
+                    DownloadOperation::Cancel { episode_id } if episode_id == "e1")
+            )),
+            "cancelling the active download should ask the shell to cancel the task"
+        );
+    }
+
+    #[test]
+    fn download_finished_cancelled_resets_and_starts_next() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(
+            &app,
+            &mut model,
+            vec![
+                make_episode("e1", "First", Some(2)),
+                make_episode("e2", "Second", Some(1)),
+            ],
+        );
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        let _ = app.update(Event::DownloadEpisode("e2".to_string()), &mut model);
+        let _ = app.update(Event::CancelDownload("e1".to_string()), &mut model);
+
+        // The shell reports the cancellation back through the Download request.
+        let mut cmd = app.update(
+            Event::DownloadFinished {
+                episode_id: "e1".to_string(),
+                result: Box::new(DownloadResult::Cancelled),
+            },
+            &mut model,
+        );
+
+        assert_eq!(
+            model_episode_status(&model, "e1"),
+            DownloadStatus::NotDownloaded,
+            "a cancelled download goes back to not-downloaded, not failed"
+        );
+        assert!(model.active_download_progress.is_none());
+        // The queue drains to e2.
+        assert_eq!(model.downloading.as_deref(), Some("e2"));
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(has_download_effect_for(&effects, "e2"));
+    }
+
+    #[test]
+    fn cancel_queued_download_drops_it_without_a_shell_cancel() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(
+            &app,
+            &mut model,
+            vec![
+                make_episode("e1", "First", Some(2)),
+                make_episode("e2", "Second", Some(1)),
+            ],
+        );
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        let _ = app.update(Event::DownloadEpisode("e2".to_string()), &mut model);
+        assert_eq!(queued_ids(&model), vec!["e2"]);
+
+        let mut cmd = app.update(Event::CancelDownload("e2".to_string()), &mut model);
+
+        // e2 leaves the queue and resets; e1 keeps downloading.
+        assert!(model.download_queue.is_empty());
+        assert_eq!(
+            model_episode_status(&model, "e2"),
+            DownloadStatus::NotDownloaded
+        );
+        assert_eq!(model.downloading.as_deref(), Some("e1"));
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            !effects.iter().any(|e| matches!(
+                e,
+                Effect::Download(r) if matches!(&r.operation, DownloadOperation::Cancel { .. })
+            )),
+            "a queued item needs no shell cancel — nothing is running"
+        );
     }
 
     #[test]

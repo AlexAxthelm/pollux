@@ -11,6 +11,8 @@ struct EpisodeRow: View {
     let onDownload: (String) -> Void
     /// Remove this episode's downloaded file.
     let onDeleteDownload: (String) -> Void
+    /// Stop this episode's in-flight or queued download.
+    let onCancelDownload: (String) -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -145,12 +147,10 @@ struct EpisodeRow: View {
             Button(role: .destructive) { onDeleteDownload(episode.id) } label: {
                 Label("Delete Download", systemImage: "trash")
             }
-        case .queued:
-            Button {} label: { Label("Queued", systemImage: "clock") }
-                .disabled(true)
-        case .downloading:
-            Button {} label: { Label("Downloading…", systemImage: "arrow.down.circle") }
-                .disabled(true)
+        case .queued, .downloading:
+            Button(role: .destructive) { onCancelDownload(episode.id) } label: {
+                Label("Cancel Download", systemImage: "xmark.circle")
+            }
         case .removedFromFeed:
             Button {} label: { Label("Removed From Feed", systemImage: "xmark.circle") }
                 .disabled(true)

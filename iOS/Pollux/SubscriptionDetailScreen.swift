@@ -74,6 +74,7 @@ struct SubscriptionDetailScreen: View {
                         episode: episode,
                         onDownload: { core.update(.downloadEpisode($0)) },
                         onDeleteDownload: { core.update(.deleteDownload($0)) },
+                        onCancelDownload: { core.update(.cancelDownload($0)) },
                     )
                 }
                 // Spec default: short swipe-right → Download / Delete. This is the
@@ -105,7 +106,11 @@ struct SubscriptionDetailScreen: View {
             Button(role: .destructive) { core.update(.deleteDownload(episode.id)) } label: {
                 Label("Delete", systemImage: "trash")
             }
-        case .queued, .downloading, .removedFromFeed:
+        case .queued, .downloading:
+            Button(role: .destructive) { core.update(.cancelDownload(episode.id)) } label: {
+                Label("Cancel", systemImage: "xmark.circle")
+            }
+        case .removedFromFeed:
             EmptyView()
         }
     }

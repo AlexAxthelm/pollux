@@ -15,6 +15,9 @@ pub enum DownloadOperation {
     /// Remove a previously downloaded file. Idempotent: deleting a file that is
     /// already gone still succeeds.
     Delete { local_path: String },
+    /// Cancel the in-flight download for `episode_id` and flush any partial bytes.
+    /// The pending `Download` request then resolves as `Cancelled`.
+    Cancel { episode_id: String },
 }
 
 #[derive(Facet, Serialize, Deserialize, Clone, Debug)]
@@ -28,6 +31,8 @@ pub enum DownloadResult {
     },
     /// A delete finished (or the file was already absent).
     Deleted,
+    /// The download was cancelled; any partial file has been flushed.
+    Cancelled,
     Error(String),
 }
 

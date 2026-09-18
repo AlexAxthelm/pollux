@@ -36,6 +36,11 @@ actor DownloadManager {
     private let storageRoot: URL
     private let downloadsDir: URL
 
+    /// The in-flight download's task and episode, so a Cancel operation can find and
+    /// cancel it. At most one at a time (downloads are serial). Set before the await
+    /// and cleared when it returns.
+    private var activeTask: (episodeId: String, task: URLSessionDownloadTask)?
+
     /// Subdirectory (and stored-path prefix) for downloaded audio.
     private static let subdirectory = "Downloads"
 
@@ -60,6 +65,8 @@ actor DownloadManager {
             await download(episodeId: episodeId, urlString: url, onProgress: onProgress)
         case let .delete(localPath):
             delete(localPath: localPath)
+        case let .cancel(episodeId):
+            cancel(episodeId: episodeId)
         }
     }
 
@@ -86,19 +93,46 @@ actor DownloadManager {
             // resumes the await; a non-2xx response fails the download.
             let delegate = DownloadSessionDelegate(destination: destination, onProgress: onProgress)
             let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
-            defer { session.finishTasksAndInvalidate() }
+            let task = session.downloadTask(with: url)
+            // Registered before the await so a Cancel can reach it; cleared after.
+            activeTask = (episodeId: episodeId, task: task)
+            defer {
+                activeTask = nil
+                session.finishTasksAndInvalidate()
+            }
 
             let finalURL: URL = try await withCheckedThrowingContinuation { continuation in
                 delegate.attach(continuation)
-                session.downloadTask(with: url).resume()
+                task.resume()
             }
 
             let size = fileSize(at: finalURL)
             let relativePath = "\(Self.subdirectory)/\(fileName)"
             return .completed(localPath: relativePath, sizeBytes: size)
         } catch {
+            // A cancelled task throws URLError.cancelled; URLSession discards its own
+            // temp file, and we clear any file that reached `destination` to be sure.
+            if (error as? URLError)?.code == .cancelled {
+                let fileName = Self.fileName(episodeId: episodeId, url: url)
+                try? FileManager.default.removeItem(
+                    at: downloadsDir.appendingPathComponent(fileName),
+                )
+                return .cancelled
+            }
             return .error(error.localizedDescription)
         }
+    }
+
+    // MARK: - Cancel
+
+    private func cancel(episodeId: String) -> DownloadResult {
+        // Cancelling the task makes the in-flight download throw URLError.cancelled,
+        // which resolves the Download request as `.cancelled`; that is where the real
+        // state change happens, so this just acks.
+        if let activeTask, activeTask.episodeId == episodeId {
+            activeTask.task.cancel()
+        }
+        return .cancelled
     }
 
     // MARK: - Delete
