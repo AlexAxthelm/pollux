@@ -36,7 +36,7 @@ struct EpisodeRow: View {
 
             Spacer(minLength: 8)
 
-            placeholderControls
+            trailingControls
         }
         .padding(.vertical, 4)
     }
@@ -104,59 +104,56 @@ struct EpisodeRow: View {
         }
     }
 
-    /// Trailing controls: a working download control plus the still-stubbed play
-    /// and more-actions buttons (their engines don't exist yet). `.borderless`
-    /// keeps the download button from also triggering the row's NavigationLink.
-    private var placeholderControls: some View {
+    /// Trailing controls: the still-stubbed play button (no playback engine yet) and
+    /// the three-dots menu, which is where the download action now lives. Download
+    /// *status* stays inline (`metaRow`); this menu is the *action* surface.
+    private var trailingControls: some View {
         HStack(spacing: 12) {
             Image(systemName: "play.circle.fill")
                 .font(.title2)
                 .stubbed()
-            downloadControl
-            Image(systemName: "ellipsis.circle")
-                .font(.title2)
-                .stubbed()
+            moreMenu
         }
     }
 
-    /// The download affordance, driven by the episode's current download status.
-    /// Actionable states are real buttons; transient/terminal states are indicators.
-    @ViewBuilder private var downloadControl: some View {
+    /// The three-dots menu. Today it holds only the download action (its first,
+    /// context-sensitive item); Play, Mark played, Flag, etc. join it as their
+    /// engines land. Swipe shortcuts are a later, user-configurable addition.
+    private var moreMenu: some View {
+        Menu {
+            downloadMenuItem
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.title2)
+        }
+        .accessibilityLabel("More actions")
+    }
+
+    /// The download entry, driven by status: an action for the states where one
+    /// applies, or a disabled indicator otherwise (there is no cancel yet).
+    @ViewBuilder private var downloadMenuItem: some View {
         switch episode.downloadStatus {
         case .notDownloaded:
             Button { onDownload(episode.id) } label: {
-                Image(systemName: "arrow.down.circle").font(.title2)
+                Label("Download", systemImage: "arrow.down.circle")
             }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("Download episode")
         case .failed:
             Button { onDownload(episode.id) } label: {
-                Image(systemName: "arrow.clockwise.circle").font(.title2)
+                Label("Retry Download", systemImage: "arrow.clockwise.circle")
             }
-            .buttonStyle(.borderless)
-            .tint(.orange)
-            .accessibilityLabel("Retry download")
-        case .queued:
-            Image(systemName: "clock")
-                .font(.title2)
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("Queued for download")
-        case .downloading:
-            // Progress lives on the meta line while downloading, so the trailing
-            // slot stays empty rather than duplicating it with a percentage.
-            EmptyView()
         case .downloaded:
-            Button { onDeleteDownload(episode.id) } label: {
-                Image(systemName: "trash.circle").font(.title2)
+            Button(role: .destructive) { onDeleteDownload(episode.id) } label: {
+                Label("Delete Download", systemImage: "trash")
             }
-            .buttonStyle(.borderless)
-            .tint(.gray)
-            .accessibilityLabel("Delete download")
+        case .queued:
+            Button {} label: { Label("Queued", systemImage: "clock") }
+                .disabled(true)
+        case .downloading:
+            Button {} label: { Label("Downloading…", systemImage: "arrow.down.circle") }
+                .disabled(true)
         case .removedFromFeed:
-            Image(systemName: "xmark.circle")
-                .font(.title2)
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("Removed from feed")
+            Button {} label: { Label("Removed From Feed", systemImage: "xmark.circle") }
+                .disabled(true)
         }
     }
 
