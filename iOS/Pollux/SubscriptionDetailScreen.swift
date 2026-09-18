@@ -108,7 +108,11 @@ struct SubscriptionDetailScreen: View {
             }
         case .queued, .downloading:
             Button(role: .destructive) { core.update(.cancelDownload(episode.id)) } label: {
-                Label("Cancel", systemImage: "xmark.circle")
+                Label {
+                    Text("Cancel\nDownload")
+                } icon: {
+                    Image(systemName: "xmark.circle")
+                }
             }
         case .removedFromFeed:
             EmptyView()
