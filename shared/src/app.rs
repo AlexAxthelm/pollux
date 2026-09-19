@@ -207,36 +207,54 @@ impl App for Pollux {
                 render()
             }
             Event::DownloadEpisode(episode_id) => {
-                // Only actionable for an episode we have loaded (the details list
-                // today). Already-queued/downloading episodes are a no-op so a
-                // double-tap can't enqueue twice.
+                // Only a not-downloaded or failed (retry) episode can start a
+                // download. Every other state — already queued/downloading, already
+                // downloaded, removed from feed, or an episode we don't have loaded —
+                // is a no-op, so a stray or repeated event can't double-enqueue or
+                // re-download a file we already have.
                 let found = model
                     .episodes
                     .iter()
                     .find(|e| e.id == episode_id)
                     .map(|e| (e.download_status.clone(), e.enclosure_url.clone()));
                 match found {
-                    None
-                    | Some((DownloadStatus::Queued, _))
-                    | Some((DownloadStatus::Downloading, _)) => render(),
-                    Some(_) if !download_allowed(model) => {
-                        // Fail-on-full: unlimited today, so this is unreachable.
-                        // When a storage cap exists this is where a download is
-                        // refused up front and marked Failed instead of started.
-                        set_download_state(model, &episode_id, DownloadStatus::Failed, None, None);
-                        persist_download_state(&episode_id, DownloadStatus::Failed, None, None)
-                            .and(render())
+                    Some((DownloadStatus::NotDownloaded, url))
+                    | Some((DownloadStatus::Failed, url)) => {
+                        if !download_allowed(model) {
+                            // Fail-on-full: unlimited today, so this is unreachable.
+                            // When a storage cap exists this is where a download is
+                            // refused up front and marked Failed instead of started.
+                            set_download_state(
+                                model,
+                                &episode_id,
+                                DownloadStatus::Failed,
+                                None,
+                                None,
+                            );
+                            persist_download_state(&episode_id, DownloadStatus::Failed, None, None)
+                                .and(render())
+                        } else {
+                            set_download_state(
+                                model,
+                                &episode_id,
+                                DownloadStatus::Queued,
+                                None,
+                                None,
+                            );
+                            model.download_queue.push(QueuedDownload {
+                                episode_id: episode_id.clone(),
+                                url,
+                            });
+                            let persist = persist_download_state(
+                                &episode_id,
+                                DownloadStatus::Queued,
+                                None,
+                                None,
+                            );
+                            persist.and(maybe_start_next(model)).and(render())
+                        }
                     }
-                    Some((_, url)) => {
-                        set_download_state(model, &episode_id, DownloadStatus::Queued, None, None);
-                        model.download_queue.push(QueuedDownload {
-                            episode_id: episode_id.clone(),
-                            url,
-                        });
-                        let persist =
-                            persist_download_state(&episode_id, DownloadStatus::Queued, None, None);
-                        persist.and(maybe_start_next(model)).and(render())
-                    }
+                    _ => render(),
                 }
             }
             Event::DownloadProgress {
@@ -1895,6 +1913,31 @@ mod tests {
                 Effect::Download(r) if matches!(&r.operation, DownloadOperation::Cancel { .. })
             )),
             "a queued item needs no shell cancel — nothing is running"
+        );
+    }
+
+    #[test]
+    fn downloading_an_already_downloaded_episode_is_a_noop() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let mut downloaded = make_episode("e1", "Ep", Some(1));
+        downloaded.download_status = DownloadStatus::Downloaded;
+        downloaded.local_path = Some("Downloads/e1.mp3".to_string());
+        load_episodes(&app, &mut model, vec![downloaded]);
+
+        // A stray DownloadEpisode must not re-download a file we already have.
+        let mut cmd = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+
+        assert_eq!(
+            model_episode_status(&model, "e1"),
+            DownloadStatus::Downloaded
+        );
+        assert!(model.download_queue.is_empty());
+        assert!(model.downloading.is_none());
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            !has_download_effect_for(&effects, "e1"),
+            "downloaded episode must not be re-fetched"
         );
     }
 
