@@ -181,12 +181,14 @@ actor DownloadManager {
 /// didWriteData, moves the finished file to `destination` synchronously (the
 /// system-supplied temp file is valid only inside didFinishDownloadingTo), and
 /// resumes the awaiting continuation on completion. A non-2xx response fails it.
+///
+/// The delegate callbacks run on URLSession's delegate queue while `attach` is
+/// called from the caller's thread, so all mutable state is guarded by `lock`
+/// (which is what makes the `@unchecked Sendable` sound).
 private final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     private let destination: URL
     private let onProgress: @Sendable (UInt64, UInt64?) -> Void
-    /// URLSession serializes a session's delegate callbacks on its delegate queue, and
-    /// this delegate drives exactly one task, so the mutable state below is only ever
-    /// touched one call at a time.
+    private let lock = NSLock()
     private var continuation: CheckedContinuation<URL, Error>?
     private var movedURL: URL?
     private var completionError: Error?
@@ -198,6 +200,8 @@ private final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegat
     }
 
     func attach(_ continuation: CheckedContinuation<URL, Error>) {
+        lock.lock()
+        defer { lock.unlock() }
         self.continuation = continuation
     }
 
@@ -210,11 +214,18 @@ private final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegat
             ? UInt64(totalBytesExpectedToWrite) : nil
         // When the size is known, coalesce to whole-percent steps so the core gets at
         // most ~100 updates per download rather than one per network packet. When it's
-        // unknown, forward as-is (already packet-paced).
+        // unknown, forward as-is (already packet-paced). onProgress runs outside the lock.
         if let total, total > 0 {
             let percent = Int(received * 100 / total)
-            guard percent != lastPercent else { return }
-            lastPercent = percent
+            lock.lock()
+            let unchanged = percent == lastPercent
+            if !unchanged {
+                lastPercent = percent
+            }
+            lock.unlock()
+            if unchanged {
+                return
+            }
         }
         onProgress(received, total)
     }
@@ -224,35 +235,48 @@ private final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegat
     ) {
         let status = (downloadTask.response as? HTTPURLResponse)?.statusCode
         if let status, !(200 ..< 300).contains(status) {
-            completionError = DownloadManagerError.badStatus(status)
+            setCompletionError(DownloadManagerError.badStatus(status))
             return
         }
         do {
             // A re-download replaces any previous file at the same path.
             try? FileManager.default.removeItem(at: destination)
             try FileManager.default.moveItem(at: location, to: destination)
+            lock.lock()
             movedURL = destination
+            lock.unlock()
         } catch {
-            completionError = error
+            setCompletionError(error)
         }
     }
 
     func urlSession(
         _: URLSession, task _: URLSessionTask, didCompleteWithError error: Error?,
     ) {
+        // Snapshot under the lock, then resume outside it (resume can run the awaiting
+        // task, which must not happen while we hold the lock).
+        lock.lock()
+        let continuation = continuation
+        self.continuation = nil
+        let finishError = completionError
+        let moved = movedURL
+        lock.unlock()
+
+        guard let continuation else { return }
         if let error {
-            resume(with: .failure(error))
-        } else if let completionError {
-            resume(with: .failure(completionError))
-        } else if let movedURL {
-            resume(with: .success(movedURL))
+            continuation.resume(throwing: error)
+        } else if let finishError {
+            continuation.resume(throwing: finishError)
+        } else if let moved {
+            continuation.resume(returning: moved)
         } else {
-            resume(with: .failure(DownloadManagerError.incomplete))
+            continuation.resume(throwing: DownloadManagerError.incomplete)
         }
     }
 
-    private func resume(with result: Result<URL, Error>) {
-        continuation?.resume(with: result)
-        continuation = nil
+    private func setCompletionError(_ error: Error) {
+        lock.lock()
+        defer { lock.unlock() }
+        completionError = error
     }
 }
