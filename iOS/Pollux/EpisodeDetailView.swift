@@ -148,11 +148,19 @@ struct EpisodeDetailView: View {
                 }
             }
         case .failed:
-            HStack {
-                Label("Download failed", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-                Spacer()
-                Button("Retry") { core.update(.downloadEpisode(episode.id)) }
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Label("Download failed", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(themeColors.error)
+                    Spacer()
+                    Button("Retry") { core.update(.downloadEpisode(episode.id)) }
+                }
+                if let reason = liveEpisode.downloadError {
+                    Text(reason)
+                        .font(.caption)
+                        .foregroundStyle(themeColors.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         case .removedFromFeed:
             Label("Removed from feed", systemImage: "xmark.circle")

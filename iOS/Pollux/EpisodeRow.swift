@@ -64,13 +64,23 @@ struct EpisodeRow: View {
                         .foregroundStyle(glyph.tint)
                         .accessibilityLabel(glyph.label)
                 }
-                if let meta = metaLine {
-                    Text(meta)
+                if let text = metaText {
+                    Text(text)
                         .font(.caption)
+                        .lineLimit(1)
                         .foregroundStyle(themeColors.secondaryText)
                 }
             }
         }
+    }
+
+    /// The date·duration line, replaced by the failure reason when a download failed
+    /// so the row says *why* (disk full, HTTP status, …) next to the warning glyph.
+    private var metaText: String? {
+        if episode.downloadStatus == .failed, let error = episode.downloadError {
+            return error
+        }
+        return metaLine
     }
 
     /// The inline download-status glyph for the date line. `nil` for not-downloaded

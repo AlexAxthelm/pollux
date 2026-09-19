@@ -297,9 +297,12 @@ impl App for Pollux {
                     );
                     persist.and(maybe_start_next(model)).and(render())
                 }
-                DownloadResult::Error(_) => {
+                DownloadResult::Error(reason) => {
                     finish_active(model, &episode_id);
                     set_download_state(model, &episode_id, DownloadStatus::Failed, None, None);
+                    // Keep the shell's specific reason so the UI can show it beside
+                    // Retry (set_download_state cleared any older one above).
+                    model.download_errors.insert(episode_id.clone(), reason);
                     let persist =
                         persist_download_state(&episode_id, DownloadStatus::Failed, None, None);
                     persist.and(maybe_start_next(model)).and(render())
@@ -486,6 +489,11 @@ fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
         }
     }
 
+    // Overlay each failed episode's reason (also transient, not stored on the Episode).
+    for summary in episodes.iter_mut() {
+        summary.download_error = model.download_errors.get(&summary.id).cloned();
+    }
+
     let (subscription_id, title, artwork_url) = match &model.selected_subscription {
         Some(s) => (Some(s.id.clone()), s.title.clone(), s.artwork_url.clone()),
         None => (None, String::new(), None),
@@ -526,10 +534,11 @@ fn episode_summary(e: &Episode) -> EpisodeSummary {
         playback_status: e.playback_status.clone(),
         playback_position_secs: e.playback_position_secs,
         download_status: e.download_status.clone(),
-        // Live progress is overlaid in `build_subscription_detail` for the active
-        // download only; every other row ships without it.
+        // Live progress and the failure reason are overlaid in
+        // `build_subscription_detail`; every row ships without them here.
         download_received_bytes: None,
         download_total_bytes: None,
+        download_error: None,
     }
 }
 
@@ -574,6 +583,11 @@ fn set_download_state(
     local_path: Option<String>,
     size_bytes: Option<u64>,
 ) {
+    // A recorded failure reason is only meaningful while the episode is Failed; every
+    // other transition drops it. The `Error` handler re-inserts after calling this.
+    if !matches!(status, DownloadStatus::Failed) {
+        model.download_errors.remove(episode_id);
+    }
     if let Some(episode) = model.episodes.iter_mut().find(|e| e.id == episode_id) {
         episode.download_status = status;
         episode.local_path = local_path;
@@ -1668,6 +1682,51 @@ mod tests {
         assert_eq!(model.downloading.as_deref(), Some("e2"));
         let effects: Vec<Effect> = cmd.effects().collect();
         assert!(has_download_effect_for(&effects, "e2"));
+    }
+
+    #[test]
+    fn download_failure_reason_is_exposed_on_the_episode() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+
+        let _ = app.update(
+            Event::DownloadFinished {
+                episode_id: "e1".to_string(),
+                result: Box::new(DownloadResult::Error("disk full".to_string())),
+            },
+            &mut model,
+        );
+
+        // The specific reason rides along on the failed episode's summary.
+        let summary = &app.view(&model).subscription_detail.episodes[0];
+        assert_eq!(summary.download_status, DownloadStatus::Failed);
+        assert_eq!(summary.download_error.as_deref(), Some("disk full"));
+    }
+
+    #[test]
+    fn retrying_a_failed_download_clears_the_reason() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        let _ = app.update(
+            Event::DownloadFinished {
+                episode_id: "e1".to_string(),
+                result: Box::new(DownloadResult::Error("boom".to_string())),
+            },
+            &mut model,
+        );
+        assert!(!model.download_errors.is_empty());
+
+        // Retrying (a DownloadEpisode on the failed episode) clears the reason and
+        // starts over.
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        assert!(model.download_errors.is_empty());
+        let summary = &app.view(&model).subscription_detail.episodes[0];
+        assert!(summary.download_error.is_none());
+        assert_eq!(summary.download_status, DownloadStatus::Downloading);
     }
 
     #[test]

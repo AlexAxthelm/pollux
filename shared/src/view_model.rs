@@ -63,4 +63,8 @@ pub struct EpisodeSummary {
     /// Transient and never persisted (see `Model::active_download_progress`).
     pub download_received_bytes: Option<u64>,
     pub download_total_bytes: Option<u64>,
+    /// Why the download failed, present only for a `Failed` episode. Lets the shell
+    /// show the specific reason (disk full, HTTP status, …) beside Retry rather than
+    /// a generic message. Transient (see `Model::download_errors`).
+    pub download_error: Option<String>,
 }

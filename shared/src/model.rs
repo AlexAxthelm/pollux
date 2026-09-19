@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::domain::{Episode, EpisodeSortOrder, Subscription};
 use crate::theme::{ThemeId, ThemeMode};
 
@@ -29,6 +31,13 @@ pub struct Model {
     // stored percentage would only be stale. Cleared when a download ends or the
     // next one starts.
     pub active_download_progress: Option<DownloadProgress>,
+
+    // Why a download failed, keyed by episode id, so the shell's specific reason
+    // (disk full, HTTP status, filesystem error) can be shown beside Retry instead
+    // of a generic "failed". In-memory only (like progress) and cleared as soon as
+    // the episode leaves the Failed state; the persisted status is enough to know it
+    // failed across a restart.
+    pub download_errors: HashMap<String, String>,
 
     // Active theme selection. Defaults (System / FollowSystem) reproduce the OS's
     // native appearance. Hard-coded for now — no UI changes it until the Settings
