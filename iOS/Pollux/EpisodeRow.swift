@@ -50,18 +50,19 @@ struct EpisodeRow: View {
     }
 
     /// The date·duration line — except while downloading, when it is replaced by a
-    /// progress indicator. A downloaded episode gets a small filled-download glyph
-    /// ahead of the date so status reads inline instead of on its own badge line.
+    /// progress indicator. Non-not-downloaded states get a small glyph ahead of the
+    /// date so status reads inline instead of on its own badge line — otherwise
+    /// queued/failed/removed rows would look identical to a plain undownloaded one.
     @ViewBuilder private var metaRow: some View {
         if episode.downloadStatus == .downloading {
             downloadingLine
         } else {
             HStack(spacing: 4) {
-                if episode.downloadStatus == .downloaded {
-                    Image(systemName: "arrow.down.circle.fill")
+                if let glyph = statusGlyph {
+                    Image(systemName: glyph.icon)
                         .font(.caption)
-                        .foregroundStyle(themeColors.secondaryText)
-                        .accessibilityLabel("Downloaded")
+                        .foregroundStyle(glyph.tint)
+                        .accessibilityLabel(glyph.label)
                 }
                 if let meta = metaLine {
                     Text(meta)
@@ -69,6 +70,24 @@ struct EpisodeRow: View {
                         .foregroundStyle(themeColors.secondaryText)
                 }
             }
+        }
+    }
+
+    /// The inline download-status glyph for the date line. `nil` for not-downloaded
+    /// (a plain date) and downloading (handled by `downloadingLine`). Failed uses the
+    /// error color to stand out; the rest are neutral.
+    private var statusGlyph: StatusGlyph? {
+        switch episode.downloadStatus {
+        case .downloaded:
+            StatusGlyph(icon: "arrow.down.circle.fill", tint: themeColors.secondaryText, label: "Downloaded")
+        case .queued:
+            StatusGlyph(icon: "clock", tint: themeColors.secondaryText, label: "Queued for download")
+        case .failed:
+            StatusGlyph(icon: "exclamationmark.triangle.fill", tint: themeColors.error, label: "Download failed")
+        case .removedFromFeed:
+            StatusGlyph(icon: "xmark.circle", tint: themeColors.secondaryText, label: "Removed from feed")
+        case .notDownloaded, .downloading:
+            nil
         }
     }
 
@@ -180,6 +199,13 @@ struct EpisodeRow: View {
         }
         return "at \(position)"
     }
+}
+
+/// Inline download-status glyph shown before the date on an episode row.
+private struct StatusGlyph {
+    let icon: String
+    let tint: Color
+    let label: String
 }
 
 /// A compact read-only status indicator (real data, theme colors).
