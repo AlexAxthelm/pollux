@@ -74,30 +74,41 @@ class Core: ObservableObject {
             }
 
         case let .download(operation):
-            // The heavy I/O runs on the DownloadManager actor's executor; awaiting
-            // it from a MainActor task only parks the continuation, so this doesn't
-            // block the UI (same shape as the storage arm above). Live byte progress
-            // comes back through the onProgress callback as ordinary DownloadProgress
-            // events while the one-shot request is still in flight.
-            let progressEpisodeId: String? = {
-                if case let .download(episodeId, _) = operation {
-                    return episodeId
-                }
-                return nil
-            }()
-            Task { @MainActor in
-                let result = await downloads.perform(operation) { [weak self] received, total in
-                    guard let progressEpisodeId else { return }
-                    Task { @MainActor in
-                        self?.update(.downloadProgress(
-                            episodeId: progressEpisodeId,
-                            receivedBytes: received,
-                            totalBytes: total,
-                        ))
-                    }
-                }
-                resolveAndDispatch(requestId: request.id, result: result)
+            handleDownload(operation, requestId: request.id)
+        }
+    }
+
+    /// Runs a download-capability operation on the DownloadManager actor (so the UI
+    /// isn't blocked) and resolves the request with its terminal result. Byte progress
+    /// is funnelled through a stream drained by a single consumer, so DownloadProgress
+    /// events reach the core in order — a Task-per-callback could reorder them.
+    private func handleDownload(_ operation: DownloadOperation, requestId: UInt32) {
+        let progressEpisodeId: String? = {
+            if case let .download(episodeId, _) = operation {
+                return episodeId
             }
+            return nil
+        }()
+        Task { @MainActor in
+            let (progressStream, progressContinuation) =
+                AsyncStream.makeStream(of: (UInt64, UInt64?).self)
+            let consumer = Task { @MainActor [weak self] in
+                for await (received, total) in progressStream {
+                    guard let progressEpisodeId else { continue }
+                    self?.update(.downloadProgress(
+                        episodeId: progressEpisodeId,
+                        receivedBytes: received,
+                        totalBytes: total,
+                    ))
+                }
+            }
+            let result = await downloads.perform(operation) { received, total in
+                progressContinuation.yield((received, total))
+            }
+            // Drain any buffered progress before the terminal result lands.
+            progressContinuation.finish()
+            await consumer.value
+            resolveAndDispatch(requestId: requestId, result: result)
         }
     }
 
