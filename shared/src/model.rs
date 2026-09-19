@@ -1,4 +1,5 @@
 use crate::domain::{Episode, EpisodeSortOrder, Subscription};
+use crate::theme::{ThemeId, ThemeMode};
 
 #[derive(Default)]
 pub struct Model {
@@ -28,6 +29,12 @@ pub struct Model {
     // stored percentage would only be stale. Cleared when a download ends or the
     // next one starts.
     pub active_download_progress: Option<DownloadProgress>,
+
+    // Active theme selection. Defaults (System / FollowSystem) reproduce the OS's
+    // native appearance. Hard-coded for now — no UI changes it until the Settings
+    // appearance section lands and drives `Event::SetTheme`.
+    pub theme_id: ThemeId,
+    pub theme_mode: ThemeMode,
 }
 
 /// An episode waiting to be downloaded. Carries the enclosure URL so the download

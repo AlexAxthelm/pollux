@@ -8,6 +8,7 @@ import SwiftUI
 /// state is read live from `core.view` so it updates while the page is open.
 struct EpisodeDetailView: View {
     @ObservedObject var core: Core
+    @Environment(\.themeColors) private var themeColors
     let episode: EpisodeSummary
     let feedTitle: String
 
@@ -38,6 +39,7 @@ struct EpisodeDetailView: View {
             }
             .padding()
         }
+        .background(themeColors.background)
         .navigationTitle(episode.title)
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -52,13 +54,14 @@ struct EpisodeDetailView: View {
             Text(episode.title)
                 .font(.title3)
                 .fontWeight(.bold)
+                .foregroundStyle(themeColors.text)
             Text(feedTitle)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themeColors.secondaryText)
             if let meta = metaLine {
                 Text(meta)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themeColors.secondaryText)
             }
         }
     }
@@ -86,7 +89,7 @@ struct EpisodeDetailView: View {
                     .foregroundStyle(Color.debug)
                 Text("No playback engine yet")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themeColors.secondaryText)
             }
         }
         .frame(maxWidth: .infinity)
@@ -173,12 +176,13 @@ struct EpisodeDetailView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Show notes")
                 .font(.headline)
+                .foregroundStyle(themeColors.text)
             if let description = episode.description, !description.isEmpty {
                 ShowNotesText(html: description, fallback: episode.descriptionText)
             } else {
                 Text("No show notes.")
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themeColors.secondaryText)
             }
         }
     }
@@ -191,6 +195,7 @@ struct EpisodeDetailView: View {
 /// A feature section whose backend doesn't exist yet: DEBUG-tinted title + STUB
 /// badge so it's clearly non-functional.
 private struct PlaceholderSection: View {
+    @Environment(\.themeColors) private var themeColors
     let title: String
     let note: String
 
@@ -205,7 +210,7 @@ private struct PlaceholderSection: View {
             }
             Text(note)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themeColors.secondaryText)
         }
     }
 }

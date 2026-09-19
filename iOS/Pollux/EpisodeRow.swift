@@ -6,6 +6,7 @@ import SwiftUI
 /// download control. Playback and more-actions remain DEBUG-tinted, disabled
 /// placeholders because their engines don't exist yet — see `DebugStyle.swift`.
 struct EpisodeRow: View {
+    @Environment(\.themeColors) private var themeColors
     let episode: EpisodeSummary
     /// Queue this episode for download (or retry a failed one).
     let onDownload: (String) -> Void
@@ -22,6 +23,7 @@ struct EpisodeRow: View {
                 Text(episode.title)
                     .font(.subheadline)
                     .fontWeight(.semibold)
+                    .foregroundStyle(themeColors.text)
                     .lineLimit(2)
 
                 metaRow
@@ -29,7 +31,7 @@ struct EpisodeRow: View {
                 if let description = episode.descriptionText, !description.isEmpty {
                     Text(description)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themeColors.secondaryText)
                         .lineLimit(1)
                 }
 
@@ -58,13 +60,13 @@ struct EpisodeRow: View {
                 if episode.downloadStatus == .downloaded {
                     Image(systemName: "arrow.down.circle.fill")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themeColors.secondaryText)
                         .accessibilityLabel("Downloaded")
                 }
                 if let meta = metaLine {
                     Text(meta)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themeColors.secondaryText)
                 }
             }
         }
@@ -85,7 +87,7 @@ struct EpisodeRow: View {
                 ProgressView()
                 Text(progress?.label ?? "Downloading…")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themeColors.secondaryText)
             }
             .accessibilityLabel("Downloading \(progress?.label ?? "")")
         }
@@ -180,15 +182,16 @@ struct EpisodeRow: View {
     }
 }
 
-/// A compact read-only status indicator (real data, semantic colors).
+/// A compact read-only status indicator (real data, theme colors).
 private struct StatusBadge: View {
+    @Environment(\.themeColors) private var themeColors
     let systemImage: String
     let text: String
 
     var body: some View {
         Label(text, systemImage: systemImage)
             .font(.caption2)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(themeColors.secondaryText)
             .labelStyle(.titleAndIcon)
     }
 }

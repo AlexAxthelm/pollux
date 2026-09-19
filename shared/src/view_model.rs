@@ -2,11 +2,15 @@ use facet::Facet;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::{DownloadStatus, EpisodeSortOrder, PlaybackStatus};
+use crate::theme::ThemeView;
 
 #[derive(Facet, Serialize, Deserialize, Clone, Default)]
 pub struct ViewModel {
     pub library: LibraryView,
     pub subscription_detail: SubscriptionDetailView,
+    /// Active theme, resolved by the shell into platform colors. Present on every
+    /// render so the shell can apply it globally without a separate query.
+    pub theme: ThemeView,
 }
 
 #[derive(Facet, Serialize, Deserialize, Clone, Default)]

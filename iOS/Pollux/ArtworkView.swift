@@ -3,6 +3,7 @@ import SwiftUI
 /// Square podcast/episode artwork loaded from a URL, with a neutral placeholder
 /// while loading or when the URL is missing or fails.
 struct ArtworkView: View {
+    @Environment(\.themeColors) private var themeColors
     let urlString: String?
     var size: CGFloat = 56
 
@@ -12,7 +13,7 @@ struct ArtworkView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(.quaternary, lineWidth: 0.5),
+                    .strokeBorder(themeColors.secondaryBackground, lineWidth: 0.5),
             )
     }
 
@@ -34,11 +35,13 @@ struct ArtworkView: View {
     }
 
     private var placeholder: some View {
+        // Placeholder surface uses the secondary-background token (base01); the
+        // glyph on top uses the secondary-text token.
         Rectangle()
-            .fill(.quaternary)
+            .fill(themeColors.secondaryBackground)
             .overlay(
                 Image(systemName: "music.mic")
-                    .foregroundStyle(.secondary),
+                    .foregroundStyle(themeColors.secondaryText),
             )
     }
 }
