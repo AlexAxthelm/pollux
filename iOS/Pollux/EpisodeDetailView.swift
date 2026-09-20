@@ -105,7 +105,7 @@ struct EpisodeDetailView: View {
         case .queued:
             HStack {
                 Label("Queued for download", systemImage: "clock")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themeColors.secondaryText)
                 Spacer()
                 cancelButton
             }
@@ -124,7 +124,7 @@ struct EpisodeDetailView: View {
                         Text(progress.label)
                             .font(.caption)
                             .monospacedDigit()
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeColors.secondaryText)
                     } else {
                         Label {
                             Text("Downloading…")
@@ -139,7 +139,7 @@ struct EpisodeDetailView: View {
         case .downloaded:
             HStack {
                 Label("Downloaded", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(themeColors.success)
                 Spacer()
                 Button(role: .destructive) {
                     core.update(.deleteDownload(episode.id))
@@ -164,7 +164,7 @@ struct EpisodeDetailView: View {
             }
         case .removedFromFeed:
             Label("Removed from feed", systemImage: "xmark.circle")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themeColors.secondaryText)
         }
     }
 

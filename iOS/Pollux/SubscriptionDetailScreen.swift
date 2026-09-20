@@ -101,12 +101,12 @@ struct SubscriptionDetailScreen: View {
             Button { core.update(.downloadEpisode(episode.id)) } label: {
                 Label("Download", systemImage: "arrow.down.circle")
             }
-            .tint(.blue)
+            .tint(themeColors.accent)
         case .failed:
             Button { core.update(.downloadEpisode(episode.id)) } label: {
                 Label("Retry", systemImage: "arrow.clockwise.circle")
             }
-            .tint(.orange)
+            .tint(themeColors.warning)
         case .downloaded:
             Button(role: .destructive) { core.update(.deleteDownload(episode.id)) } label: {
                 Label("Delete", systemImage: "trash")
