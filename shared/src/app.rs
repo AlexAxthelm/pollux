@@ -310,21 +310,12 @@ impl App for Pollux {
                 DownloadResult::Cancelled => {
                     // The shell cancelled the task and flushed the partial file, so
                     // the episode goes back to not-downloaded and the queue drains on.
+                    // This is the *sole* owner of a cancelled download's state reset —
+                    // the `Cancel` operation's own ack (DownloadCanceled) does nothing.
                     finish_active(model, &episode_id);
-                    set_download_state(
-                        model,
-                        &episode_id,
-                        DownloadStatus::NotDownloaded,
-                        None,
-                        None,
-                    );
-                    let persist = persist_download_state(
-                        &episode_id,
-                        DownloadStatus::NotDownloaded,
-                        None,
-                        None,
-                    );
-                    persist.and(maybe_start_next(model)).and(render())
+                    reset_to_not_downloaded(model, &episode_id)
+                        .and(maybe_start_next(model))
+                        .and(render())
                 }
                 // Deleted never arrives here (it resolves DeleteDownload instead).
                 DownloadResult::Deleted => render(),
@@ -345,28 +336,22 @@ impl App for Pollux {
                     .position(|q| q.episode_id == episode_id)
                 {
                     // Queued but not started: just drop it from the queue and reset —
-                    // nothing is running and no file exists yet.
+                    // nothing is running and no file exists yet, so no shell cancel is
+                    // needed and the reset happens synchronously here.
                     model.download_queue.remove(pos);
-                    set_download_state(
-                        model,
-                        &episode_id,
-                        DownloadStatus::NotDownloaded,
-                        None,
-                        None,
-                    );
-                    persist_download_state(&episode_id, DownloadStatus::NotDownloaded, None, None)
-                        .and(render())
+                    reset_to_not_downloaded(model, &episode_id).and(render())
                 } else {
                     // Not downloading and not queued — nothing to cancel.
                     render()
                 }
             }
-            Event::DownloadCanceled(result) => {
-                // Best-effort: the reset rides on the Download request's Cancelled
-                // resolution; only surface a failure to cancel here.
-                if let DownloadResult::Error(e) = *result {
-                    model.detail_error = Some(e);
-                }
+            Event::DownloadCanceled(_result) => {
+                // The `Cancel` request must be resolved (the shell resolves every
+                // request), so this is its required sink — nothing more. The actual
+                // state reset is owned entirely by the in-flight `Download` request
+                // resolving `Cancelled` (see DownloadFinished above); if the cancel
+                // somehow didn't take, that download simply resolves normally, so
+                // there is nothing to surface here.
                 render()
             }
             Event::DeleteDownload(episode_id) => {
@@ -388,34 +373,13 @@ impl App for Pollux {
                     None => {
                         // Nothing on disk (e.g. a Failed row): normalize to
                         // NotDownloaded without a filesystem round-trip.
-                        set_download_state(
-                            model,
-                            &episode_id,
-                            DownloadStatus::NotDownloaded,
-                            None,
-                            None,
-                        );
-                        persist_download_state(
-                            &episode_id,
-                            DownloadStatus::NotDownloaded,
-                            None,
-                            None,
-                        )
-                        .and(render())
+                        reset_to_not_downloaded(model, &episode_id).and(render())
                     }
                 }
             }
             Event::DownloadDeleted { episode_id, result } => match *result {
                 DownloadResult::Deleted => {
-                    set_download_state(
-                        model,
-                        &episode_id,
-                        DownloadStatus::NotDownloaded,
-                        None,
-                        None,
-                    );
-                    persist_download_state(&episode_id, DownloadStatus::NotDownloaded, None, None)
-                        .and(render())
+                    reset_to_not_downloaded(model, &episode_id).and(render())
                 }
                 DownloadResult::Error(e) => {
                     // The file couldn't be removed; leave the row as-is and surface
@@ -490,8 +454,11 @@ fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
     }
 
     // Overlay each failed episode's reason (also transient, not stored on the Episode).
-    for summary in episodes.iter_mut() {
-        summary.download_error = model.download_errors.get(&summary.id).cloned();
+    // Skipped entirely when nothing has failed, which is the common case.
+    if !model.download_errors.is_empty() {
+        for summary in episodes.iter_mut() {
+            summary.download_error = model.download_errors.get(&summary.id).cloned();
+        }
     }
 
     let (subscription_id, title, artwork_url) = match &model.selected_subscription {
@@ -618,6 +585,14 @@ fn persist_download_state(
     .then_send(|r| Event::DownloadStatePersisted(Box::new(r)))
 }
 
+/// Resets an episode to not-downloaded (in the model) and returns the command that
+/// persists it. The single shape used everywhere a download ends without a file —
+/// cancelling an active or queued download, and deleting a stored one.
+fn reset_to_not_downloaded(model: &mut Model, episode_id: &str) -> Command<Effect, Event> {
+    set_download_state(model, episode_id, DownloadStatus::NotDownloaded, None, None);
+    persist_download_state(episode_id, DownloadStatus::NotDownloaded, None, None)
+}
+
 /// Clears the in-flight marker (and its live progress) when the active download
 /// reaches a terminal state.
 fn finish_active(model: &mut Model, episode_id: &str) {
@@ -685,9 +660,8 @@ pub enum Event {
     DeleteDownload(String),
     /// Stop an in-flight or queued download and reset the episode to not-downloaded.
     CancelDownload(String),
-    /// Result of asking the shell to cancel an in-flight download. The state reset
-    /// rides on the `Download` request resolving `Cancelled`; this only surfaces a
-    /// cancel error.
+    /// Required resolution sink for the `Cancel` request — carries no state change.
+    /// The reset is owned by the in-flight `Download` request resolving `Cancelled`.
     DownloadCanceled(Box<DownloadResult>),
     /// Live byte progress for the in-flight download, reported by the shell while
     /// the one-shot download request is still running. Transient — not persisted.
