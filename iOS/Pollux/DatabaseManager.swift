@@ -213,6 +213,12 @@ actor DatabaseManager {
     }
 
     private func listPendingDownloads() throws -> StorageResult {
+        // Known limitation: enqueue order isn't persisted, so a relaunch rebuilds the
+        // queue by pub_date rather than the order the user queued them (and may start a
+        // previously-Queued item before the one that was actively Downloading). Fine for
+        // the serial MVP; revisit when the download queue gains explicit ordering — a
+        // persisted sequence column, restoring the active item first — alongside the
+        // downloads page / re-ordering / parallel-downloads work (see ROADMAP Phase 5).
         let rows = try db.read { db -> [Row] in
             try Row.fetchAll(
                 db,
