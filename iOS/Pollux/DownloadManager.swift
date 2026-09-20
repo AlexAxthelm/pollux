@@ -35,6 +35,12 @@ enum DownloadManagerError: Error, LocalizedError {
 actor DownloadManager {
     private let storageRoot: URL
     private let downloadsDir: URL
+    /// Configuration for the download session. Injectable so tests can register a
+    /// stub `URLProtocol` instead of hitting the network.
+    private let sessionConfiguration: URLSessionConfiguration
+    /// Progress-report throttle passed to the session delegate (see there). Injectable
+    /// so tests don't depend on a real one-second wall-clock gap.
+    private let reportInterval: TimeInterval
 
     /// The in-flight download's task and episode, so a Cancel operation can find and
     /// cancel it. At most one at a time (downloads are serial). Set before the await
@@ -44,14 +50,32 @@ actor DownloadManager {
     /// Subdirectory (and stored-path prefix) for downloaded audio.
     private static let subdirectory = "Downloads"
 
-    init() throws {
-        guard let support = FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask,
-        ).first else {
-            throw DownloadManagerError.storageUnavailable
+    /// - Parameters:
+    ///   - storageRoot: where downloads live; defaults to Application Support. Tests
+    ///     pass a temporary directory.
+    ///   - sessionConfiguration: URLSession configuration; tests register a stub
+    ///     `URLProtocol` here.
+    ///   - reportInterval: throttle for progress reports on unknown-size downloads.
+    init(
+        storageRoot: URL? = nil,
+        sessionConfiguration: URLSessionConfiguration = .default,
+        reportInterval: TimeInterval = 1,
+    ) throws {
+        let root: URL
+        if let storageRoot {
+            root = storageRoot
+        } else {
+            guard let support = FileManager.default.urls(
+                for: .applicationSupportDirectory, in: .userDomainMask,
+            ).first else {
+                throw DownloadManagerError.storageUnavailable
+            }
+            root = support
         }
-        storageRoot = support
-        downloadsDir = support.appendingPathComponent(Self.subdirectory, isDirectory: true)
+        self.storageRoot = root
+        downloadsDir = root.appendingPathComponent(Self.subdirectory, isDirectory: true)
+        self.sessionConfiguration = sessionConfiguration
+        self.reportInterval = reportInterval
     }
 
     /// `onProgress(received, total)` is called with byte counts while a download runs
@@ -89,8 +113,12 @@ actor DownloadManager {
             // delegate reports progress, moves the finished temp file to `destination`
             // (the system temp file is valid only inside didFinishDownloadingTo), and
             // resumes the await; a non-2xx response fails the download.
-            let delegate = DownloadSessionDelegate(destination: destination, onProgress: onProgress)
-            let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+            let delegate = DownloadSessionDelegate(
+                destination: destination, reportInterval: reportInterval, onProgress: onProgress,
+            )
+            let session = URLSession(
+                configuration: sessionConfiguration, delegate: delegate, delegateQueue: nil,
+            )
             let task = session.downloadTask(with: url)
             // Registered before the await so a Cancel can reach it; cleared after.
             activeTask = (episodeId: episodeId, task: task)
@@ -197,12 +225,22 @@ private final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegat
     private var movedURL: URL?
     private var completionError: Error?
     private var lastPercent = -1
+    /// Last time an indeterminate-size download reported progress, for time throttling.
+    private var lastReportAt = Date.distantPast
     /// Bytes written so far; the final value is the completed file's size, so it can be
     /// reported without a filesystem re-read (which could fail and record a size of 0).
     private var receivedBytes: UInt64 = 0
 
-    init(destination: URL, onProgress: @escaping @Sendable (UInt64, UInt64?) -> Void) {
+    /// Minimum spacing between progress reports when the total size is unknown and
+    /// there is no percentage to coalesce on (~1 update per second in production).
+    private let reportInterval: TimeInterval
+
+    init(
+        destination: URL, reportInterval: TimeInterval,
+        onProgress: @escaping @Sendable (UInt64, UInt64?) -> Void,
+    ) {
         self.destination = destination
+        self.reportInterval = reportInterval
         self.onProgress = onProgress
     }
 
@@ -219,17 +257,24 @@ private final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegat
         let received = UInt64(max(0, totalBytesWritten))
         let total: UInt64? = totalBytesExpectedToWrite > 0
             ? UInt64(totalBytesExpectedToWrite) : nil
-        // Record every callback (so the final value is the completed size), but when the
-        // size is known coalesce onProgress to whole-percent steps so the core gets at
-        // most ~100 updates per download. onProgress runs outside the lock.
+        // Record every callback (so the final value is the completed size), but coalesce
+        // onProgress so the core isn't flooded with an update per write: to whole-percent
+        // steps when the size is known (~100 updates), or to ~1/sec when it isn't (no
+        // percentage to step on). onProgress runs outside the lock.
         lock.lock()
         receivedBytes = received
-        var report = true
+        let report: Bool
         if let total, total > 0 {
             let percent = Int(received * 100 / total)
             report = percent != lastPercent
             if report {
                 lastPercent = percent
+            }
+        } else {
+            let now = Date()
+            report = now.timeIntervalSince(lastReportAt) >= reportInterval
+            if report {
+                lastReportAt = now
             }
         }
         lock.unlock()
