@@ -101,12 +101,13 @@ actor DownloadManager {
                 session.finishTasksAndInvalidate()
             }
 
-            let finalURL: URL = try await withCheckedThrowingContinuation { continuation in
+            // The delegate reports the completed file's byte count, so there's no
+            // filesystem re-read that could fail and record a size of 0.
+            let (_, size): (URL, UInt64) = try await withCheckedThrowingContinuation { continuation in
                 delegate.attach(continuation)
                 task.resume()
             }
 
-            let size = fileSize(at: finalURL)
             let relativePath = "\(Self.subdirectory)/\(fileName)"
             return .completed(localPath: relativePath, sizeBytes: size)
         } catch {
@@ -166,15 +167,6 @@ actor DownloadManager {
         let ext = url.pathExtension
         return ext.isEmpty ? base : "\(base).\(ext)"
     }
-
-    private func fileSize(at url: URL) -> UInt64 {
-        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-              let size = attributes[.size] as? UInt64
-        else {
-            return 0
-        }
-        return size
-    }
 }
 
 /// Session delegate driving a single download. Reports byte progress via
@@ -189,17 +181,20 @@ private final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegat
     private let destination: URL
     private let onProgress: @Sendable (UInt64, UInt64?) -> Void
     private let lock = NSLock()
-    private var continuation: CheckedContinuation<URL, Error>?
+    private var continuation: CheckedContinuation<(URL, UInt64), Error>?
     private var movedURL: URL?
     private var completionError: Error?
     private var lastPercent = -1
+    /// Bytes written so far; the final value is the completed file's size, so it can be
+    /// reported without a filesystem re-read (which could fail and record a size of 0).
+    private var receivedBytes: UInt64 = 0
 
     init(destination: URL, onProgress: @escaping @Sendable (UInt64, UInt64?) -> Void) {
         self.destination = destination
         self.onProgress = onProgress
     }
 
-    func attach(_ continuation: CheckedContinuation<URL, Error>) {
+    func attach(_ continuation: CheckedContinuation<(URL, UInt64), Error>) {
         lock.lock()
         defer { lock.unlock() }
         self.continuation = continuation
@@ -212,22 +207,23 @@ private final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegat
         let received = UInt64(max(0, totalBytesWritten))
         let total: UInt64? = totalBytesExpectedToWrite > 0
             ? UInt64(totalBytesExpectedToWrite) : nil
-        // When the size is known, coalesce to whole-percent steps so the core gets at
-        // most ~100 updates per download rather than one per network packet. When it's
-        // unknown, forward as-is (already packet-paced). onProgress runs outside the lock.
+        // Record every callback (so the final value is the completed size), but when the
+        // size is known coalesce onProgress to whole-percent steps so the core gets at
+        // most ~100 updates per download. onProgress runs outside the lock.
+        lock.lock()
+        receivedBytes = received
+        var report = true
         if let total, total > 0 {
             let percent = Int(received * 100 / total)
-            lock.lock()
-            let unchanged = percent == lastPercent
-            if !unchanged {
+            report = percent != lastPercent
+            if report {
                 lastPercent = percent
             }
-            lock.unlock()
-            if unchanged {
-                return
-            }
         }
-        onProgress(received, total)
+        lock.unlock()
+        if report {
+            onProgress(received, total)
+        }
     }
 
     func urlSession(
@@ -260,6 +256,7 @@ private final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegat
         self.continuation = nil
         let finishError = completionError
         let moved = movedURL
+        let bytes = receivedBytes
         lock.unlock()
 
         guard let continuation else { return }
@@ -268,7 +265,7 @@ private final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegat
         } else if let finishError {
             continuation.resume(throwing: finishError)
         } else if let moved {
-            continuation.resume(returning: moved)
+            continuation.resume(returning: (moved, bytes))
         } else {
             continuation.resume(throwing: DownloadManagerError.incomplete)
         }
