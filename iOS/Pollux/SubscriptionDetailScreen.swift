@@ -71,26 +71,49 @@ struct SubscriptionDetailScreen: View {
                     .foregroundStyle(themeColors.secondaryText)
             }
         } else {
-            List(detail.episodes, id: \.id) { episode in
-                NavigationLink(value: episode) {
-                    EpisodeRow(
-                        episode: episode,
-                        onDownload: { core.update(.downloadEpisode($0)) },
-                        onDeleteDownload: { core.update(.deleteDownload($0)) },
-                        onCancelDownload: { core.update(.cancelDownload($0)) },
-                    )
+            VStack(spacing: 0) {
+                if let notice = detail.downloadNotice {
+                    downloadNoticeBanner(notice)
                 }
-                // Spec default: short swipe-right → Download / Delete. This is the
-                // one actionable swipe today (flag / mark-played have no engine yet);
-                // it becomes user-configurable when Settings lands.
-                .swipeActions(edge: .leading, allowsFullSwipe: fullSwipeAllowed(episode)) {
-                    downloadSwipeButton(for: episode)
+                List(detail.episodes, id: \.id) { episode in
+                    NavigationLink(value: episode) {
+                        EpisodeRow(
+                            episode: episode,
+                            onDownload: { core.update(.downloadEpisode($0)) },
+                            onDeleteDownload: { core.update(.deleteDownload($0)) },
+                            onCancelDownload: { core.update(.cancelDownload($0)) },
+                        )
+                    }
+                    // Spec default: short swipe-right → Download / Delete. This is the
+                    // one actionable swipe today (flag / mark-played have no engine yet);
+                    // it becomes user-configurable when Settings lands.
+                    .swipeActions(edge: .leading, allowsFullSwipe: fullSwipeAllowed(episode)) {
+                        downloadSwipeButton(for: episode)
+                    }
+                    .listRowBackground(themeColors.background)
                 }
-                .listRowBackground(themeColors.background)
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
         }
+    }
+
+    /// Non-blocking banner for a failed download *operation* (a persistence write or
+    /// file removal). Unlike the list-load error it sits above the episodes and leaves
+    /// every row and control in place; it clears itself on the next download action.
+    private func downloadNoticeBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+            Text(message)
+                .font(.caption)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(themeColors.error)
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(themeColors.secondaryBackground)
     }
 
     /// Leading-swipe download action, mirroring the row's menu: Download when absent,

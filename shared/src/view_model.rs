@@ -38,6 +38,10 @@ pub struct SubscriptionDetailView {
     pub sort_order: EpisodeSortOrder,
     pub loading: bool,
     pub error: Option<String>,
+    /// A transient, non-blocking notice for a failed download *operation* (a
+    /// persistence write or file removal that didn't take). Shown as a banner that
+    /// leaves the episode list and its controls intact, unlike `error`.
+    pub download_notice: Option<String>,
 }
 
 /// Read-only projection of an `Episode` for display. Dates and durations stay raw

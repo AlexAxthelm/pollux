@@ -39,6 +39,13 @@ pub struct Model {
     // failed across a restart.
     pub download_errors: HashMap<String, String>,
 
+    // A transient, non-blocking notice for a download *operation* that failed without
+    // changing the episode's state — a persistence write that didn't commit, or a file
+    // that couldn't be removed. Shown as a dismissible banner on the details page (NOT
+    // through `detail_error`, which replaces the whole episode list). Cleared when the
+    // user starts another download action or the next persistence write succeeds.
+    pub download_notice: Option<String>,
+
     // Active theme selection. Defaults (System / FollowSystem) reproduce the OS's
     // native appearance. Hard-coded for now — no UI changes it until the Settings
     // appearance section lands and drives `Event::SetTheme`.

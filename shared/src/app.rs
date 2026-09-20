@@ -163,6 +163,8 @@ impl App for Pollux {
                     model.episodes.clear();
                     model.detail_loading = true;
                     model.detail_error = None;
+                    // A notice from the previous feed doesn't apply to this one.
+                    model.download_notice = None;
                     Command::request_from_shell(StorageOperation::ListEpisodesBySubscription {
                         subscription_id: id.clone(),
                     })
@@ -208,6 +210,8 @@ impl App for Pollux {
                 render()
             }
             Event::DownloadEpisode(episode_id) => {
+                // A fresh user action supersedes any stale op-failure notice.
+                model.download_notice = None;
                 // Only a not-downloaded or failed (retry) episode can start a
                 // download. Every other state — already queued/downloading, already
                 // downloaded, removed from feed, or an episode we don't have loaded —
@@ -321,6 +325,8 @@ impl App for Pollux {
                 DownloadResult::Deleted => render(),
             },
             Event::CancelDownload(episode_id) => {
+                // A fresh user action supersedes any stale op-failure notice.
+                model.download_notice = None;
                 if model.downloading.as_deref() == Some(episode_id.as_str()) {
                     // Active download: ask the shell to cancel the task and flush the
                     // partial file. The in-flight Download request then resolves as
@@ -355,6 +361,8 @@ impl App for Pollux {
                 render()
             }
             Event::DeleteDownload(episode_id) => {
+                // A fresh user action supersedes any stale op-failure notice.
+                model.download_notice = None;
                 let local_path = model
                     .episodes
                     .iter()
@@ -382,9 +390,10 @@ impl App for Pollux {
                     reset_to_not_downloaded(model, &episode_id).and(render())
                 }
                 DownloadResult::Error(e) => {
-                    // The file couldn't be removed; leave the row as-is and surface
-                    // why on the details page rather than lying about the state.
-                    model.detail_error = Some(e);
+                    // The file couldn't be removed; leave the row (still Downloaded) as
+                    // it is and surface why through the non-blocking notice rather than
+                    // the list-load error, which would hide every episode and control.
+                    model.download_notice = Some(format!("Couldn't remove the download: {e}"));
                     render()
                 }
                 // Only Deleted/Error arrive from a Delete request; the rest are
@@ -392,8 +401,15 @@ impl App for Pollux {
                 DownloadResult::Completed { .. } | DownloadResult::Cancelled => render(),
             },
             Event::DownloadStatePersisted(result) => {
-                if let StorageResult::Error(e) = *result {
-                    model.detail_error = Some(e);
+                match *result {
+                    // A durability failure: the UI already shows the correct optimistic
+                    // state, so surface this as a non-blocking notice, not the list error.
+                    StorageResult::Error(e) => {
+                        model.download_notice =
+                            Some(format!("Couldn't save the download's state: {e}"));
+                    }
+                    // A write went through, so any earlier notice is stale — clear it.
+                    _ => model.download_notice = None,
                 }
                 render()
             }
@@ -474,6 +490,7 @@ fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
         sort_order: model.episode_sort,
         loading: model.detail_loading,
         error: model.detail_error.clone(),
+        download_notice: model.download_notice.clone(),
     }
 }
 
@@ -1773,14 +1790,53 @@ mod tests {
     }
 
     #[test]
-    fn download_persist_error_surfaces_on_details_page() {
+    fn download_persist_error_surfaces_as_a_notice_not_the_list_error() {
         let app = Pollux;
         let mut model = Model::default();
+        // A pre-existing list-load error must survive a download op-failure.
+        model.detail_error = Some("earlier list load failed".to_string());
+
         let _ = app.update(
             Event::DownloadStatePersisted(Box::new(StorageResult::Error("db locked".to_string()))),
             &mut model,
         );
-        assert_eq!(model.detail_error.as_deref(), Some("db locked"));
+
+        // The op failure lands in the non-blocking notice, and the list error (which
+        // would blank the whole episode list) is untouched.
+        assert!(model
+            .download_notice
+            .as_deref()
+            .is_some_and(|n| n.contains("db locked")));
+        assert_eq!(
+            model.detail_error.as_deref(),
+            Some("earlier list load failed")
+        );
+    }
+
+    #[test]
+    fn a_successful_persist_clears_a_stale_download_notice() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.download_notice = Some("Couldn't save the download's state: db locked".to_string());
+
+        let _ = app.update(
+            Event::DownloadStatePersisted(Box::new(StorageResult::Success)),
+            &mut model,
+        );
+
+        assert!(model.download_notice.is_none());
+    }
+
+    #[test]
+    fn a_fresh_download_action_clears_a_stale_download_notice() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+        model.download_notice = Some("Couldn't remove the download: busy".to_string());
+
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+
+        assert!(model.download_notice.is_none());
     }
 
     #[test]
