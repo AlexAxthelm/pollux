@@ -162,8 +162,9 @@ struct EpisodeRow: View {
         .accessibilityLabel("More actions")
     }
 
-    /// The download entry, driven by status: an action for the states where one
-    /// applies, or a disabled indicator otherwise (there is no cancel yet).
+    /// The download entry, driven by status: Download when absent, Retry after a
+    /// failure, Delete when stored, Cancel Download while queued or downloading, and
+    /// a disabled indicator once removed from the feed.
     @ViewBuilder private var downloadMenuItem: some View {
         switch episode.downloadStatus {
         case .notDownloaded:

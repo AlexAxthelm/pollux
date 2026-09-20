@@ -93,8 +93,9 @@ struct SubscriptionDetailScreen: View {
         }
     }
 
-    /// Leading-swipe download action, mirroring the row's menu: an action for the
-    /// states where one applies, nothing for the rest (there is no cancel yet).
+    /// Leading-swipe download action, mirroring the row's menu: Download when absent,
+    /// Retry after a failure, Delete when stored, Cancel while queued or downloading,
+    /// and nothing once removed from the feed.
     @ViewBuilder private func downloadSwipeButton(for episode: EpisodeSummary) -> some View {
         switch episode.downloadStatus {
         case .notDownloaded:
