@@ -401,15 +401,14 @@ impl App for Pollux {
                 DownloadResult::Completed { .. } | DownloadResult::Cancelled => render(),
             },
             Event::DownloadStatePersisted(result) => {
-                match *result {
-                    // A durability failure: the UI already shows the correct optimistic
-                    // state, so surface this as a non-blocking notice, not the list error.
-                    StorageResult::Error(e) => {
-                        model.download_notice =
-                            Some(format!("Couldn't save the download's state: {e}"));
-                    }
-                    // A write went through, so any earlier notice is stale — clear it.
-                    _ => model.download_notice = None,
+                // A durability failure: the UI already shows the correct optimistic
+                // state, so surface this as a non-blocking notice, not the list error.
+                // Success is silent — notably it does NOT clear an existing notice, so
+                // an unrelated episode's persist can't dismiss another episode's failure
+                // message. The notice clears on the next user download action (see
+                // DownloadEpisode/DeleteDownload/CancelDownload) or on a feed switch.
+                if let StorageResult::Error(e) = *result {
+                    model.download_notice = Some(format!("Couldn't save the download's state: {e}"));
                 }
                 render()
             }
@@ -1809,17 +1808,24 @@ mod tests {
     }
 
     #[test]
-    fn a_successful_persist_clears_a_stale_download_notice() {
+    fn an_unrelated_successful_persist_does_not_clear_the_notice() {
+        // A different episode's persist succeeding must NOT dismiss a standing
+        // op-failure notice — otherwise a background download completing could wipe
+        // the message before the user sees it. The notice clears on a user action or
+        // feed switch instead (covered by other tests).
         let app = Pollux;
         let mut model = Model::default();
-        model.download_notice = Some("Couldn't save the download's state: db locked".to_string());
+        model.download_notice = Some("Couldn't remove the download: disk busy".to_string());
 
         let _ = app.update(
             Event::DownloadStatePersisted(Box::new(StorageResult::Success)),
             &mut model,
         );
 
-        assert!(model.download_notice.is_none());
+        assert_eq!(
+            model.download_notice.as_deref(),
+            Some("Couldn't remove the download: disk busy"),
+        );
     }
 
     #[test]
