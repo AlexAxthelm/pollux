@@ -9,6 +9,8 @@ class Core: ObservableObject {
     private var core: CoreFfi
     private let db: DatabaseManager
     private let downloads: DownloadManager
+    /// Storage operations are funnelled here and executed one at a time, in order.
+    private let storage: AsyncStream<(StorageOperation, UInt32)>.Continuation
 
     init() {
         core = CoreFfi()
@@ -22,10 +24,29 @@ class Core: ObservableObject {
         } catch {
             fatalError("Failed to initialize DownloadManager: \(error)")
         }
+        // One serial consumer so writes for a given episode apply in submission order
+        // (Queued → Downloading → terminal). A Task per op could reorder them — a fast
+        // failure/cancel racing the Downloading write would leave a stale status in the
+        // DB and re-download the episode after restart.
+        let (storageStream, storageContinuation) =
+            AsyncStream.makeStream(of: (StorageOperation, UInt32).self)
+        storage = storageContinuation
         guard let view = try? ViewModel.bincodeDeserialize(input: [UInt8](core.view())) else {
             fatalError("Failed to deserialize initial ViewModel from core")
         }
         self.view = view
+        Task { @MainActor [weak self] in
+            for await (operation, requestId) in storageStream {
+                guard let self else { return }
+                let result: StorageResult
+                do {
+                    result = try await db.execute(operation)
+                } catch {
+                    result = .error(error.localizedDescription)
+                }
+                resolveAndDispatch(requestId: requestId, result: result)
+            }
+        }
         update(.started)
     }
 
@@ -54,15 +75,8 @@ class Core: ObservableObject {
             view = updatedView
 
         case let .storage(operation):
-            Task { @MainActor in
-                let result: StorageResult
-                do {
-                    result = try await db.execute(operation)
-                } catch {
-                    result = .error(error.localizedDescription)
-                }
-                resolveAndDispatch(requestId: request.id, result: result)
-            }
+            // Enqueue for the serial consumer set up in init (preserves write order).
+            storage.yield((operation, request.id))
 
         case let .http(operation):
             let requestId = request.id
