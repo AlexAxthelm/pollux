@@ -38,7 +38,14 @@ serialized Effects flow out. The core never touches UI or I/O directly.
 pollux/
 ├── shared/                 # Rust core (Crux app)
 │   ├── src/
-│   │   ├── app.rs          # App trait impl: Event, Model, ViewModel, Effect
+│   │   ├── app.rs          # App trait impl: Event, update(), view()
+│   │   ├── model.rs        # Model — private core state
+│   │   ├── view_model.rs   # ViewModel — serializable projection for the shell
+│   │   ├── effect.rs       # Effect enum (Render / Storage / Http / Download)
+│   │   ├── capabilities/   # Storage, Http, Download operation & result types
+│   │   ├── domain/         # Episode, Subscription
+│   │   ├── feed_parser.rs  # RSS → Subscription + Episodes
+│   │   ├── theme.rs        # base16 themes → ThemeView
 │   │   ├── ffi.rs          # CoreFFI — the C/UniFFI/WASM bridge struct
 │   │   ├── lib.rs          # Crate root; re-exports; UniFFI scaffolding
 │   │   └── bin/
@@ -46,9 +53,12 @@ pollux/
 │   └── Cargo.toml
 ├── iOS/
 │   ├── Pollux/             # SwiftUI app
-│   │   ├── Pollux.swift    # @main entry point
-│   │   ├── ContentView.swift
-│   │   └── core.swift      # Core ObservableObject: drives CoreFFI
+│   │   ├── Pollux.swift          # @main entry point
+│   │   ├── ContentView.swift     # library + subscribe flow
+│   │   ├── core.swift            # Core ObservableObject: drives CoreFFI
+│   │   ├── DatabaseManager.swift # Storage effect handler (GRDB/SQLite)
+│   │   ├── DownloadManager.swift # Download effect handler (URLSession)
+│   │   └── Theme.swift           # ThemeView → SwiftUI colors
 │   ├── generated/          # ← git-ignored; produced by `make typegen` + `make package`
 │   │   ├── App/            # Swift type stubs (Event, ViewModel, Request, …)
 │   │   └── Shared/         # Swift package wrapping the compiled Rust static lib
@@ -89,10 +99,10 @@ Event → update() → Command<Effect, Event>
 | Type | Role |
 |---|---|
 | `Pollux` | Zero-sized struct implementing `crux_core::App` |
-| `Event` | All actions the UI can trigger (`Increment`, `Decrement`, `Reset` today) |
-| `Model` | Private application state (never leaves the core) |
-| `ViewModel` | Public, serializable snapshot of state for the shell to render |
-| `Effect` | Side-effects the shell must handle (`Render` today; later: network, storage, …) |
+| `Event` | All inputs the shell feeds in — user actions (subscribe/refresh a feed, select a subscription, sort/download/cancel an episode, set the theme) and the async results of storage/HTTP/download effects |
+| `Model` | Private application state (never leaves the core); see `model.rs` |
+| `ViewModel` | Public, serializable snapshot of state for the shell to render; see `view_model.rs` |
+| `Effect` | Side-effects the shell must handle: `Render`, `Storage` (SQLite via GRDB), `Http` (feed fetch), `Download` (episode audio); see `effect.rs` |
 
 `Model` and `ViewModel` are deliberately separate. `Model` is private and
 mutable; `ViewModel` is a derived, serializable read-only projection.
@@ -108,9 +118,10 @@ mutable; `ViewModel` is a derived, serializable read-only projection.
   effect
 - `view() -> Vec<u8>` — get the current bincode-serialized `ViewModel`
 
-The shell is responsible for deserializing effects and dispatching them. Simple
-synchronous effects (like `Render`) are handled inline. Future async effects
-(network, disk) will be dispatched to platform APIs and resolved via `resolve()`.
+The shell is responsible for deserializing effects and dispatching them. The
+synchronous `Render` effect is handled inline; the async `Storage`, `Http`, and
+`Download` effects are dispatched to platform APIs and their results delivered
+back via `resolve()`.
 
 ### iOS shell (`iOS/Pollux/core.swift`)
 
@@ -119,8 +130,10 @@ synchronous effects (like `Render`) are handled inline. Future async effects
 1. Serializes the `Event` with bincode
 2. Calls `CoreFFI.update(data:)`
 3. Deserializes the returned `[Request]`
-4. Dispatches each `Request` via `processEffect(_:)` — currently only
-   `.render`, which deserializes the `ViewModel` and publishes it
+4. Dispatches each `Request` via `processEffect(_:)`: `.render` deserializes and
+   publishes the `ViewModel`; `.storage`, `.http`, and `.download` run their
+   async work and feed the result back through `resolve()`. Storage runs on a
+   single serial consumer so writes apply in submission order.
 
 SwiftUI views observe `core.view` and re-render automatically.
 
@@ -143,8 +156,9 @@ make generate-project  →  xcodegen --spec iOS/project.yml
                            regenerates iOS/Pollux.xcodeproj
 ```
 
-`make ios-build` runs all three in order. Run it whenever `shared/src/app.rs`
-changes (new events, new view model fields).
+`make ios-build` runs all three in order. Run it whenever the core's public
+types change — new `Event`/`Effect` variants, `ViewModel` fields, or capability
+operation/result types in `shared/src/`.
 
 Type serialization uses **bincode** (compact binary) at the FFI boundary and
 **serde** for all types. `facet` is used to drive type generation.
@@ -174,7 +188,7 @@ GitHub Actions runs on push and PR to `main`:
 - **Rust checks**: `cargo check`, `cargo test`, `cargo clippy -D warnings`,
   `cargo fmt --check`, `cargo check --locked`
 - **Swift checks**: `swiftlint lint --strict`, `swiftformat --lint`
-- **Admin**: forbidden-pattern scan (no no lint suppressions, no `unsafe`, no
+- **Admin**: forbidden-pattern scan (no lint suppressions, no `unsafe`, no
   force-unwrap calls, no force-try/cast in Swift, etc.)
 
 All CI targets in `.github/workflows/` are reusable `workflow_call` workflows
@@ -184,14 +198,21 @@ composed by `rust.yml`, `swift.yml`, and `admin.yml`.
 
 ## Current State
 
-The core is a counter app (Increment / Decrement / Reset). That is scaffolding
-only — the real domain model has not been implemented yet. Feature intent and
-priorities are documented in `docs/features/`; the implementation order is in
-`docs/ROADMAP.md`.
+The MVP foundation is in place: RSS feed parsing and subscribing, a library and
+per-feed episode list, and an offline **download manager** (serial queue, live
+progress, resume-on-launch, cancel). A base16 **theming** system is wired
+through the `ViewModel`. State lives in the Rust core; the iOS shell handles
+SQLite (GRDB), HTTP, downloads (URLSession), and rendering.
+
+Still to come (see `docs/ROADMAP.md`): audio playback, playlists (the core
+differentiator), a Settings screen, and feed refresh. Sync is out of scope for
+MVP and v1.0. Feature intent and priorities live in `docs/features/`.
 
 When adding a new domain feature, the typical change surface is:
 
-1. Extend `Event`, `Model`, `ViewModel`, and/or `Effect` in `shared/src/app.rs`
+1. Extend the core types in `shared/src/` — `Event`/`update()`/`view()` in
+   `app.rs`, plus `model.rs`, `view_model.rs`, `effect.rs`, and `capabilities/`
+   as needed
 2. Run `make ios-build` to regenerate Swift types and rebuild the Xcode project
 3. Update SwiftUI views in `iOS/Pollux/` to consume the new `ViewModel` fields
    and emit the new `Event` variants
