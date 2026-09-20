@@ -80,9 +80,7 @@ actor DownloadManager {
             return .error(DownloadManagerError.invalidURL(urlString).localizedDescription)
         }
         do {
-            try FileManager.default.createDirectory(
-                at: downloadsDir, withIntermediateDirectories: true,
-            )
+            try ensureDownloadsDirectory()
             let fileName = Self.fileName(episodeId: episodeId, url: url)
             let destination = downloadsDir.appendingPathComponent(fileName)
 
@@ -153,6 +151,20 @@ actor DownloadManager {
     }
 
     // MARK: - Paths
+
+    /// Creates the downloads directory if needed and marks it excluded from device
+    /// backups. Downloaded audio is reproducible, so it shouldn't consume the user's
+    /// iCloud backup quota or bloat their backups. The exclusion is best-effort — a
+    /// failure to set the flag doesn't fail the download.
+    private func ensureDownloadsDirectory() throws {
+        try FileManager.default.createDirectory(
+            at: downloadsDir, withIntermediateDirectories: true,
+        )
+        var dir = downloadsDir
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? dir.setResourceValues(values)
+    }
 
     private func absoluteURL(for relativePath: String) -> URL {
         storageRoot.appendingPathComponent(relativePath)
