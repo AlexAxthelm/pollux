@@ -1835,6 +1835,50 @@ mod tests {
     }
 
     #[test]
+    fn delete_failure_surfaces_as_a_notice_and_keeps_the_row() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let mut downloaded = make_episode("e1", "Ep", Some(1));
+        downloaded.download_status = DownloadStatus::Downloaded;
+        downloaded.local_path = Some("Downloads/e1.mp3".to_string());
+        load_episodes(&app, &mut model, vec![downloaded]);
+        let _ = app.update(Event::DeleteDownload("e1".to_string()), &mut model);
+
+        // The shell couldn't remove the file.
+        let _ = app.update(
+            Event::DownloadDeleted {
+                episode_id: "e1".to_string(),
+                result: Box::new(DownloadResult::Error("disk busy".to_string())),
+            },
+            &mut model,
+        );
+
+        // The row stays Downloaded (the file is presumably still there) and the
+        // failure lands in the non-blocking notice, not the list error.
+        assert_eq!(
+            model_episode_status(&model, "e1"),
+            DownloadStatus::Downloaded
+        );
+        assert!(model.download_notice.as_deref().is_some_and(|n| n.contains("disk busy")));
+        assert!(model.detail_error.is_none());
+    }
+
+    #[test]
+    fn selecting_a_subscription_clears_a_stale_download_notice() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions = vec![make_subscription("sub-1", "Feed")];
+        model.download_notice = Some("Couldn't save the download's state: db locked".to_string());
+
+        let _ = app.update(Event::SelectSubscription("sub-1".to_string()), &mut model);
+
+        assert!(
+            model.download_notice.is_none(),
+            "a notice from a previous feed shouldn't carry into another"
+        );
+    }
+
+    #[test]
     fn download_progress_overlays_bytes_on_the_active_episode() {
         let app = Pollux;
         let mut model = Model::default();

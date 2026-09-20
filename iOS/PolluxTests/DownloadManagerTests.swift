@@ -236,4 +236,27 @@ struct DownloadManagerTests {
         #expect(samples.map(\.received) == samples.map(\.received).sorted())
         #expect(samples.last?.received == UInt64(body.count))
     }
+
+    @Test func unknownSizeProgressIsThrottled() async throws {
+        let root = makeTempRoot()
+        // A long interval means the time throttle should let at most the first report
+        // through, no matter how many write callbacks a chunked body produces.
+        let manager = try makeManager(root: root, reportInterval: 1000)
+        // ~1600 chunks of 64 bytes: without throttling this would report constantly.
+        MockURLProtocol.configure(.init(advertiseContentLength: false, body: Data(count: 100_000)))
+        let recorder = ProgressRecorder()
+
+        let result = await manager.perform(
+            .download(episodeId: "ep-u", url: "https://example.com/u.mp3"),
+        ) { @Sendable received, total in
+            recorder.record(received, total)
+        }
+
+        #expect(result == .completed(localPath: "Downloads/ep_u.mp3", sizeBytes: 100_000))
+        let samples = recorder.samples
+        // The throttle caps reporting at the single initial callback.
+        #expect(samples.count <= 1)
+        // Any report that did fire carries no total (the size was unknown).
+        #expect(samples.allSatisfy { $0.total == nil })
+    }
 }
