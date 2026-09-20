@@ -36,15 +36,14 @@ pub enum StorageOperation {
         position_secs: Option<u32>,
     },
     /// Persists a download-state transition (status plus the file metadata that
-    /// comes with it). `local_path`/`size_bytes`/`progress` are cleared to NULL
-    /// when `None` — e.g. on delete or failure — so the row never keeps a stale
-    /// path for a file that is no longer there.
+    /// comes with it). `local_path`/`size_bytes` are cleared to NULL when `None` —
+    /// e.g. on delete or failure — so the row never keeps a stale path for a file
+    /// that is no longer there. (Live byte progress is transient and never stored.)
     UpdateDownloadState {
         episode_id: String,
         status: DownloadStatus,
         local_path: Option<String>,
         size_bytes: Option<u64>,
-        progress: Option<u8>,
     },
     UpsertFeedWithEpisodes {
         subscription: Subscription,

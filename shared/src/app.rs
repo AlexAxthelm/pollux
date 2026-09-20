@@ -576,9 +576,6 @@ fn set_download_state(
         episode.download_status = status;
         episode.local_path = local_path;
         episode.file_size_bytes = size_bytes;
-        // No live percentage in the status-only pass; keep the column NULL rather
-        // than leaving a stale value from a previous download.
-        episode.download_progress = None;
     }
 }
 
@@ -597,7 +594,6 @@ fn persist_download_state(
         status,
         local_path,
         size_bytes,
-        progress: None,
     })
     .then_send(|r| Event::DownloadStatePersisted(Box::new(r)))
 }
@@ -740,7 +736,6 @@ mod tests {
             playback_status: PlaybackStatus::Unplayed,
             playback_position_secs: None,
             download_status: DownloadStatus::NotDownloaded,
-            download_progress: None,
             is_flagged: false,
             file_size_bytes: None,
             local_path: None,

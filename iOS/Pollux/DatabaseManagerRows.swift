@@ -29,15 +29,14 @@ extension DatabaseManager {
     static func upsertEpisodeRow(_ episode: Episode, subscriptionId: String, db: Database) throws {
         let playbackStr = playbackStatusString(episode.playbackStatus)
         let downloadStr = downloadStatusString(episode.downloadStatus)
-        let downloadProgress = episode.downloadProgress.map { Int32($0) }
         try db.execute(
             sql: """
             INSERT INTO episodes
                 (id, feed_guid, subscription_id, title, description, pub_date,
                  duration_secs, enclosure_url, artwork_url, playback_status,
-                 playback_position_secs, download_status, download_progress,
+                 playback_position_secs, download_status,
                  is_flagged, file_size_bytes, local_path)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(subscription_id, feed_guid) DO UPDATE SET
                 title = excluded.title,
                 description = excluded.description,
@@ -53,7 +52,7 @@ extension DatabaseManager {
                 episode.pubDate, episode.durationSecs,
                 episode.enclosureUrl, episode.artworkUrl,
                 playbackStr, episode.playbackPositionSecs,
-                downloadStr, downloadProgress,
+                downloadStr,
                 episode.isFlagged,
                 episode.fileSizeBytes.flatMap { Int64(exactly: $0) },
                 episode.localPath,
@@ -91,7 +90,6 @@ extension DatabaseManager {
             playbackStatus: playbackStatus(from: row["playback_status"]),
             playbackPositionSecs: (row["playback_position_secs"] as Int64?).flatMap { UInt32(exactly: $0) },
             downloadStatus: downloadStatus(from: row["download_status"]),
-            downloadProgress: (row["download_progress"] as Int32?).flatMap { UInt8(exactly: $0) },
             isFlagged: row["is_flagged"],
             fileSizeBytes: (row["file_size_bytes"] as Int64?).map { UInt64(bitPattern: $0) },
             localPath: row["local_path"],

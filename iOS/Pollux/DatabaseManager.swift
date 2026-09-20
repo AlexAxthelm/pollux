@@ -63,7 +63,6 @@ actor DatabaseManager {
                 t.column("playback_status", .text).notNull().defaults(to: "Unplayed")
                 t.column("playback_position_secs", .integer).check(sql: "playback_position_secs >= 0")
                 t.column("download_status", .text).notNull().defaults(to: "NotDownloaded")
-                t.column("download_progress", .integer).check(sql: "download_progress BETWEEN 0 AND 100")
                 t.column("is_flagged", .boolean).notNull().defaults(to: false)
                 t.column("file_size_bytes", .integer).check(sql: "file_size_bytes >= 0")
                 t.column("local_path", .text)
@@ -117,10 +116,9 @@ actor DatabaseManager {
             try getEpisodeByFeedGuid(subscriptionId: subscriptionId, feedGuid: feedGuid)
         case let .updatePlaybackStatus(episodeId, status, positionSecs):
             try await updatePlaybackStatus(episodeId: episodeId, status: status, positionSecs: positionSecs)
-        case let .updateDownloadState(episodeId, status, localPath, sizeBytes, progress):
+        case let .updateDownloadState(episodeId, status, localPath, sizeBytes):
             try await updateDownloadState(
-                episodeId: episodeId, status: status, localPath: localPath,
-                sizeBytes: sizeBytes, progress: progress,
+                episodeId: episodeId, status: status, localPath: localPath, sizeBytes: sizeBytes,
             )
         default:
             fatalError("executeEpisode received a non-episode operation: \(operation)")
@@ -262,25 +260,23 @@ actor DatabaseManager {
         return .success
     }
 
-    /// Persists a download-state transition. `localPath`/`sizeBytes`/`progress`
-    /// are written verbatim — passing nil clears the column to NULL, matching the
-    /// core, which sends nil to wipe stale file metadata on delete/failure. Size
-    /// overflow stores NULL (as in `upsertEpisodeRow`) rather than trapping.
+    /// Persists a download-state transition. `localPath`/`sizeBytes` are written
+    /// verbatim — passing nil clears the column to NULL, matching the core, which
+    /// sends nil to wipe stale file metadata on delete/failure. Size overflow stores
+    /// NULL (as in `upsertEpisodeRow`) rather than trapping.
     private func updateDownloadState(
-        episodeId: String, status: DownloadStatus, localPath: String?,
-        sizeBytes: UInt64?, progress: UInt8?,
+        episodeId: String, status: DownloadStatus, localPath: String?, sizeBytes: UInt64?,
     ) async throws -> StorageResult {
         let statusStr = Self.downloadStatusString(status)
         let size = sizeBytes.flatMap { Int64(exactly: $0) }
-        let progressInt = progress.map { Int32($0) }
         try await db.write { db in
             try db.execute(
                 sql: """
                 UPDATE episodes
-                SET download_status = ?, local_path = ?, file_size_bytes = ?, download_progress = ?
+                SET download_status = ?, local_path = ?, file_size_bytes = ?
                 WHERE id = ?
                 """,
-                arguments: [statusStr, localPath, size, progressInt, episodeId],
+                arguments: [statusStr, localPath, size, episodeId],
             )
         }
         return .success
