@@ -46,4 +46,52 @@ struct EpisodeFormattingTests {
         #expect(rendered != nil)
         #expect(rendered?.isEmpty == false)
     }
+
+    // MARK: Download progress
+
+    @Test func nilReceivedHasNoProgress() {
+        #expect(EpisodeFormatting.downloadProgress(received: nil, total: 100) == nil)
+    }
+
+    @Test func knownTotalGivesFractionAndCombinedLabel() {
+        let progress = EpisodeFormatting.downloadProgress(received: 50, total: 100)
+        #expect(progress?.fraction == 0.5)
+        #expect(progress?.label == "\(bytes(50)) / \(bytes(100))")
+    }
+
+    @Test func unknownTotalHasNoFractionAndReceivedOnlyLabel() {
+        let progress = EpisodeFormatting.downloadProgress(received: 1234, total: nil)
+        #expect(progress?.fraction == nil)
+        #expect(progress?.label == bytes(1234))
+    }
+
+    @Test func zeroTotalIsTreatedAsUnknown() {
+        // A reported total of 0 carries no information, so it behaves like `nil`.
+        let progress = EpisodeFormatting.downloadProgress(received: 1234, total: 0)
+        #expect(progress?.fraction == nil)
+        #expect(progress?.label == bytes(1234))
+    }
+
+    @Test func receivedExceedingTotalClampsFractionToOne() {
+        // A late byte count past the advertised size shouldn't push the bar past full.
+        let progress = EpisodeFormatting.downloadProgress(received: 150, total: 100)
+        #expect(progress?.fraction == 1.0)
+        #expect(progress?.label == "\(bytes(150)) / \(bytes(100))")
+    }
+
+    @Test func hugeByteCountsDoNotOverflow() {
+        // Int64(clamping:) keeps the ByteCountFormatter input in range, and the
+        // fraction still resolves to a sane clamped value.
+        let progress = EpisodeFormatting.downloadProgress(received: .max, total: .max)
+        #expect(progress?.fraction == 1.0)
+        #expect(progress?.label == "\(bytes(.max)) / \(bytes(.max))")
+    }
+}
+
+/// Mirror of `EpisodeFormatting`'s private byte formatter so tests can assert exact
+/// labels without depending on the current locale's spelling of a unit.
+private func bytes(_ count: Int64) -> String {
+    let formatter = ByteCountFormatter()
+    formatter.countStyle = .file
+    return formatter.string(fromByteCount: count)
 }

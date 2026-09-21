@@ -2,7 +2,7 @@ use crux_core::capability::Operation;
 use facet::Facet;
 use serde::{Deserialize, Serialize};
 
-use crate::domain::{Episode, PlaybackStatus, Subscription};
+use crate::domain::{DownloadStatus, Episode, PlaybackStatus, Subscription};
 
 #[derive(Facet, Serialize, Deserialize, Clone, Debug)]
 #[repr(C)]
@@ -22,6 +22,10 @@ pub enum StorageOperation {
     ListEpisodesBySubscription {
         subscription_id: String,
     },
+    /// Every episode currently marked `Downloading` or `Queued`, across all feeds.
+    /// Used at launch to rebuild the download queue for downloads interrupted by a
+    /// previous quit.
+    ListPendingDownloads,
     GetEpisodeByFeedGuid {
         subscription_id: String,
         feed_guid: String,
@@ -30,6 +34,16 @@ pub enum StorageOperation {
         episode_id: String,
         status: PlaybackStatus,
         position_secs: Option<u32>,
+    },
+    /// Persists a download-state transition (status plus the file metadata that
+    /// comes with it). `local_path`/`size_bytes` are cleared to NULL when `None` —
+    /// e.g. on delete or failure — so the row never keeps a stale path for a file
+    /// that is no longer there. (Live byte progress is transient and never stored.)
+    UpdateDownloadState {
+        episode_id: String,
+        status: DownloadStatus,
+        local_path: Option<String>,
+        size_bytes: Option<u64>,
     },
     UpsertFeedWithEpisodes {
         subscription: Subscription,

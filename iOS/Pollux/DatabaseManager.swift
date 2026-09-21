@@ -63,7 +63,6 @@ actor DatabaseManager {
                 t.column("playback_status", .text).notNull().defaults(to: "Unplayed")
                 t.column("playback_position_secs", .integer).check(sql: "playback_position_secs >= 0")
                 t.column("download_status", .text).notNull().defaults(to: "NotDownloaded")
-                t.column("download_progress", .integer).check(sql: "download_progress BETWEEN 0 AND 100")
                 t.column("is_flagged", .boolean).notNull().defaults(to: false)
                 t.column("file_size_bytes", .integer).check(sql: "file_size_bytes >= 0")
                 t.column("local_path", .text)
@@ -82,6 +81,9 @@ actor DatabaseManager {
 
     @discardableResult
     func execute(_ operation: StorageOperation) async throws -> StorageResult {
+        // Split by domain so neither dispatcher trips the cyclomatic-complexity
+        // limit as operations are added. Subscription/feed ops here; episode ops in
+        // `executeEpisode`.
         switch operation {
         case .listSubscriptions:
             try listSubscriptions()
@@ -91,18 +93,35 @@ actor DatabaseManager {
             try await upsertSubscription(sub)
         case let .deleteSubscription(id):
             try await deleteSubscription(id: id)
+        case let .upsertFeedWithEpisodes(subscription, episodes):
+            try await upsertFeedWithEpisodes(subscription: subscription, episodes: episodes)
+        default:
+            try await executeEpisode(operation)
+        }
+    }
+
+    /// Episode-scoped storage operations. `execute` routes everything it does not
+    /// handle here; the `default` is unreachable (every remaining case is covered).
+    private func executeEpisode(_ operation: StorageOperation) async throws -> StorageResult {
+        switch operation {
         case let .upsertEpisode(episode):
             try await upsertEpisode(episode)
         case let .getEpisode(id):
             try getEpisode(id: id)
         case let .listEpisodesBySubscription(subscriptionId):
             try listEpisodesBySubscription(subscriptionId: subscriptionId)
+        case .listPendingDownloads:
+            try listPendingDownloads()
         case let .getEpisodeByFeedGuid(subscriptionId, feedGuid):
             try getEpisodeByFeedGuid(subscriptionId: subscriptionId, feedGuid: feedGuid)
         case let .updatePlaybackStatus(episodeId, status, positionSecs):
             try await updatePlaybackStatus(episodeId: episodeId, status: status, positionSecs: positionSecs)
-        case let .upsertFeedWithEpisodes(subscription, episodes):
-            try await upsertFeedWithEpisodes(subscription: subscription, episodes: episodes)
+        case let .updateDownloadState(episodeId, status, localPath, sizeBytes):
+            try await updateDownloadState(
+                episodeId: episodeId, status: status, localPath: localPath, sizeBytes: sizeBytes,
+            )
+        default:
+            fatalError("executeEpisode received a non-episode operation: \(operation)")
         }
     }
 
@@ -191,6 +210,26 @@ actor DatabaseManager {
         return .episodes(rows.map(Self.episode(from:)))
     }
 
+    private func listPendingDownloads() throws -> StorageResult {
+        // Known limitation: enqueue order isn't persisted, so a relaunch rebuilds the
+        // queue by pub_date rather than the order the user queued them (and may start a
+        // previously-Queued item before the one that was actively Downloading). Fine for
+        // the serial MVP; revisit when the download queue gains explicit ordering — a
+        // persisted sequence column, restoring the active item first — alongside the
+        // downloads page / re-ordering / parallel-downloads work (see ROADMAP Phase 5).
+        let rows = try db.read { db -> [Row] in
+            try Row.fetchAll(
+                db,
+                sql: """
+                SELECT * FROM episodes
+                WHERE download_status IN ('Downloading', 'Queued')
+                ORDER BY pub_date
+                """,
+            )
+        }
+        return .episodes(rows.map(Self.episode(from:)))
+    }
+
     private func getEpisodeByFeedGuid(subscriptionId: String, feedGuid: String) throws -> StorageResult {
         let row = try db.read { db -> Row? in
             try Row.fetchOne(
@@ -220,146 +259,26 @@ actor DatabaseManager {
         }
         return .success
     }
-}
 
-// MARK: - Row mapping + status conversion
-
-private extension DatabaseManager {
-    static func upsertSubscriptionRow(_ subscription: Subscription, db: Database) throws {
-        try db.execute(
-            sql: """
-            INSERT INTO subscriptions
-                (id, feed_url, title, artwork_url, description, last_refreshed, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(feed_url) DO UPDATE SET
-                title = excluded.title,
-                artwork_url = excluded.artwork_url,
-                description = excluded.description,
-                last_refreshed = excluded.last_refreshed
-            """,
-            arguments: [
-                subscription.id, subscription.feedUrl, subscription.title,
-                subscription.artworkUrl, subscription.description,
-                subscription.lastRefreshed, subscription.createdAt,
-            ],
-        )
-    }
-
-    static func upsertEpisodeRow(_ episode: Episode, subscriptionId: String, db: Database) throws {
-        let playbackStr = playbackStatusString(episode.playbackStatus)
-        let downloadStr = downloadStatusString(episode.downloadStatus)
-        let downloadProgress = episode.downloadProgress.map { Int32($0) }
-        try db.execute(
-            sql: """
-            INSERT INTO episodes
-                (id, feed_guid, subscription_id, title, description, pub_date,
-                 duration_secs, enclosure_url, artwork_url, playback_status,
-                 playback_position_secs, download_status, download_progress,
-                 is_flagged, file_size_bytes, local_path)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            ON CONFLICT(subscription_id, feed_guid) DO UPDATE SET
-                title = excluded.title,
-                description = excluded.description,
-                enclosure_url = excluded.enclosure_url,
-                artwork_url = excluded.artwork_url,
-                pub_date = excluded.pub_date,
-                duration_secs = excluded.duration_secs,
-                file_size_bytes = excluded.file_size_bytes
-            """,
-            arguments: [
-                episode.id, episode.feedGuid, subscriptionId,
-                episode.title, episode.description,
-                episode.pubDate, episode.durationSecs,
-                episode.enclosureUrl, episode.artworkUrl,
-                playbackStr, episode.playbackPositionSecs,
-                downloadStr, downloadProgress,
-                episode.isFlagged,
-                episode.fileSizeBytes.flatMap { Int64(exactly: $0) },
-                episode.localPath,
-            ],
-        )
-    }
-
-    static func subscription(from row: Row) -> Subscription {
-        Subscription(
-            id: row["id"],
-            feedUrl: row["feed_url"],
-            title: row["title"],
-            artworkUrl: row["artwork_url"],
-            description: row["description"],
-            lastRefreshed: row["last_refreshed"],
-            createdAt: row["created_at"],
-        )
-    }
-
-    static func episode(from row: Row) -> Episode {
-        // Checked conversions: a stored value outside the target type's range
-        // (written by a later schema or external tooling) reads back as nil
-        // rather than trapping or silently wrapping — matching the write path,
-        // which stores NULL on overflow (see fileSizeBytes in upsertEpisodeRow).
-        Episode(
-            id: row["id"],
-            feedGuid: row["feed_guid"],
-            subscriptionId: row["subscription_id"],
-            title: row["title"],
-            description: row["description"],
-            pubDate: row["pub_date"],
-            durationSecs: (row["duration_secs"] as Int64?).flatMap { UInt32(exactly: $0) },
-            enclosureUrl: row["enclosure_url"],
-            artworkUrl: row["artwork_url"],
-            playbackStatus: playbackStatus(from: row["playback_status"]),
-            playbackPositionSecs: (row["playback_position_secs"] as Int64?).flatMap { UInt32(exactly: $0) },
-            downloadStatus: downloadStatus(from: row["download_status"]),
-            downloadProgress: (row["download_progress"] as Int32?).flatMap { UInt8(exactly: $0) },
-            isFlagged: row["is_flagged"],
-            fileSizeBytes: (row["file_size_bytes"] as Int64?).map { UInt64(bitPattern: $0) },
-            localPath: row["local_path"],
-        )
-    }
-
-    static func playbackStatusString(_ status: PlaybackStatus) -> String {
-        switch status {
-        case .unplayed: "Unplayed"
-        case .inProgress: "InProgress"
-        case .played: "Played"
-        }
-    }
-
-    static func playbackStatus(from string: String) -> PlaybackStatus {
-        switch string {
-        case "Unplayed": .unplayed
-        case "InProgress": .inProgress
-        case "Played": .played
-        default: fatalError(
-                "Unknown PlaybackStatus in DB: '\(string)' — add a case to "
-                    + "playbackStatus(from:) and playbackStatusString(_:)",
+    /// Persists a download-state transition. `localPath`/`sizeBytes` are written
+    /// verbatim — passing nil clears the column to NULL, matching the core, which
+    /// sends nil to wipe stale file metadata on delete/failure. Size overflow stores
+    /// NULL (as in `upsertEpisodeRow`) rather than trapping.
+    private func updateDownloadState(
+        episodeId: String, status: DownloadStatus, localPath: String?, sizeBytes: UInt64?,
+    ) async throws -> StorageResult {
+        let statusStr = Self.downloadStatusString(status)
+        let size = sizeBytes.flatMap { Int64(exactly: $0) }
+        try await db.write { db in
+            try db.execute(
+                sql: """
+                UPDATE episodes
+                SET download_status = ?, local_path = ?, file_size_bytes = ?
+                WHERE id = ?
+                """,
+                arguments: [statusStr, localPath, size, episodeId],
             )
         }
-    }
-
-    static func downloadStatusString(_ status: DownloadStatus) -> String {
-        switch status {
-        case .notDownloaded: "NotDownloaded"
-        case .queued: "Queued"
-        case .downloading: "Downloading"
-        case .downloaded: "Downloaded"
-        case .failed: "Failed"
-        case .removedFromFeed: "RemovedFromFeed"
-        }
-    }
-
-    static func downloadStatus(from string: String) -> DownloadStatus {
-        switch string {
-        case "NotDownloaded": .notDownloaded
-        case "Queued": .queued
-        case "Downloading": .downloading
-        case "Downloaded": .downloaded
-        case "Failed": .failed
-        case "RemovedFromFeed": .removedFromFeed
-        default: fatalError(
-                "Unknown DownloadStatus in DB: '\(string)' — add a case to "
-                    + "downloadStatus(from:) and downloadStatusString(_:)",
-            )
-        }
+        return .success
     }
 }

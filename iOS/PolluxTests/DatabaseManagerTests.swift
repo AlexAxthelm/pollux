@@ -51,7 +51,6 @@ private func makeEpisode(
         playbackStatus: playbackStatus,
         playbackPositionSecs: nil,
         downloadStatus: downloadStatus,
-        downloadProgress: nil,
         isFlagged: false,
         fileSizeBytes: fileSizeBytes,
         localPath: nil
@@ -228,6 +227,81 @@ struct DatabaseManagerTests {
         let result = try await db.execute(.getEpisode(id: "ep-1"))
         guard case .episode(let fetched) = result else { return }
         #expect(fetched.playbackPositionSecs == largePosition)
+    }
+
+    @Test func updateDownloadState_recordsDownloadedFileMetadata() async throws {
+        let db = try makeManager()
+        try await db.execute(.upsertSubscription(makeSubscription(id: "sub-1")))
+        try await db.execute(.upsertEpisode(makeEpisode(id: "ep-1", subscriptionId: "sub-1")))
+
+        try await db.execute(
+            .updateDownloadState(
+                episodeId: "ep-1", status: .downloaded,
+                localPath: "Downloads/ep-1.mp3", sizeBytes: 4096,
+            ))
+
+        let result = try await db.execute(.getEpisode(id: "ep-1"))
+        guard case let .episode(fetched) = result else {
+            Issue.record("Expected .episode, got \(result)")
+            return
+        }
+        #expect(fetched.downloadStatus == .downloaded)
+        #expect(fetched.localPath == "Downloads/ep-1.mp3")
+        #expect(fetched.fileSizeBytes == 4096)
+    }
+
+    @Test func updateDownloadState_clearsFileMetadataOnReset() async throws {
+        let db = try makeManager()
+        try await db.execute(.upsertSubscription(makeSubscription(id: "sub-1")))
+        try await db.execute(.upsertEpisode(makeEpisode(id: "ep-1", subscriptionId: "sub-1")))
+
+        // Download, then delete: the reset must null out the path and size so no
+        // stale file reference survives.
+        try await db.execute(
+            .updateDownloadState(
+                episodeId: "ep-1", status: .downloaded,
+                localPath: "Downloads/ep-1.mp3", sizeBytes: 4096,
+            ))
+        try await db.execute(
+            .updateDownloadState(
+                episodeId: "ep-1", status: .notDownloaded,
+                localPath: nil, sizeBytes: nil,
+            ))
+
+        let result = try await db.execute(.getEpisode(id: "ep-1"))
+        guard case let .episode(fetched) = result else {
+            Issue.record("Expected .episode, got \(result)")
+            return
+        }
+        #expect(fetched.downloadStatus == .notDownloaded)
+        #expect(fetched.localPath == nil)
+        #expect(fetched.fileSizeBytes == nil)
+    }
+
+    @Test func listPendingDownloads_returnsOnlyInFlightEpisodes() async throws {
+        let db = try makeManager()
+        try await db.execute(.upsertSubscription(makeSubscription(id: "sub-1")))
+
+        // One of each download status; only Downloading + Queued should come back.
+        let statuses: [(String, DownloadStatus)] = [
+            ("ep-notdl", .notDownloaded),
+            ("ep-queued", .queued),
+            ("ep-downloading", .downloading),
+            ("ep-downloaded", .downloaded),
+            ("ep-failed", .failed),
+        ]
+        for (id, status) in statuses {
+            try await db.execute(.upsertEpisode(
+                makeEpisode(id: id, subscriptionId: "sub-1", feedGuid: "g-\(id)", downloadStatus: status),
+            ))
+        }
+
+        let result = try await db.execute(.listPendingDownloads)
+        guard case let .episodes(eps) = result else {
+            Issue.record("Expected .episodes, got \(result)")
+            return
+        }
+        #expect(Set(eps.map(\.id)) == ["ep-queued", "ep-downloading"])
     }
 
     @Test func deleteSubscription_cascadesToEpisodes() async throws {
@@ -430,7 +504,7 @@ struct DatabaseManagerTests {
             title: "Test", description: nil, pubDate: nil, durationSecs: nil,
             enclosureUrl: "https://example.com/ep.mp3", artworkUrl: nil,
             playbackStatus: .unplayed, playbackPositionSecs: nil,
-            downloadStatus: .notDownloaded, downloadProgress: nil,
+            downloadStatus: .notDownloaded,
             isFlagged: false, fileSizeBytes: UInt64.max, localPath: nil
         )
 
@@ -468,32 +542,5 @@ struct DatabaseManagerTests {
             return
         }
         #expect(fetched.durationSecs == nil, "out-of-range duration should read as nil")
-    }
-
-    @Test func episode_outOfRangeDownloadProgressReadsAsNil() async throws {
-        // download_progress has a CHECK (0...100), so planting an out-of-range
-        // value requires bypassing it — standing in for a future schema that
-        // drops the bound or external tooling that ignores it. The read must
-        // degrade to nil, not silently wrap (300 -> 44) as truncation would.
-        let path = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString + ".sqlite").path
-        let db = try DatabaseManager(path: path)
-        try await db.execute(.upsertSubscription(makeSubscription(id: "sub-1")))
-        try await db.execute(.upsertEpisode(
-            makeEpisode(id: "ep-1", subscriptionId: "sub-1", feedGuid: "g1"),
-        ))
-
-        let raw = try DatabasePool(path: path)
-        try await raw.write { db in
-            try db.execute(sql: "PRAGMA ignore_check_constraints = ON")
-            try db.execute(sql: "UPDATE episodes SET download_progress = 300 WHERE id = 'ep-1'")
-        }
-
-        let result = try await db.execute(.getEpisode(id: "ep-1"))
-        guard case let .episode(fetched) = result else {
-            Issue.record("Expected .episode, got \(result)")
-            return
-        }
-        #expect(fetched.downloadProgress == nil, "out-of-range progress should read as nil")
     }
 }

@@ -8,6 +8,9 @@ class Core: ObservableObject {
 
     private var core: CoreFfi
     private let db: DatabaseManager
+    private let downloads: DownloadManager
+    /// Storage operations are funnelled here and executed one at a time, in order.
+    private let storage: AsyncStream<(StorageOperation, UInt32)>.Continuation
 
     init() {
         core = CoreFfi()
@@ -16,10 +19,34 @@ class Core: ObservableObject {
         } catch {
             fatalError("Failed to initialize DatabaseManager: \(error)")
         }
+        do {
+            downloads = try DownloadManager()
+        } catch {
+            fatalError("Failed to initialize DownloadManager: \(error)")
+        }
+        // One serial consumer so writes for a given episode apply in submission order
+        // (Queued → Downloading → terminal). A Task per op could reorder them — a fast
+        // failure/cancel racing the Downloading write would leave a stale status in the
+        // DB and re-download the episode after restart.
+        let (storageStream, storageContinuation) =
+            AsyncStream.makeStream(of: (StorageOperation, UInt32).self)
+        storage = storageContinuation
         guard let view = try? ViewModel.bincodeDeserialize(input: [UInt8](core.view())) else {
             fatalError("Failed to deserialize initial ViewModel from core")
         }
         self.view = view
+        Task { @MainActor [weak self] in
+            for await (operation, requestId) in storageStream {
+                guard let self else { return }
+                let result: StorageResult
+                do {
+                    result = try await db.execute(operation)
+                } catch {
+                    result = .error(error.localizedDescription)
+                }
+                resolveAndDispatch(requestId: requestId, result: result)
+            }
+        }
         update(.started)
     }
 
@@ -48,15 +75,8 @@ class Core: ObservableObject {
             view = updatedView
 
         case let .storage(operation):
-            Task { @MainActor in
-                let result: StorageResult
-                do {
-                    result = try await db.execute(operation)
-                } catch {
-                    result = .error(error.localizedDescription)
-                }
-                resolveAndDispatch(requestId: request.id, result: result)
-            }
+            // Enqueue for the serial consumer set up in init (preserves write order).
+            storage.yield((operation, request.id))
 
         case let .http(operation):
             let requestId = request.id
@@ -66,6 +86,43 @@ class Core: ObservableObject {
                     self?.resolveAndDispatch(requestId: requestId, result: result)
                 }
             }
+
+        case let .download(operation):
+            handleDownload(operation, requestId: request.id)
+        }
+    }
+
+    /// Runs a download-capability operation on the DownloadManager actor (so the UI
+    /// isn't blocked) and resolves the request with its terminal result. Byte progress
+    /// is funnelled through a stream drained by a single consumer, so DownloadProgress
+    /// events reach the core in order — a Task-per-callback could reorder them.
+    private func handleDownload(_ operation: DownloadOperation, requestId: UInt32) {
+        let progressEpisodeId: String? = {
+            if case let .download(episodeId, _) = operation {
+                return episodeId
+            }
+            return nil
+        }()
+        Task { @MainActor in
+            let (progressStream, progressContinuation) =
+                AsyncStream.makeStream(of: (UInt64, UInt64?).self)
+            let consumer = Task { @MainActor [weak self] in
+                for await (received, total) in progressStream {
+                    guard let progressEpisodeId else { continue }
+                    self?.update(.downloadProgress(
+                        episodeId: progressEpisodeId,
+                        receivedBytes: received,
+                        totalBytes: total,
+                    ))
+                }
+            }
+            let result = await downloads.perform(operation) { received, total in
+                progressContinuation.yield((received, total))
+            }
+            // Drain any buffered progress before the terminal result lands.
+            progressContinuation.finish()
+            await consumer.value
+            resolveAndDispatch(requestId: requestId, result: result)
         }
     }
 
@@ -113,6 +170,13 @@ class Core: ObservableObject {
     private func resolveAndDispatch(requestId: UInt32, result: HttpResult) {
         guard let bytes = try? result.bincodeSerialize() else {
             fatalError("Failed to serialize HttpResult for request \(requestId)")
+        }
+        resolveBytes(requestId: requestId, bytes: bytes)
+    }
+
+    private func resolveAndDispatch(requestId: UInt32, result: DownloadResult) {
+        guard let bytes = try? result.bincodeSerialize() else {
+            fatalError("Failed to serialize DownloadResult for request \(requestId)")
         }
         resolveBytes(requestId: requestId, bytes: bytes)
     }

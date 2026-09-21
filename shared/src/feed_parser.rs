@@ -96,7 +96,6 @@ pub fn parse_feed(url: &str, body: Vec<u8>) -> Result<(Subscription, Vec<Episode
                 playback_status: PlaybackStatus::Unplayed,
                 playback_position_secs: None,
                 download_status: DownloadStatus::NotDownloaded,
-                download_progress: None,
                 is_flagged: false,
                 file_size_bytes,
                 local_path: None,

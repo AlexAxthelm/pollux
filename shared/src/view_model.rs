@@ -38,6 +38,20 @@ pub struct SubscriptionDetailView {
     pub sort_order: EpisodeSortOrder,
     pub loading: bool,
     pub error: Option<String>,
+    /// A transient, non-blocking notice for a failed download *operation* (a
+    /// persistence write or file removal that didn't take). Shown as a banner that
+    /// leaves the episode list and its controls intact, unlike `error`. Tagged with
+    /// the episode it concerns so an episode's detail page shows it only when it's
+    /// about that episode, while the list shows it for any.
+    pub download_notice: Option<DownloadNotice>,
+}
+
+/// A failed-download-operation notice, paired with the episode it's about. Transient
+/// and non-blocking (see `SubscriptionDetailView::download_notice`).
+#[derive(Facet, Serialize, Deserialize, Clone)]
+pub struct DownloadNotice {
+    pub episode_id: String,
+    pub message: String,
 }
 
 /// Read-only projection of an `Episode` for display. Dates and durations stay raw
@@ -57,5 +71,14 @@ pub struct EpisodeSummary {
     pub playback_status: PlaybackStatus,
     pub playback_position_secs: Option<u32>,
     pub download_status: DownloadStatus,
-    pub download_progress: Option<u8>,
+    /// Live download progress, present only for the episode currently downloading.
+    /// `received`/`total` are byte counts; `total` is absent when the server didn't
+    /// report a size, in which case the shell shows an indeterminate indicator.
+    /// Transient and never persisted (see `Model::active_download_progress`).
+    pub download_received_bytes: Option<u64>,
+    pub download_total_bytes: Option<u64>,
+    /// Why the download failed, present only for a `Failed` episode. Lets the shell
+    /// show the specific reason (disk full, HTTP status, …) beside Retry rather than
+    /// a generic message. Transient (see `Model::download_errors`).
+    pub download_error: Option<String>,
 }

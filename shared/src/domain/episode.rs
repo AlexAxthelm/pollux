@@ -46,7 +46,6 @@ pub struct Episode {
     pub playback_status: PlaybackStatus,
     pub playback_position_secs: Option<u32>,
     pub download_status: DownloadStatus,
-    pub download_progress: Option<u8>,
     pub is_flagged: bool,
     pub file_size_bytes: Option<u64>,
     pub local_path: Option<String>,

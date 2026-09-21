@@ -104,6 +104,9 @@ Rounding out MVP to a complete, shippable state.
 - **Storage UI**: usage breakdown by subscription, limit configuration
 - **Subscription unsubscribe**: warning with episode count, hard delete,
   playlist re-evaluation on removal
+- **Download queue management**: downloads page, user re-ordering, and a
+  persisted enqueue order so the serial queue restores FIFO across relaunch
+  (today it rebuilds by pub date); groundwork for parallel downloads
 - **Subscription-level download rules**: cascading defaults (global → feed)
 - **Settings completion**: all known settings wired up, cascading defaults
   pattern throughout

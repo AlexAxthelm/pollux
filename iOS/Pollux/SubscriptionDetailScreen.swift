@@ -30,7 +30,7 @@ struct SubscriptionDetailScreen: View {
             }
         }
         .navigationDestination(for: EpisodeSummary.self) { episode in
-            EpisodeDetailView(episode: episode, feedTitle: subscription.title)
+            EpisodeDetailView(core: core, episode: episode, feedTitle: subscription.title)
         }
         .task(id: subscription.id) {
             core.update(.selectSubscription(subscription.id))
@@ -71,14 +71,72 @@ struct SubscriptionDetailScreen: View {
                     .foregroundStyle(themeColors.secondaryText)
             }
         } else {
-            List(detail.episodes, id: \.id) { episode in
-                NavigationLink(value: episode) {
-                    EpisodeRow(episode: episode)
+            VStack(spacing: 0) {
+                // The list spans every episode, so show a notice for any of them.
+                if let notice = detail.downloadNotice {
+                    DownloadNoticeBanner(message: notice.message)
                 }
-                .listRowBackground(themeColors.background)
+                List(detail.episodes, id: \.id) { episode in
+                    NavigationLink(value: episode) {
+                        EpisodeRow(
+                            episode: episode,
+                            onDownload: { core.update(.downloadEpisode($0)) },
+                            onDeleteDownload: { core.update(.deleteDownload($0)) },
+                            onCancelDownload: { core.update(.cancelDownload($0)) },
+                        )
+                    }
+                    // Spec default: short swipe-right → Download / Delete. This is the
+                    // one actionable swipe today (flag / mark-played have no engine yet);
+                    // it becomes user-configurable when Settings lands.
+                    .swipeActions(edge: .leading, allowsFullSwipe: fullSwipeAllowed(episode)) {
+                        downloadSwipeButton(for: episode)
+                    }
+                    .listRowBackground(themeColors.background)
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
+        }
+    }
+
+    /// Leading-swipe download action, mirroring the row's menu: Download when absent,
+    /// Retry after a failure, Delete when stored, Cancel while queued or downloading,
+    /// and nothing once removed from the feed.
+    @ViewBuilder private func downloadSwipeButton(for episode: EpisodeSummary) -> some View {
+        switch episode.downloadStatus {
+        case .notDownloaded:
+            Button { core.update(.downloadEpisode(episode.id)) } label: {
+                Label("Download", systemImage: "arrow.down.circle")
+            }
+            .tint(themeColors.accent)
+        case .failed:
+            Button { core.update(.downloadEpisode(episode.id)) } label: {
+                Label("Retry", systemImage: "arrow.clockwise.circle")
+            }
+            .tint(themeColors.warning)
+        case .downloaded:
+            Button(role: .destructive) { core.update(.deleteDownload(episode.id)) } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        case .queued, .downloading:
+            Button(role: .destructive) { core.update(.cancelDownload(episode.id)) } label: {
+                Label {
+                    Text("Cancel\nDownload")
+                } icon: {
+                    Image(systemName: "xmark.circle")
+                }
+            }
+        case .removedFromFeed:
+            EmptyView()
+        }
+    }
+
+    /// Full-swipe commits the action without tapping. Allowed for downloading (safe,
+    /// re-downloadable) but not for deleting, so a stray long swipe can't wipe a file.
+    private func fullSwipeAllowed(_ episode: EpisodeSummary) -> Bool {
+        switch episode.downloadStatus {
+        case .notDownloaded, .failed: true
+        default: false
         }
     }
 

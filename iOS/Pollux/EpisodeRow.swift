@@ -1,13 +1,19 @@
 import App
 import SwiftUI
 
-/// One episode in the subscription details list. Shows only stored data (art,
-/// title, date, duration, description, read-only played/download status). Controls
-/// whose engines don't exist yet (play, download, more-actions) are rendered as
-/// DEBUG-tinted, disabled placeholders — see `DebugStyle.swift`.
+/// One episode in the subscription details list. Shows stored data (art, title,
+/// date, duration, description, read-only played/download status) and a working
+/// download control. Playback and more-actions remain DEBUG-tinted, disabled
+/// placeholders because their engines don't exist yet — see `DebugStyle.swift`.
 struct EpisodeRow: View {
     @Environment(\.themeColors) private var themeColors
     let episode: EpisodeSummary
+    /// Queue this episode for download (or retry a failed one).
+    let onDownload: (String) -> Void
+    /// Remove this episode's downloaded file.
+    let onDeleteDownload: (String) -> Void
+    /// Stop this episode's in-flight or queued download.
+    let onCancelDownload: (String) -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -20,11 +26,7 @@ struct EpisodeRow: View {
                     .foregroundStyle(themeColors.text)
                     .lineLimit(2)
 
-                if let meta = metaLine {
-                    Text(meta)
-                        .font(.caption)
-                        .foregroundStyle(themeColors.secondaryText)
-                }
+                metaRow
 
                 if let description = episode.descriptionText, !description.isEmpty {
                     Text(description)
@@ -38,7 +40,7 @@ struct EpisodeRow: View {
 
             Spacer(minLength: 8)
 
-            placeholderControls
+            trailingControls
         }
         .padding(.vertical, 4)
     }
@@ -47,10 +49,82 @@ struct EpisodeRow: View {
         EpisodeFormatting.metaLine(pubDate: episode.pubDate, durationSecs: episode.durationSecs)
     }
 
+    /// The date·duration line — except while downloading, when it is replaced by a
+    /// progress indicator. Non-not-downloaded states get a small glyph ahead of the
+    /// date so status reads inline instead of on its own badge line — otherwise
+    /// queued/failed/removed rows would look identical to a plain undownloaded one.
+    @ViewBuilder private var metaRow: some View {
+        if episode.downloadStatus == .downloading {
+            downloadingLine
+        } else {
+            HStack(spacing: 4) {
+                if let glyph = statusGlyph {
+                    Image(systemName: glyph.icon)
+                        .font(.caption)
+                        .foregroundStyle(glyph.tint)
+                        .accessibilityLabel(glyph.label)
+                }
+                if let text = metaText {
+                    Text(text)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .foregroundStyle(themeColors.secondaryText)
+                }
+            }
+        }
+    }
+
+    /// The date·duration line, replaced by the failure reason when a download failed
+    /// so the row says *why* (disk full, HTTP status, …) next to the warning glyph.
+    private var metaText: String? {
+        if episode.downloadStatus == .failed, let error = episode.downloadError {
+            return error
+        }
+        return metaLine
+    }
+
+    /// The inline download-status glyph for the date line. `nil` for not-downloaded
+    /// (a plain date) and downloading (handled by `downloadingLine`). Failed uses the
+    /// error color to stand out; the rest are neutral.
+    private var statusGlyph: StatusGlyph? {
+        switch episode.downloadStatus {
+        case .downloaded:
+            StatusGlyph(icon: "arrow.down.circle.fill", tint: themeColors.secondaryText, label: "Downloaded")
+        case .queued:
+            StatusGlyph(icon: "clock", tint: themeColors.secondaryText, label: "Queued for download")
+        case .failed:
+            StatusGlyph(icon: "exclamationmark.triangle.fill", tint: themeColors.error, label: "Download failed")
+        case .removedFromFeed:
+            StatusGlyph(icon: "xmark.circle", tint: themeColors.secondaryText, label: "Removed from feed")
+        case .notDownloaded, .downloading:
+            nil
+        }
+    }
+
+    /// In-progress download: a determinate bar when the size is known, otherwise a
+    /// spinner with whatever byte count we have. Replaces the date·duration line.
+    @ViewBuilder private var downloadingLine: some View {
+        let progress = EpisodeFormatting.downloadProgress(
+            received: episode.downloadReceivedBytes,
+            total: episode.downloadTotalBytes,
+        )
+        if let progress, let fraction = progress.fraction {
+            ProgressView(value: fraction)
+                .accessibilityLabel("Downloading \(Int(fraction * 100)) percent")
+        } else {
+            HStack(spacing: 6) {
+                ProgressView()
+                Text(progress?.label ?? "Downloading…")
+                    .font(.caption)
+                    .foregroundStyle(themeColors.secondaryText)
+            }
+            .accessibilityLabel("Downloading \(progress?.label ?? "")")
+        }
+    }
+
     @ViewBuilder private var statusRow: some View {
         let playback = playbackBadge
-        let download = downloadBadge
-        if playback != nil || download != nil || playbackPositionText != nil {
+        if playback != nil || playbackPositionText != nil {
             HStack(spacing: 10) {
                 if let playback {
                     StatusBadge(systemImage: playback.icon, text: playback.text)
@@ -58,25 +132,60 @@ struct EpisodeRow: View {
                 if let positionText = playbackPositionText {
                     StatusBadge(systemImage: "clock.arrow.circlepath", text: positionText)
                 }
-                if let download {
-                    StatusBadge(systemImage: download.icon, text: download.text)
-                }
             }
             .padding(.top, 2)
         }
     }
 
-    /// Play + more-actions: no playback engine or download manager exists yet, so
-    /// these are inert placeholders (DEBUG tint + 🚫 overlay), not wired to fake
-    /// behavior.
-    private var placeholderControls: some View {
+    /// Trailing controls: the still-stubbed play button (no playback engine yet) and
+    /// the three-dots menu, which is where the download action now lives. Download
+    /// *status* stays inline (`metaRow`); this menu is the *action* surface.
+    private var trailingControls: some View {
         HStack(spacing: 12) {
             Image(systemName: "play.circle.fill")
                 .font(.title2)
                 .stubbed()
+            moreMenu
+        }
+    }
+
+    /// The three-dots menu. Today it holds only the download action (its first,
+    /// context-sensitive item); Play, Mark played, Flag, etc. join it as their
+    /// engines land. Swipe shortcuts are a later, user-configurable addition.
+    private var moreMenu: some View {
+        Menu {
+            downloadMenuItem
+        } label: {
             Image(systemName: "ellipsis.circle")
                 .font(.title2)
-                .stubbed()
+        }
+        .accessibilityLabel("More actions")
+    }
+
+    /// The download entry, driven by status: Download when absent, Retry after a
+    /// failure, Delete when stored, Cancel Download while queued or downloading, and
+    /// a disabled indicator once removed from the feed.
+    @ViewBuilder private var downloadMenuItem: some View {
+        switch episode.downloadStatus {
+        case .notDownloaded:
+            Button { onDownload(episode.id) } label: {
+                Label("Download", systemImage: "arrow.down.circle")
+            }
+        case .failed:
+            Button { onDownload(episode.id) } label: {
+                Label("Retry Download", systemImage: "arrow.clockwise.circle")
+            }
+        case .downloaded:
+            Button(role: .destructive) { onDeleteDownload(episode.id) } label: {
+                Label("Delete Download", systemImage: "trash")
+            }
+        case .queued, .downloading:
+            Button(role: .destructive) { onCancelDownload(episode.id) } label: {
+                Label("Cancel Download", systemImage: "xmark.circle")
+            }
+        case .removedFromFeed:
+            Button {} label: { Label("Removed From Feed", systemImage: "xmark.circle") }
+                .disabled(true)
         }
     }
 
@@ -101,23 +210,13 @@ struct EpisodeRow: View {
         }
         return "at \(position)"
     }
+}
 
-    private var downloadBadge: (icon: String, text: String)? {
-        switch episode.downloadStatus {
-        case .notDownloaded:
-            nil
-        case .queued:
-            ("clock", "Queued")
-        case .downloading:
-            ("arrow.down.circle", "Downloading")
-        case .downloaded:
-            ("arrow.down.circle.fill", "Downloaded")
-        case .failed:
-            ("exclamationmark.triangle", "Failed")
-        case .removedFromFeed:
-            ("xmark.circle", "Removed")
-        }
-    }
+/// Inline download-status glyph shown before the date on an episode row.
+private struct StatusGlyph {
+    let icon: String
+    let tint: Color
+    let label: String
 }
 
 /// A compact read-only status indicator (real data, theme colors).

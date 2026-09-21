@@ -2,16 +2,18 @@ use crux_core::{render::render, App, Command};
 use facet::Facet;
 use serde::{Deserialize, Serialize};
 
+use crate::capabilities::download::{DownloadOperation, DownloadResult};
 use crate::capabilities::http::{HttpOperation, HttpResult};
 use crate::capabilities::storage::{StorageOperation, StorageResult};
-use crate::domain::{Episode, EpisodeSortOrder};
+use crate::domain::{DownloadStatus, Episode, EpisodeSortOrder};
 use crate::effect::Effect;
 use crate::feed_parser::parse_feed;
 use crate::html::strip_html_preview;
-use crate::model::Model;
+use crate::model::{DownloadProgress, Model, QueuedDownload};
 use crate::theme::{theme_view, ThemeId, ThemeMode};
 use crate::view_model::{
-    EpisodeSummary, LibraryView, SubscriptionDetailView, SubscriptionSummary, ViewModel,
+    DownloadNotice, EpisodeSummary, LibraryView, SubscriptionDetailView, SubscriptionSummary,
+    ViewModel,
 };
 
 #[derive(Default)]
@@ -27,9 +29,14 @@ impl App for Pollux {
         match event {
             Event::Started => {
                 model.loading = true;
-                Command::request_from_shell(StorageOperation::ListSubscriptions)
-                    .then_send(|r| Event::SubscriptionsLoaded(Box::new(r)))
-                    .and(render())
+                let subscriptions =
+                    Command::request_from_shell(StorageOperation::ListSubscriptions)
+                        .then_send(|r| Event::SubscriptionsLoaded(Box::new(r)));
+                // Rebuild the download queue for anything a previous session left
+                // mid-download, and resume it.
+                let pending = Command::request_from_shell(StorageOperation::ListPendingDownloads)
+                    .then_send(|r| Event::PendingDownloadsLoaded(Box::new(r)));
+                subscriptions.and(pending).and(render())
             }
             Event::SubscriptionsLoaded(result) => {
                 model.loading = false;
@@ -44,6 +51,45 @@ impl App for Pollux {
                     }
                 }
                 render()
+            }
+            Event::PendingDownloadsLoaded(result) => {
+                // Rebuild the queue from downloads a prior session left in flight and
+                // resume them. Partial files don't survive a quit, so each restarts
+                // from scratch. Best-effort: an error here just leaves nothing queued.
+                let mut cmd = Command::done();
+                if let StorageResult::Episodes(rows) = *result {
+                    // Nothing is in flight at launch, so `maybe_start_next` will start
+                    // the first re-enqueued item (persisting it as `Downloading`).
+                    let will_start_head = model.downloading.is_none();
+                    for episode in rows {
+                        let already = model.downloading.as_deref() == Some(episode.id.as_str())
+                            || model
+                                .download_queue
+                                .iter()
+                                .any(|q| q.episode_id == episode.id);
+                        if already {
+                            continue;
+                        }
+                        // The head item is about to be started, so skip a `Queued` write
+                        // that its `Downloading` write would immediately supersede. Items
+                        // waiting behind it are normalized to `Queued` so one left
+                        // "Downloading" by a prior session no longer reads that way.
+                        let is_head = will_start_head && model.download_queue.is_empty();
+                        if !is_head {
+                            cmd = cmd.and(persist_download_state(
+                                &episode.id,
+                                DownloadStatus::Queued,
+                                None,
+                                None,
+                            ));
+                        }
+                        model.download_queue.push(QueuedDownload {
+                            episode_id: episode.id,
+                            url: episode.enclosure_url,
+                        });
+                    }
+                }
+                cmd.and(maybe_start_next(model)).and(render())
             }
             Event::FetchFeed(url) => {
                 model.loading = true;
@@ -126,6 +172,8 @@ impl App for Pollux {
                     model.episodes.clear();
                     model.detail_loading = true;
                     model.detail_error = None;
+                    // A notice from the previous feed doesn't apply to this one.
+                    model.download_notice = None;
                     Command::request_from_shell(StorageOperation::ListEpisodesBySubscription {
                         subscription_id: id.clone(),
                     })
@@ -168,6 +216,215 @@ impl App for Pollux {
                 // The sort is applied in view(), so this only records the choice
                 // and re-renders — no storage round-trip needed.
                 model.episode_sort = order;
+                render()
+            }
+            Event::DownloadEpisode(episode_id) => {
+                // A fresh user action supersedes any stale op-failure notice.
+                model.download_notice = None;
+                // Only a not-downloaded or failed (retry) episode can start a
+                // download. Every other state — already queued/downloading, already
+                // downloaded, removed from feed, or an episode we don't have loaded —
+                // is a no-op, so a stray or repeated event can't double-enqueue or
+                // re-download a file we already have.
+                let found = model
+                    .episodes
+                    .iter()
+                    .find(|e| e.id == episode_id)
+                    .map(|e| (e.download_status.clone(), e.enclosure_url.clone()));
+                match found {
+                    Some((DownloadStatus::NotDownloaded, url))
+                    | Some((DownloadStatus::Failed, url)) => {
+                        if !download_allowed(model) {
+                            // Fail-on-full: unlimited today, so this is unreachable.
+                            // When a storage cap exists this is where a download is
+                            // refused up front and marked Failed instead of started.
+                            set_download_state(
+                                model,
+                                &episode_id,
+                                DownloadStatus::Failed,
+                                None,
+                                None,
+                            );
+                            persist_download_state(&episode_id, DownloadStatus::Failed, None, None)
+                                .and(render())
+                        } else {
+                            set_download_state(
+                                model,
+                                &episode_id,
+                                DownloadStatus::Queued,
+                                None,
+                                None,
+                            );
+                            model.download_queue.push(QueuedDownload {
+                                episode_id: episode_id.clone(),
+                                url,
+                            });
+                            let persist = persist_download_state(
+                                &episode_id,
+                                DownloadStatus::Queued,
+                                None,
+                                None,
+                            );
+                            persist.and(maybe_start_next(model)).and(render())
+                        }
+                    }
+                    _ => render(),
+                }
+            }
+            Event::DownloadProgress {
+                episode_id,
+                received_bytes,
+                total_bytes,
+            } => {
+                // Track only the active download's progress; drop a late or stale
+                // report for an episode that already finished or was superseded.
+                if model.downloading.as_deref() == Some(episode_id.as_str()) {
+                    model.active_download_progress = Some(DownloadProgress {
+                        episode_id,
+                        received_bytes,
+                        total_bytes,
+                    });
+                    render()
+                } else {
+                    Command::done()
+                }
+            }
+            Event::DownloadFinished { episode_id, result } => match *result {
+                DownloadResult::Completed {
+                    local_path,
+                    size_bytes,
+                } => {
+                    finish_active(model, &episode_id);
+                    set_download_state(
+                        model,
+                        &episode_id,
+                        DownloadStatus::Downloaded,
+                        Some(local_path.clone()),
+                        Some(size_bytes),
+                    );
+                    let persist = persist_download_state(
+                        &episode_id,
+                        DownloadStatus::Downloaded,
+                        Some(local_path),
+                        Some(size_bytes),
+                    );
+                    persist.and(maybe_start_next(model)).and(render())
+                }
+                DownloadResult::Error(reason) => {
+                    finish_active(model, &episode_id);
+                    set_download_state(model, &episode_id, DownloadStatus::Failed, None, None);
+                    // Keep the shell's specific reason so the UI can show it beside
+                    // Retry (set_download_state cleared any older one above).
+                    model.download_errors.insert(episode_id.clone(), reason);
+                    let persist =
+                        persist_download_state(&episode_id, DownloadStatus::Failed, None, None);
+                    persist.and(maybe_start_next(model)).and(render())
+                }
+                DownloadResult::Cancelled => {
+                    // The shell cancelled the task and flushed the partial file, so
+                    // the episode goes back to not-downloaded and the queue drains on.
+                    // This is the *sole* owner of a cancelled download's state reset —
+                    // the `Cancel` operation's own ack (DownloadCanceled) does nothing.
+                    finish_active(model, &episode_id);
+                    reset_to_not_downloaded(model, &episode_id)
+                        .and(maybe_start_next(model))
+                        .and(render())
+                }
+                // Deleted never arrives here (it resolves DeleteDownload instead).
+                DownloadResult::Deleted => render(),
+            },
+            Event::CancelDownload(episode_id) => {
+                // A fresh user action supersedes any stale op-failure notice.
+                model.download_notice = None;
+                if model.downloading.as_deref() == Some(episode_id.as_str()) {
+                    // Active download: ask the shell to cancel the task and flush the
+                    // partial file. The in-flight Download request then resolves as
+                    // Cancelled (handled above), which finalizes the state.
+                    Command::request_from_shell(DownloadOperation::Cancel {
+                        episode_id: episode_id.clone(),
+                    })
+                    .then_send(|r| Event::DownloadCanceled(Box::new(r)))
+                    .and(render())
+                } else if let Some(pos) = model
+                    .download_queue
+                    .iter()
+                    .position(|q| q.episode_id == episode_id)
+                {
+                    // Queued but not started: just drop it from the queue and reset —
+                    // nothing is running and no file exists yet, so no shell cancel is
+                    // needed and the reset happens synchronously here.
+                    model.download_queue.remove(pos);
+                    reset_to_not_downloaded(model, &episode_id).and(render())
+                } else {
+                    // Not downloading and not queued — nothing to cancel.
+                    render()
+                }
+            }
+            Event::DownloadCanceled(_result) => {
+                // The `Cancel` request must be resolved (the shell resolves every
+                // request), so this is its required sink — nothing more. The actual
+                // state reset is owned entirely by the in-flight `Download` request
+                // resolving `Cancelled` (see DownloadFinished above); if the cancel
+                // somehow didn't take, that download simply resolves normally, so
+                // there is nothing to surface here.
+                render()
+            }
+            Event::DeleteDownload(episode_id) => {
+                // A fresh user action supersedes any stale op-failure notice.
+                model.download_notice = None;
+                let local_path = model
+                    .episodes
+                    .iter()
+                    .find(|e| e.id == episode_id)
+                    .and_then(|e| e.local_path.clone());
+                match local_path {
+                    Some(path) => {
+                        let id = episode_id.clone();
+                        Command::request_from_shell(DownloadOperation::Delete { local_path: path })
+                            .then_send(move |r| Event::DownloadDeleted {
+                                episode_id: id.clone(),
+                                result: Box::new(r),
+                            })
+                            .and(render())
+                    }
+                    None => {
+                        // Nothing on disk (e.g. a Failed row): normalize to
+                        // NotDownloaded without a filesystem round-trip.
+                        reset_to_not_downloaded(model, &episode_id).and(render())
+                    }
+                }
+            }
+            Event::DownloadDeleted { episode_id, result } => match *result {
+                DownloadResult::Deleted => {
+                    reset_to_not_downloaded(model, &episode_id).and(render())
+                }
+                DownloadResult::Error(e) => {
+                    // The file couldn't be removed; leave the row (still Downloaded) as
+                    // it is and surface why through the non-blocking notice rather than
+                    // the list-load error, which would hide every episode and control.
+                    model.download_notice = Some(DownloadNotice {
+                        episode_id,
+                        message: format!("Couldn't remove the download: {e}"),
+                    });
+                    render()
+                }
+                // Only Deleted/Error arrive from a Delete request; the rest are
+                // unreachable but keep the match total.
+                DownloadResult::Completed { .. } | DownloadResult::Cancelled => render(),
+            },
+            Event::DownloadStatePersisted { episode_id, result } => {
+                // A durability failure: the UI already shows the correct optimistic
+                // state, so surface this as a non-blocking notice, not the list error.
+                // Success is silent — notably it does NOT clear an existing notice, so
+                // an unrelated episode's persist can't dismiss another episode's failure
+                // message. The notice clears on the next user download action (see
+                // DownloadEpisode/DeleteDownload/CancelDownload) or on a feed switch.
+                if let StorageResult::Error(e) = *result {
+                    model.download_notice = Some(DownloadNotice {
+                        episode_id,
+                        message: format!("Couldn't save the download's state: {e}"),
+                    });
+                }
                 render()
             }
             Event::SetTheme { id, mode } => {
@@ -216,6 +473,24 @@ fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
     let mut episodes: Vec<EpisodeSummary> = model.episodes.iter().map(episode_summary).collect();
     sort_episodes(&mut episodes, model.episode_sort);
 
+    // Overlay the in-flight download's live byte progress onto its row. Progress is
+    // transient runtime state (not stored on the Episode), so it is injected here at
+    // projection time for the one episode currently downloading.
+    if let Some(progress) = model.active_download_progress.as_ref() {
+        if let Some(summary) = episodes.iter_mut().find(|e| e.id == progress.episode_id) {
+            summary.download_received_bytes = Some(progress.received_bytes);
+            summary.download_total_bytes = progress.total_bytes;
+        }
+    }
+
+    // Overlay each failed episode's reason (also transient, not stored on the Episode).
+    // Skipped entirely when nothing has failed, which is the common case.
+    if !model.download_errors.is_empty() {
+        for summary in episodes.iter_mut() {
+            summary.download_error = model.download_errors.get(&summary.id).cloned();
+        }
+    }
+
     let (subscription_id, title, artwork_url) = match &model.selected_subscription {
         Some(s) => (Some(s.id.clone()), s.title.clone(), s.artwork_url.clone()),
         None => (None, String::new(), None),
@@ -229,6 +504,7 @@ fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
         sort_order: model.episode_sort,
         loading: model.detail_loading,
         error: model.detail_error.clone(),
+        download_notice: model.download_notice.clone(),
     }
 }
 
@@ -256,7 +532,11 @@ fn episode_summary(e: &Episode) -> EpisodeSummary {
         playback_status: e.playback_status.clone(),
         playback_position_secs: e.playback_position_secs,
         download_status: e.download_status.clone(),
-        download_progress: e.download_progress,
+        // Live progress and the failure reason are overlaid in
+        // `build_subscription_detail`; every row ships without them here.
+        download_received_bytes: None,
+        download_total_bytes: None,
+        download_error: None,
     }
 }
 
@@ -278,11 +558,122 @@ fn sort_episodes(episodes: &mut [EpisodeSummary], order: EpisodeSortOrder) {
     }
 }
 
+/// Pre-download storage check. Unlimited today — the user-configurable soft cap
+/// arrives with the Settings screen (see ROADMAP follow-ups). Device-full is not
+/// predicted here; it surfaces as the shell's write failing (`DownloadResult::Error`
+/// → `Failed`), which is the fail-on-full behavior the storage spec calls for.
+fn download_allowed(_model: &Model) -> bool {
+    true
+}
+
+/// Applies a download-state transition to the in-memory episode, if it's loaded.
+///
+/// `SelectSubscription` is intentionally idempotent (it won't reload the feed
+/// already on screen), so a status change written only to storage would not show
+/// up on the details page. Mutating `model.episodes` in place is what lets `view()`
+/// reproject the new state without a reload — see the note at `SelectSubscription`.
+/// `local_path`/`size_bytes`/`progress` are set (or cleared) together with the
+/// status so the row never keeps a path for a file that isn't there.
+fn set_download_state(
+    model: &mut Model,
+    episode_id: &str,
+    status: DownloadStatus,
+    local_path: Option<String>,
+    size_bytes: Option<u64>,
+) {
+    // A recorded failure reason is only meaningful while the episode is Failed; every
+    // other transition drops it. The `Error` handler re-inserts after calling this.
+    if !matches!(status, DownloadStatus::Failed) {
+        model.download_errors.remove(episode_id);
+    }
+    if let Some(episode) = model.episodes.iter_mut().find(|e| e.id == episode_id) {
+        episode.download_status = status;
+        episode.local_path = local_path;
+        episode.file_size_bytes = size_bytes;
+    }
+}
+
+/// Persists a download-state transition through the storage capability. The result
+/// is checked for errors (via `DownloadStatePersisted`) but success is silent — the
+/// UI already reflects the change from `set_download_state`, so persistence is only
+/// about durability across restarts.
+fn persist_download_state(
+    episode_id: &str,
+    status: DownloadStatus,
+    local_path: Option<String>,
+    size_bytes: Option<u64>,
+) -> Command<Effect, Event> {
+    // Capture the id so a persistence failure's notice can be tagged with its episode.
+    let id = episode_id.to_string();
+    Command::request_from_shell(StorageOperation::UpdateDownloadState {
+        episode_id: episode_id.to_string(),
+        status,
+        local_path,
+        size_bytes,
+    })
+    .then_send(move |r| Event::DownloadStatePersisted {
+        episode_id: id.clone(),
+        result: Box::new(r),
+    })
+}
+
+/// Resets an episode to not-downloaded (in the model) and returns the command that
+/// persists it. The single shape used everywhere a download ends without a file —
+/// cancelling an active or queued download, and deleting a stored one.
+fn reset_to_not_downloaded(model: &mut Model, episode_id: &str) -> Command<Effect, Event> {
+    set_download_state(model, episode_id, DownloadStatus::NotDownloaded, None, None);
+    persist_download_state(episode_id, DownloadStatus::NotDownloaded, None, None)
+}
+
+/// Clears the in-flight marker (and its live progress) when the active download
+/// reaches a terminal state.
+fn finish_active(model: &mut Model, episode_id: &str) {
+    if model.downloading.as_deref() == Some(episode_id) {
+        model.downloading = None;
+        model.active_download_progress = None;
+    }
+}
+
+/// Starts the next queued download if nothing is in flight (serial: one at a time).
+/// Returns the command that marks the episode `Downloading`, persists that, and
+/// issues the shell download whose result comes back as `DownloadFinished`. A no-op
+/// (empty command) when a download is already running or the queue is empty.
+fn maybe_start_next(model: &mut Model) -> Command<Effect, Event> {
+    if model.downloading.is_some() {
+        return Command::done();
+    }
+    if model.download_queue.is_empty() {
+        return Command::done();
+    }
+    // The queue entry carries the URL, so a download can start without its feed's
+    // episodes being loaded (e.g. a resume at launch).
+    let QueuedDownload { episode_id, url } = model.download_queue.remove(0);
+
+    model.downloading = Some(episode_id.clone());
+    // A fresh download starts with no progress until the shell reports the first bytes.
+    model.active_download_progress = None;
+    set_download_state(model, &episode_id, DownloadStatus::Downloading, None, None);
+
+    let persist = persist_download_state(&episode_id, DownloadStatus::Downloading, None, None);
+    let download = Command::request_from_shell(DownloadOperation::Download {
+        episode_id: episode_id.clone(),
+        url,
+    })
+    .then_send(move |r| Event::DownloadFinished {
+        episode_id: episode_id.clone(),
+        result: Box::new(r),
+    });
+    persist.and(download)
+}
+
 #[derive(Facet, Serialize, Deserialize, Clone, Debug)]
 #[repr(C)]
 pub enum Event {
     Started,
     SubscriptionsLoaded(Box<StorageResult>),
+    /// Episodes left `Downloading`/`Queued` by a previous session, loaded at launch
+    /// so their downloads can be re-enqueued and resumed.
+    PendingDownloadsLoaded(Box<StorageResult>),
     FetchFeed(String),
     FeedFetched {
         url: String,
@@ -295,6 +686,38 @@ pub enum Event {
         result: Box<StorageResult>,
     },
     SetEpisodeSort(EpisodeSortOrder),
+    /// Queue an episode's audio for download (or retry a failed one).
+    DownloadEpisode(String),
+    /// Remove a downloaded (or failed) episode's local file.
+    DeleteDownload(String),
+    /// Stop an in-flight or queued download and reset the episode to not-downloaded.
+    CancelDownload(String),
+    /// Required resolution sink for the `Cancel` request — carries no state change.
+    /// The reset is owned by the in-flight `Download` request resolving `Cancelled`.
+    DownloadCanceled(Box<DownloadResult>),
+    /// Live byte progress for the in-flight download, reported by the shell while
+    /// the one-shot download request is still running. Transient — not persisted.
+    DownloadProgress {
+        episode_id: String,
+        received_bytes: u64,
+        total_bytes: Option<u64>,
+    },
+    /// Terminal result of a shell download for `episode_id`.
+    DownloadFinished {
+        episode_id: String,
+        result: Box<DownloadResult>,
+    },
+    /// Terminal result of a shell delete for `episode_id`.
+    DownloadDeleted {
+        episode_id: String,
+        result: Box<DownloadResult>,
+    },
+    /// Result of persisting a download-state transition. Success is silent; an
+    /// error is surfaced on the details page (downloads are driven from there).
+    DownloadStatePersisted {
+        episode_id: String,
+        result: Box<StorageResult>,
+    },
     /// Change the active theme. Not yet emitted by any UI — the seam for the
     /// Settings appearance section (see `docs/features/theme.md`).
     SetTheme {
@@ -335,7 +758,6 @@ mod tests {
             playback_status: PlaybackStatus::Unplayed,
             playback_position_secs: None,
             download_status: DownloadStatus::NotDownloaded,
-            download_progress: None,
             is_flagged: false,
             file_size_bytes: None,
             local_path: None,
@@ -405,12 +827,21 @@ mod tests {
         assert!(model.loading);
 
         let effects: Vec<Effect> = cmd.effects().collect();
-        assert_eq!(effects.len(), 2);
+        // ListSubscriptions + ListPendingDownloads + render.
+        assert_eq!(effects.len(), 3);
 
         let has_storage = effects
             .iter()
             .any(|e| matches!(e, Effect::Storage(r) if matches!(r.operation, StorageOperation::ListSubscriptions)));
         assert!(has_storage, "expected a ListSubscriptions storage effect");
+
+        let has_pending = effects
+            .iter()
+            .any(|e| matches!(e, Effect::Storage(r) if matches!(r.operation, StorageOperation::ListPendingDownloads)));
+        assert!(
+            has_pending,
+            "expected a ListPendingDownloads storage effect to resume interrupted downloads"
+        );
 
         let has_render = effects.iter().any(|e| matches!(e, Effect::Render(_)));
         assert!(has_render, "expected a render effect");
@@ -1084,5 +1515,691 @@ mod tests {
         let summary = &app.view(&model).subscription_detail.episodes[0];
         assert!(summary.description.is_none());
         assert!(summary.description_text.is_none());
+    }
+
+    // --- Download manager ---
+
+    fn model_episode_status(model: &Model, id: &str) -> DownloadStatus {
+        model
+            .episodes
+            .iter()
+            .find(|e| e.id == id)
+            .map(|e| e.download_status.clone())
+            .expect("episode should be loaded")
+    }
+
+    fn queued_ids(model: &Model) -> Vec<String> {
+        model
+            .download_queue
+            .iter()
+            .map(|q| q.episode_id.clone())
+            .collect()
+    }
+
+    fn has_download_effect_for(effects: &[Effect], episode_id: &str) -> bool {
+        effects.iter().any(|e| {
+            matches!(
+                e,
+                Effect::Download(r) if matches!(&r.operation,
+                    DownloadOperation::Download { episode_id: id, .. } if id == episode_id)
+            )
+        })
+    }
+
+    #[test]
+    fn download_episode_marks_downloading_and_issues_download_effect() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+
+        let mut cmd = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+
+        // Serial: nothing else in flight, so it starts immediately.
+        assert_eq!(model.downloading.as_deref(), Some("e1"));
+        assert_eq!(
+            model_episode_status(&model, "e1"),
+            DownloadStatus::Downloading
+        );
+        assert!(
+            model.download_queue.is_empty(),
+            "the only item should be in flight, not queued"
+        );
+
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            has_download_effect_for(&effects, "e1"),
+            "expected a Download effect for e1"
+        );
+
+        // The details page reflects the new state without any re-selection — the
+        // in-place model update is what makes idempotent SelectSubscription safe.
+        let view = app.view(&model);
+        assert_eq!(
+            view.subscription_detail.episodes[0].download_status,
+            DownloadStatus::Downloading
+        );
+    }
+
+    #[test]
+    fn second_download_stays_queued_while_one_is_in_flight() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(
+            &app,
+            &mut model,
+            vec![
+                make_episode("e1", "First", Some(2)),
+                make_episode("e2", "Second", Some(1)),
+            ],
+        );
+
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        let mut cmd = app.update(Event::DownloadEpisode("e2".to_string()), &mut model);
+
+        // e1 is still the one downloading; e2 waits its turn.
+        assert_eq!(model.downloading.as_deref(), Some("e1"));
+        assert_eq!(model_episode_status(&model, "e2"), DownloadStatus::Queued);
+        assert_eq!(queued_ids(&model), vec!["e2"]);
+
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            !has_download_effect_for(&effects, "e2"),
+            "a second download must not start while one is in flight (serial)"
+        );
+    }
+
+    #[test]
+    fn download_completed_marks_downloaded_and_starts_next() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(
+            &app,
+            &mut model,
+            vec![
+                make_episode("e1", "First", Some(2)),
+                make_episode("e2", "Second", Some(1)),
+            ],
+        );
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        let _ = app.update(Event::DownloadEpisode("e2".to_string()), &mut model);
+
+        let mut cmd = app.update(
+            Event::DownloadFinished {
+                episode_id: "e1".to_string(),
+                result: Box::new(DownloadResult::Completed {
+                    local_path: "Downloads/e1.mp3".to_string(),
+                    size_bytes: 4_096,
+                }),
+            },
+            &mut model,
+        );
+
+        // e1 is done, with its file recorded.
+        assert_eq!(
+            model_episode_status(&model, "e1"),
+            DownloadStatus::Downloaded
+        );
+        let e1 = model
+            .episodes
+            .iter()
+            .find(|e| e.id == "e1")
+            .expect("e1 should be loaded");
+        assert_eq!(e1.local_path.as_deref(), Some("Downloads/e1.mp3"));
+        assert_eq!(e1.file_size_bytes, Some(4_096));
+
+        // The queue drains to e2.
+        assert_eq!(model.downloading.as_deref(), Some("e2"));
+        assert_eq!(
+            model_episode_status(&model, "e2"),
+            DownloadStatus::Downloading
+        );
+        assert!(model.download_queue.is_empty());
+
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            has_download_effect_for(&effects, "e2"),
+            "finishing one download should start the next queued one"
+        );
+    }
+
+    #[test]
+    fn download_error_marks_failed_and_still_drains_queue() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(
+            &app,
+            &mut model,
+            vec![
+                make_episode("e1", "First", Some(2)),
+                make_episode("e2", "Second", Some(1)),
+            ],
+        );
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        let _ = app.update(Event::DownloadEpisode("e2".to_string()), &mut model);
+
+        let mut cmd = app.update(
+            Event::DownloadFinished {
+                episode_id: "e1".to_string(),
+                result: Box::new(DownloadResult::Error("disk full".to_string())),
+            },
+            &mut model,
+        );
+
+        assert_eq!(model_episode_status(&model, "e1"), DownloadStatus::Failed);
+        // A failure must not stall the queue — the next episode still starts.
+        assert_eq!(model.downloading.as_deref(), Some("e2"));
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(has_download_effect_for(&effects, "e2"));
+    }
+
+    #[test]
+    fn download_failure_reason_is_exposed_on_the_episode() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+
+        let _ = app.update(
+            Event::DownloadFinished {
+                episode_id: "e1".to_string(),
+                result: Box::new(DownloadResult::Error("disk full".to_string())),
+            },
+            &mut model,
+        );
+
+        // The specific reason rides along on the failed episode's summary.
+        let summary = &app.view(&model).subscription_detail.episodes[0];
+        assert_eq!(summary.download_status, DownloadStatus::Failed);
+        assert_eq!(summary.download_error.as_deref(), Some("disk full"));
+    }
+
+    #[test]
+    fn retrying_a_failed_download_clears_the_reason() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        let _ = app.update(
+            Event::DownloadFinished {
+                episode_id: "e1".to_string(),
+                result: Box::new(DownloadResult::Error("boom".to_string())),
+            },
+            &mut model,
+        );
+        assert!(!model.download_errors.is_empty());
+
+        // Retrying (a DownloadEpisode on the failed episode) clears the reason and
+        // starts over.
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        assert!(model.download_errors.is_empty());
+        let summary = &app.view(&model).subscription_detail.episodes[0];
+        assert!(summary.download_error.is_none());
+        assert_eq!(summary.download_status, DownloadStatus::Downloading);
+    }
+
+    #[test]
+    fn delete_download_issues_delete_effect_then_resets_on_result() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let mut downloaded = make_episode("e1", "Ep", Some(1));
+        downloaded.download_status = DownloadStatus::Downloaded;
+        downloaded.local_path = Some("Downloads/e1.mp3".to_string());
+        downloaded.file_size_bytes = Some(4_096);
+        load_episodes(&app, &mut model, vec![downloaded]);
+
+        // Deleting a downloaded episode goes to the shell first (best-effort file
+        // removal), so the row stays Downloaded until the delete result comes back.
+        let mut cmd = app.update(Event::DeleteDownload("e1".to_string()), &mut model);
+        assert_eq!(
+            model_episode_status(&model, "e1"),
+            DownloadStatus::Downloaded
+        );
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            effects.iter().any(|e| matches!(
+                e,
+                Effect::Download(r) if matches!(&r.operation,
+                    DownloadOperation::Delete { local_path } if local_path == "Downloads/e1.mp3")
+            )),
+            "expected a Delete effect carrying the stored path"
+        );
+
+        // The shell reports the file gone.
+        let _ = app.update(
+            Event::DownloadDeleted {
+                episode_id: "e1".to_string(),
+                result: Box::new(DownloadResult::Deleted),
+            },
+            &mut model,
+        );
+        assert_eq!(
+            model_episode_status(&model, "e1"),
+            DownloadStatus::NotDownloaded
+        );
+        let e1 = model
+            .episodes
+            .iter()
+            .find(|e| e.id == "e1")
+            .expect("e1 should be loaded");
+        assert!(e1.local_path.is_none(), "path must be cleared after delete");
+        assert!(e1.file_size_bytes.is_none());
+    }
+
+    #[test]
+    fn delete_without_a_local_file_normalizes_immediately() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let mut failed = make_episode("e1", "Ep", Some(1));
+        failed.download_status = DownloadStatus::Failed;
+        load_episodes(&app, &mut model, vec![failed]);
+
+        // A Failed row has no file, so there's no shell round-trip — it just resets.
+        let mut cmd = app.update(Event::DeleteDownload("e1".to_string()), &mut model);
+        assert_eq!(
+            model_episode_status(&model, "e1"),
+            DownloadStatus::NotDownloaded
+        );
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            !effects.iter().any(|e| matches!(e, Effect::Download(_))),
+            "no file means no Delete effect"
+        );
+    }
+
+    #[test]
+    fn download_persist_error_surfaces_as_a_notice_not_the_list_error() {
+        let app = Pollux;
+        let mut model = Model::default();
+        // A pre-existing list-load error must survive a download op-failure.
+        model.detail_error = Some("earlier list load failed".to_string());
+
+        let _ = app.update(
+            Event::DownloadStatePersisted {
+                episode_id: "e1".to_string(),
+                result: Box::new(StorageResult::Error("db locked".to_string())),
+            },
+            &mut model,
+        );
+
+        // The op failure lands in the non-blocking notice, tagged with its episode, and
+        // the list error (which would blank the whole episode list) is untouched.
+        let notice = model.download_notice.as_ref().expect("a notice");
+        assert_eq!(notice.episode_id, "e1");
+        assert!(notice.message.contains("db locked"));
+        assert_eq!(
+            model.detail_error.as_deref(),
+            Some("earlier list load failed")
+        );
+    }
+
+    #[test]
+    fn an_unrelated_successful_persist_does_not_clear_the_notice() {
+        // A different episode's persist succeeding must NOT dismiss a standing
+        // op-failure notice — otherwise a background download completing could wipe
+        // the message before the user sees it. The notice clears on a user action or
+        // feed switch instead (covered by other tests).
+        let app = Pollux;
+        let mut model = Model::default();
+        model.download_notice = Some(DownloadNotice {
+            episode_id: "e1".to_string(),
+            message: "Couldn't remove the download: disk busy".to_string(),
+        });
+
+        // A *different* episode's persist succeeds.
+        let _ = app.update(
+            Event::DownloadStatePersisted {
+                episode_id: "e2".to_string(),
+                result: Box::new(StorageResult::Success),
+            },
+            &mut model,
+        );
+
+        let notice = model.download_notice.as_ref().expect("notice retained");
+        assert_eq!(notice.episode_id, "e1");
+        assert_eq!(notice.message, "Couldn't remove the download: disk busy");
+    }
+
+    #[test]
+    fn a_fresh_download_action_clears_a_stale_download_notice() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+        model.download_notice = Some(DownloadNotice {
+            episode_id: "e1".to_string(),
+            message: "Couldn't remove the download: busy".to_string(),
+        });
+
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+
+        assert!(model.download_notice.is_none());
+    }
+
+    #[test]
+    fn delete_failure_surfaces_as_a_notice_and_keeps_the_row() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let mut downloaded = make_episode("e1", "Ep", Some(1));
+        downloaded.download_status = DownloadStatus::Downloaded;
+        downloaded.local_path = Some("Downloads/e1.mp3".to_string());
+        load_episodes(&app, &mut model, vec![downloaded]);
+        let _ = app.update(Event::DeleteDownload("e1".to_string()), &mut model);
+
+        // The shell couldn't remove the file.
+        let _ = app.update(
+            Event::DownloadDeleted {
+                episode_id: "e1".to_string(),
+                result: Box::new(DownloadResult::Error("disk busy".to_string())),
+            },
+            &mut model,
+        );
+
+        // The row stays Downloaded (the file is presumably still there) and the
+        // failure lands in the non-blocking notice (tagged with e1), not the list error.
+        assert_eq!(
+            model_episode_status(&model, "e1"),
+            DownloadStatus::Downloaded
+        );
+        let notice = model.download_notice.as_ref().expect("a notice");
+        assert_eq!(notice.episode_id, "e1");
+        assert!(notice.message.contains("disk busy"));
+        assert!(model.detail_error.is_none());
+    }
+
+    #[test]
+    fn selecting_a_subscription_clears_a_stale_download_notice() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions = vec![make_subscription("sub-1", "Feed")];
+        model.download_notice = Some(DownloadNotice {
+            episode_id: "e1".to_string(),
+            message: "Couldn't save the download's state: db locked".to_string(),
+        });
+
+        let _ = app.update(Event::SelectSubscription("sub-1".to_string()), &mut model);
+
+        assert!(
+            model.download_notice.is_none(),
+            "a notice from a previous feed shouldn't carry into another"
+        );
+    }
+
+    #[test]
+    fn download_progress_overlays_bytes_on_the_active_episode() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+
+        let _ = app.update(
+            Event::DownloadProgress {
+                episode_id: "e1".to_string(),
+                received_bytes: 512,
+                total_bytes: Some(1024),
+            },
+            &mut model,
+        );
+
+        let summary = &app.view(&model).subscription_detail.episodes[0];
+        assert_eq!(summary.download_received_bytes, Some(512));
+        assert_eq!(summary.download_total_bytes, Some(1024));
+    }
+
+    #[test]
+    fn download_progress_for_an_inactive_episode_is_ignored() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+
+        // Nothing is downloading, so a stray progress report must not stick.
+        let _ = app.update(
+            Event::DownloadProgress {
+                episode_id: "e1".to_string(),
+                received_bytes: 10,
+                total_bytes: None,
+            },
+            &mut model,
+        );
+
+        assert!(model.active_download_progress.is_none());
+        let summary = &app.view(&model).subscription_detail.episodes[0];
+        assert!(summary.download_received_bytes.is_none());
+    }
+
+    #[test]
+    fn progress_is_cleared_when_the_download_finishes() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        let _ = app.update(
+            Event::DownloadProgress {
+                episode_id: "e1".to_string(),
+                received_bytes: 512,
+                total_bytes: Some(1024),
+            },
+            &mut model,
+        );
+        assert!(model.active_download_progress.is_some());
+
+        let _ = app.update(
+            Event::DownloadFinished {
+                episode_id: "e1".to_string(),
+                result: Box::new(DownloadResult::Completed {
+                    local_path: "Downloads/e1.mp3".to_string(),
+                    size_bytes: 1024,
+                }),
+            },
+            &mut model,
+        );
+
+        assert!(
+            model.active_download_progress.is_none(),
+            "progress must be cleared once the download ends"
+        );
+        let summary = &app.view(&model).subscription_detail.episodes[0];
+        assert!(summary.download_received_bytes.is_none());
+    }
+
+    #[test]
+    fn pending_downloads_are_reenqueued_and_resumed_on_load() {
+        let app = Pollux;
+        let mut model = Model::default();
+
+        // Two episodes a previous session left mid-download (their feed is not
+        // loaded — mirroring a cold start before any subscription is selected).
+        let mut e1 = make_episode("e1", "First", Some(2));
+        e1.download_status = DownloadStatus::Downloading;
+        let mut e2 = make_episode("e2", "Second", Some(1));
+        e2.download_status = DownloadStatus::Queued;
+
+        let mut cmd = app.update(
+            Event::PendingDownloadsLoaded(Box::new(StorageResult::Episodes(vec![e1, e2]))),
+            &mut model,
+        );
+
+        // Serial: the first resumes, the rest wait — even though model.episodes is
+        // empty, because the queue carries the URL.
+        assert_eq!(model.downloading.as_deref(), Some("e1"));
+        assert_eq!(queued_ids(&model), vec!["e2"]);
+
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            has_download_effect_for(&effects, "e1"),
+            "an interrupted download should resume at launch"
+        );
+
+        // The head item (e1) is started immediately, so it's persisted only as
+        // Downloading — no redundant Queued write that Downloading would supersede.
+        // The item waiting behind it (e2) is normalized to Queued.
+        let persisted: Vec<(&str, &DownloadStatus)> = effects
+            .iter()
+            .filter_map(|e| match e {
+                Effect::Storage(r) => match &r.operation {
+                    StorageOperation::UpdateDownloadState {
+                        episode_id, status, ..
+                    } => Some((episode_id.as_str(), status)),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            persisted,
+            vec![
+                ("e2", &DownloadStatus::Queued),
+                ("e1", &DownloadStatus::Downloading),
+            ],
+            "head persists Downloading only; the rest persist Queued"
+        );
+    }
+
+    #[test]
+    fn pending_downloads_loaded_empty_is_a_noop() {
+        let app = Pollux;
+        let mut model = Model::default();
+
+        let mut cmd = app.update(
+            Event::PendingDownloadsLoaded(Box::new(StorageResult::Episodes(vec![]))),
+            &mut model,
+        );
+
+        assert!(model.downloading.is_none());
+        assert!(model.download_queue.is_empty());
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(!effects.iter().any(|e| matches!(e, Effect::Download(_))));
+    }
+
+    #[test]
+    fn cancel_active_download_requests_a_shell_cancel() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        assert_eq!(model.downloading.as_deref(), Some("e1"));
+
+        let mut cmd = app.update(Event::CancelDownload("e1".to_string()), &mut model);
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            effects.iter().any(|e| matches!(
+                e,
+                Effect::Download(r) if matches!(&r.operation,
+                    DownloadOperation::Cancel { episode_id } if episode_id == "e1")
+            )),
+            "cancelling the active download should ask the shell to cancel the task"
+        );
+    }
+
+    #[test]
+    fn download_finished_cancelled_resets_and_starts_next() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(
+            &app,
+            &mut model,
+            vec![
+                make_episode("e1", "First", Some(2)),
+                make_episode("e2", "Second", Some(1)),
+            ],
+        );
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        let _ = app.update(Event::DownloadEpisode("e2".to_string()), &mut model);
+        let _ = app.update(Event::CancelDownload("e1".to_string()), &mut model);
+
+        // The shell reports the cancellation back through the Download request.
+        let mut cmd = app.update(
+            Event::DownloadFinished {
+                episode_id: "e1".to_string(),
+                result: Box::new(DownloadResult::Cancelled),
+            },
+            &mut model,
+        );
+
+        assert_eq!(
+            model_episode_status(&model, "e1"),
+            DownloadStatus::NotDownloaded,
+            "a cancelled download goes back to not-downloaded, not failed"
+        );
+        assert!(model.active_download_progress.is_none());
+        // The queue drains to e2.
+        assert_eq!(model.downloading.as_deref(), Some("e2"));
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(has_download_effect_for(&effects, "e2"));
+    }
+
+    #[test]
+    fn cancel_queued_download_drops_it_without_a_shell_cancel() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(
+            &app,
+            &mut model,
+            vec![
+                make_episode("e1", "First", Some(2)),
+                make_episode("e2", "Second", Some(1)),
+            ],
+        );
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        let _ = app.update(Event::DownloadEpisode("e2".to_string()), &mut model);
+        assert_eq!(queued_ids(&model), vec!["e2"]);
+
+        let mut cmd = app.update(Event::CancelDownload("e2".to_string()), &mut model);
+
+        // e2 leaves the queue and resets; e1 keeps downloading.
+        assert!(model.download_queue.is_empty());
+        assert_eq!(
+            model_episode_status(&model, "e2"),
+            DownloadStatus::NotDownloaded
+        );
+        assert_eq!(model.downloading.as_deref(), Some("e1"));
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            !effects.iter().any(|e| matches!(
+                e,
+                Effect::Download(r) if matches!(&r.operation, DownloadOperation::Cancel { .. })
+            )),
+            "a queued item needs no shell cancel — nothing is running"
+        );
+    }
+
+    #[test]
+    fn downloading_an_already_downloaded_episode_is_a_noop() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let mut downloaded = make_episode("e1", "Ep", Some(1));
+        downloaded.download_status = DownloadStatus::Downloaded;
+        downloaded.local_path = Some("Downloads/e1.mp3".to_string());
+        load_episodes(&app, &mut model, vec![downloaded]);
+
+        // A stray DownloadEpisode must not re-download a file we already have.
+        let mut cmd = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+
+        assert_eq!(
+            model_episode_status(&model, "e1"),
+            DownloadStatus::Downloaded
+        );
+        assert!(model.download_queue.is_empty());
+        assert!(model.downloading.is_none());
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            !has_download_effect_for(&effects, "e1"),
+            "downloaded episode must not be re-fetched"
+        );
+    }
+
+    #[test]
+    fn redownloading_an_in_flight_episode_is_a_noop() {
+        let app = Pollux;
+        let mut model = Model::default();
+        load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
+        let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+
+        // Tapping download again while it's downloading must not re-enqueue.
+        let mut cmd = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
+        assert!(model.download_queue.is_empty());
+        let effects: Vec<Effect> = cmd.effects().collect();
+        assert!(
+            !has_download_effect_for(&effects, "e1"),
+            "a redundant download request must not issue a second fetch"
+        );
     }
 }
