@@ -11,7 +11,10 @@ struct DownloadNoticeBanner: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
+            // Decorative: the message text conveys the warning, so keep VoiceOver from
+            // announcing the icon's name ahead of it.
             Image(systemName: "exclamationmark.triangle.fill")
+                .accessibilityHidden(true)
             Text(message)
                 .font(.caption)
                 .fixedSize(horizontal: false, vertical: true)
