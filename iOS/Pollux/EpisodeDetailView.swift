@@ -19,6 +19,18 @@ struct EpisodeDetailView: View {
         core.view.subscriptionDetail.episodes.first { $0.id == episode.id } ?? episode
     }
 
+    /// The op-failure notice message, but only when it concerns this episode — the
+    /// notice is subscription-wide, so scope it so one episode's failure doesn't
+    /// surface on another's detail page.
+    private var episodeNotice: String? {
+        guard let notice = core.view.subscriptionDetail.downloadNotice,
+              notice.episodeId == episode.id
+        else {
+            return nil
+        }
+        return notice.message
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -26,8 +38,9 @@ struct EpisodeDetailView: View {
                 titleBlock
                 playbackControls
                 // A delete/cancel initiated here can fail; show the same non-blocking
-                // notice the list uses so the failure is visible without navigating back.
-                if let notice = core.view.subscriptionDetail.downloadNotice {
+                // notice the list uses so the failure is visible without navigating back
+                // — but only when it's about this episode (see `episodeNotice`).
+                if let notice = episodeNotice {
                     DownloadNoticeBanner(message: notice)
                 }
                 downloadSection

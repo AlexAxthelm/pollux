@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::domain::{Episode, EpisodeSortOrder, Subscription};
 use crate::theme::{ThemeId, ThemeMode};
+use crate::view_model::DownloadNotice;
 
 #[derive(Default)]
 pub struct Model {
@@ -41,10 +42,11 @@ pub struct Model {
 
     // A transient, non-blocking notice for a download *operation* that failed without
     // changing the episode's state — a persistence write that didn't commit, or a file
-    // that couldn't be removed. Shown as a dismissible banner on the details page (NOT
-    // through `detail_error`, which replaces the whole episode list). Cleared when the
-    // user starts another download action or the next persistence write succeeds.
-    pub download_notice: Option<String>,
+    // that couldn't be removed. Tagged with the failing episode so the detail page can
+    // scope it to that episode. Shown as a banner on the details page (NOT through
+    // `detail_error`, which replaces the whole episode list). Cleared when the user
+    // starts another download action or switches feeds.
+    pub download_notice: Option<DownloadNotice>,
 
     // Active theme selection. Defaults (System / FollowSystem) reproduce the OS's
     // native appearance. Hard-coded for now — no UI changes it until the Settings

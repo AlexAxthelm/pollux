@@ -12,7 +12,8 @@ use crate::html::strip_html_preview;
 use crate::model::{DownloadProgress, Model, QueuedDownload};
 use crate::theme::{theme_view, ThemeId, ThemeMode};
 use crate::view_model::{
-    EpisodeSummary, LibraryView, SubscriptionDetailView, SubscriptionSummary, ViewModel,
+    DownloadNotice, EpisodeSummary, LibraryView, SubscriptionDetailView, SubscriptionSummary,
+    ViewModel,
 };
 
 #[derive(Default)]
@@ -401,14 +402,17 @@ impl App for Pollux {
                     // The file couldn't be removed; leave the row (still Downloaded) as
                     // it is and surface why through the non-blocking notice rather than
                     // the list-load error, which would hide every episode and control.
-                    model.download_notice = Some(format!("Couldn't remove the download: {e}"));
+                    model.download_notice = Some(DownloadNotice {
+                        episode_id,
+                        message: format!("Couldn't remove the download: {e}"),
+                    });
                     render()
                 }
                 // Only Deleted/Error arrive from a Delete request; the rest are
                 // unreachable but keep the match total.
                 DownloadResult::Completed { .. } | DownloadResult::Cancelled => render(),
             },
-            Event::DownloadStatePersisted(result) => {
+            Event::DownloadStatePersisted { episode_id, result } => {
                 // A durability failure: the UI already shows the correct optimistic
                 // state, so surface this as a non-blocking notice, not the list error.
                 // Success is silent — notably it does NOT clear an existing notice, so
@@ -416,8 +420,10 @@ impl App for Pollux {
                 // message. The notice clears on the next user download action (see
                 // DownloadEpisode/DeleteDownload/CancelDownload) or on a feed switch.
                 if let StorageResult::Error(e) = *result {
-                    model.download_notice =
-                        Some(format!("Couldn't save the download's state: {e}"));
+                    model.download_notice = Some(DownloadNotice {
+                        episode_id,
+                        message: format!("Couldn't save the download's state: {e}"),
+                    });
                 }
                 render()
             }
@@ -597,13 +603,18 @@ fn persist_download_state(
     local_path: Option<String>,
     size_bytes: Option<u64>,
 ) -> Command<Effect, Event> {
+    // Capture the id so a persistence failure's notice can be tagged with its episode.
+    let id = episode_id.to_string();
     Command::request_from_shell(StorageOperation::UpdateDownloadState {
         episode_id: episode_id.to_string(),
         status,
         local_path,
         size_bytes,
     })
-    .then_send(|r| Event::DownloadStatePersisted(Box::new(r)))
+    .then_send(move |r| Event::DownloadStatePersisted {
+        episode_id: id.clone(),
+        result: Box::new(r),
+    })
 }
 
 /// Resets an episode to not-downloaded (in the model) and returns the command that
@@ -703,7 +714,10 @@ pub enum Event {
     },
     /// Result of persisting a download-state transition. Success is silent; an
     /// error is surfaced on the details page (downloads are driven from there).
-    DownloadStatePersisted(Box<StorageResult>),
+    DownloadStatePersisted {
+        episode_id: String,
+        result: Box<StorageResult>,
+    },
     /// Change the active theme. Not yet emitted by any UI — the seam for the
     /// Settings appearance section (see `docs/features/theme.md`).
     SetTheme {
@@ -1800,16 +1814,18 @@ mod tests {
         model.detail_error = Some("earlier list load failed".to_string());
 
         let _ = app.update(
-            Event::DownloadStatePersisted(Box::new(StorageResult::Error("db locked".to_string()))),
+            Event::DownloadStatePersisted {
+                episode_id: "e1".to_string(),
+                result: Box::new(StorageResult::Error("db locked".to_string())),
+            },
             &mut model,
         );
 
-        // The op failure lands in the non-blocking notice, and the list error (which
-        // would blank the whole episode list) is untouched.
-        assert!(model
-            .download_notice
-            .as_deref()
-            .is_some_and(|n| n.contains("db locked")));
+        // The op failure lands in the non-blocking notice, tagged with its episode, and
+        // the list error (which would blank the whole episode list) is untouched.
+        let notice = model.download_notice.as_ref().expect("a notice");
+        assert_eq!(notice.episode_id, "e1");
+        assert!(notice.message.contains("db locked"));
         assert_eq!(
             model.detail_error.as_deref(),
             Some("earlier list load failed")
@@ -1824,17 +1840,23 @@ mod tests {
         // feed switch instead (covered by other tests).
         let app = Pollux;
         let mut model = Model::default();
-        model.download_notice = Some("Couldn't remove the download: disk busy".to_string());
+        model.download_notice = Some(DownloadNotice {
+            episode_id: "e1".to_string(),
+            message: "Couldn't remove the download: disk busy".to_string(),
+        });
 
+        // A *different* episode's persist succeeds.
         let _ = app.update(
-            Event::DownloadStatePersisted(Box::new(StorageResult::Success)),
+            Event::DownloadStatePersisted {
+                episode_id: "e2".to_string(),
+                result: Box::new(StorageResult::Success),
+            },
             &mut model,
         );
 
-        assert_eq!(
-            model.download_notice.as_deref(),
-            Some("Couldn't remove the download: disk busy"),
-        );
+        let notice = model.download_notice.as_ref().expect("notice retained");
+        assert_eq!(notice.episode_id, "e1");
+        assert_eq!(notice.message, "Couldn't remove the download: disk busy");
     }
 
     #[test]
@@ -1842,7 +1864,10 @@ mod tests {
         let app = Pollux;
         let mut model = Model::default();
         load_episodes(&app, &mut model, vec![make_episode("e1", "Ep", Some(1))]);
-        model.download_notice = Some("Couldn't remove the download: busy".to_string());
+        model.download_notice = Some(DownloadNotice {
+            episode_id: "e1".to_string(),
+            message: "Couldn't remove the download: busy".to_string(),
+        });
 
         let _ = app.update(Event::DownloadEpisode("e1".to_string()), &mut model);
 
@@ -1869,15 +1894,14 @@ mod tests {
         );
 
         // The row stays Downloaded (the file is presumably still there) and the
-        // failure lands in the non-blocking notice, not the list error.
+        // failure lands in the non-blocking notice (tagged with e1), not the list error.
         assert_eq!(
             model_episode_status(&model, "e1"),
             DownloadStatus::Downloaded
         );
-        assert!(model
-            .download_notice
-            .as_deref()
-            .is_some_and(|n| n.contains("disk busy")));
+        let notice = model.download_notice.as_ref().expect("a notice");
+        assert_eq!(notice.episode_id, "e1");
+        assert!(notice.message.contains("disk busy"));
         assert!(model.detail_error.is_none());
     }
 
@@ -1886,7 +1910,10 @@ mod tests {
         let app = Pollux;
         let mut model = Model::default();
         model.subscriptions = vec![make_subscription("sub-1", "Feed")];
-        model.download_notice = Some("Couldn't save the download's state: db locked".to_string());
+        model.download_notice = Some(DownloadNotice {
+            episode_id: "e1".to_string(),
+            message: "Couldn't save the download's state: db locked".to_string(),
+        });
 
         let _ = app.update(Event::SelectSubscription("sub-1".to_string()), &mut model);
 

@@ -40,8 +40,18 @@ pub struct SubscriptionDetailView {
     pub error: Option<String>,
     /// A transient, non-blocking notice for a failed download *operation* (a
     /// persistence write or file removal that didn't take). Shown as a banner that
-    /// leaves the episode list and its controls intact, unlike `error`.
-    pub download_notice: Option<String>,
+    /// leaves the episode list and its controls intact, unlike `error`. Tagged with
+    /// the episode it concerns so an episode's detail page shows it only when it's
+    /// about that episode, while the list shows it for any.
+    pub download_notice: Option<DownloadNotice>,
+}
+
+/// A failed-download-operation notice, paired with the episode it's about. Transient
+/// and non-blocking (see `SubscriptionDetailView::download_notice`).
+#[derive(Facet, Serialize, Deserialize, Clone)]
+pub struct DownloadNotice {
+    pub episode_id: String,
+    pub message: String,
 }
 
 /// Read-only projection of an `Episode` for display. Dates and durations stay raw

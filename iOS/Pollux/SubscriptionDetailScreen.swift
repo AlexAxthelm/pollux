@@ -72,8 +72,9 @@ struct SubscriptionDetailScreen: View {
             }
         } else {
             VStack(spacing: 0) {
+                // The list spans every episode, so show a notice for any of them.
                 if let notice = detail.downloadNotice {
-                    DownloadNoticeBanner(message: notice)
+                    DownloadNoticeBanner(message: notice.message)
                 }
                 List(detail.episodes, id: \.id) { episode in
                     NavigationLink(value: episode) {
