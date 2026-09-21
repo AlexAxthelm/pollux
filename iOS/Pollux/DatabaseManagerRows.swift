@@ -44,7 +44,7 @@ extension DatabaseManager {
                 artwork_url = excluded.artwork_url,
                 pub_date = excluded.pub_date,
                 duration_secs = excluded.duration_secs,
-                -- FIXME(refresh): download_status/local_path are preserved on
+                -- note(refresh): download_status/local_path are preserved on
                 -- conflict, but file_size_bytes is overwritten with the feed's
                 -- advertised <enclosure length>. For a downloaded episode this clobbers
                 -- the real on-disk size that updateDownloadState recorded. There's no
