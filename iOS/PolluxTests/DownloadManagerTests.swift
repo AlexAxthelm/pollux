@@ -132,6 +132,12 @@ private func makeManager(root: URL, reportInterval: TimeInterval = 0) throws -> 
 
 private let noProgress: @Sendable (UInt64, UInt64?) -> Void = { _, _ in }
 
+/// The stored path a download for `episodeId`/`url` resolves to, derived from the
+/// same helper the manager uses so tests don't hard-code the (digest-based) name.
+private func downloadsRelativePath(episodeId: String, url: URL) -> String {
+    "Downloads/" + DownloadManager.fileName(episodeId: episodeId, url: url)
+}
+
 // MARK: - Tests
 
 @Suite("DownloadManager", .serialized)
@@ -142,13 +148,15 @@ struct DownloadManagerTests {
         let manager = try makeManager(root: root)
         let body = Data((0 ..< 300).map { UInt8($0 % 251) })
         MockURLProtocol.configure(.init(body: body))
+        let url = try #require(URL(string: "https://example.com/a.mp3"))
 
         let result = await manager.perform(
-            .download(episodeId: "ep-1", url: "https://example.com/a.mp3"), onProgress: noProgress,
+            .download(episodeId: "ep-1", url: url.absoluteString), onProgress: noProgress,
         )
 
-        #expect(result == .completed(localPath: "Downloads/ep_1.mp3", sizeBytes: UInt64(body.count)))
-        let stored = try Data(contentsOf: root.appendingPathComponent("Downloads/ep_1.mp3"))
+        let rel = downloadsRelativePath(episodeId: "ep-1", url: url)
+        #expect(result == .completed(localPath: rel, sizeBytes: UInt64(body.count)))
+        let stored = try Data(contentsOf: root.appendingPathComponent(rel))
         #expect(stored == body)
     }
 
@@ -156,9 +164,10 @@ struct DownloadManagerTests {
         let root = makeTempRoot()
         let manager = try makeManager(root: root)
         MockURLProtocol.configure(.init(statusCode: 404, body: Data("not found".utf8)))
+        let url = try #require(URL(string: "https://example.com/b.mp3"))
 
         let result = await manager.perform(
-            .download(episodeId: "ep-2", url: "https://example.com/b.mp3"), onProgress: noProgress,
+            .download(episodeId: "ep-2", url: url.absoluteString), onProgress: noProgress,
         )
 
         guard case let .error(message) = result else {
@@ -167,7 +176,9 @@ struct DownloadManagerTests {
         }
         #expect(message.contains("404"))
         #expect(!FileManager.default.fileExists(
-            atPath: root.appendingPathComponent("Downloads/ep_2.mp3").path,
+            atPath: root.appendingPathComponent(
+                downloadsRelativePath(episodeId: "ep-2", url: url),
+            ).path,
         ))
     }
 
@@ -179,10 +190,11 @@ struct DownloadManagerTests {
             .init(advertiseContentLength: false, body: Data(count: 128), stall: true),
             onStart: { started.fire() },
         )
+        let url = try #require(URL(string: "https://example.com/c.mp3"))
 
         let download = Task {
             await manager.perform(
-                .download(episodeId: "ep-3", url: "https://example.com/c.mp3"),
+                .download(episodeId: "ep-3", url: url.absoluteString),
                 onProgress: noProgress,
             )
         }
@@ -192,7 +204,9 @@ struct DownloadManagerTests {
         let result = await download.value
         #expect(result == .cancelled)
         #expect(!FileManager.default.fileExists(
-            atPath: root.appendingPathComponent("Downloads/ep_3.mp3").path,
+            atPath: root.appendingPathComponent(
+                downloadsRelativePath(episodeId: "ep-3", url: url),
+            ).path,
         ))
     }
 
@@ -221,20 +235,39 @@ struct DownloadManagerTests {
         let body = Data(count: 5000)
         MockURLProtocol.configure(.init(body: body))
         let recorder = ProgressRecorder()
+        let url = try #require(URL(string: "https://example.com/p.mp3"))
 
         let result = await manager.perform(
-            .download(episodeId: "ep-p", url: "https://example.com/p.mp3"),
+            .download(episodeId: "ep-p", url: url.absoluteString),
         ) { @Sendable received, total in
             recorder.record(received, total)
         }
 
-        #expect(result == .completed(localPath: "Downloads/ep_p.mp3", sizeBytes: UInt64(body.count)))
+        let rel = downloadsRelativePath(episodeId: "ep-p", url: url)
+        #expect(result == .completed(localPath: rel, sizeBytes: UInt64(body.count)))
         let samples = recorder.samples
         #expect(!samples.isEmpty)
         // Every report carries the advertised total, and received bytes never go backwards.
         #expect(samples.allSatisfy { $0.total == UInt64(body.count) })
         #expect(samples.map(\.received) == samples.map(\.received).sorted())
         #expect(samples.last?.received == UInt64(body.count))
+    }
+
+    @Test func fileNameAvoidsCollisionsBetweenSimilarIds() throws {
+        let url = try #require(URL(string: "https://example.com/a.mp3"))
+        // Ids that a lossy char-replacement scheme would collapse to the same name.
+        let first = DownloadManager.fileName(episodeId: "ep-1", url: url)
+        let second = DownloadManager.fileName(episodeId: "ep_1", url: url)
+        #expect(first != second, "distinct ids must map to distinct files")
+        // Deterministic for the same id, and the extension is preserved.
+        #expect(DownloadManager.fileName(episodeId: "ep-1", url: url) == first)
+        #expect(first.hasSuffix(".mp3"))
+    }
+
+    @Test func fileNameOmitsExtensionWhenTheUrlHasNone() throws {
+        let url = try #require(URL(string: "https://example.com/audio"))
+        let name = DownloadManager.fileName(episodeId: "ep-1", url: url)
+        #expect(!name.contains("."), "no URL extension means no dotted suffix")
     }
 
     @Test func unknownSizeProgressIsThrottled() async throws {
@@ -245,14 +278,16 @@ struct DownloadManagerTests {
         // ~1600 chunks of 64 bytes: without throttling this would report constantly.
         MockURLProtocol.configure(.init(advertiseContentLength: false, body: Data(count: 100_000)))
         let recorder = ProgressRecorder()
+        let url = try #require(URL(string: "https://example.com/u.mp3"))
 
         let result = await manager.perform(
-            .download(episodeId: "ep-u", url: "https://example.com/u.mp3"),
+            .download(episodeId: "ep-u", url: url.absoluteString),
         ) { @Sendable received, total in
             recorder.record(received, total)
         }
 
-        #expect(result == .completed(localPath: "Downloads/ep_u.mp3", sizeBytes: 100_000))
+        let rel = downloadsRelativePath(episodeId: "ep-u", url: url)
+        #expect(result == .completed(localPath: rel, sizeBytes: 100_000))
         let samples = recorder.samples
         // The throttle caps reporting at the single initial callback.
         #expect(samples.count <= 1)

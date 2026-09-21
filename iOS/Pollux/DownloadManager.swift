@@ -1,4 +1,5 @@
 import App
+import CryptoKit
 import Foundation
 
 /// Errors from the download shell. Carried in `DownloadResult.error` back to the
@@ -198,12 +199,17 @@ actor DownloadManager {
         storageRoot.appendingPathComponent(relativePath)
     }
 
-    /// A filesystem-safe, stable file name for an episode. The episode id can be a
-    /// GUID, URL, or hash, so it is reduced to alphanumerics; the enclosure's file
-    /// extension is preserved when present so players see a familiar type.
-    private static func fileName(episodeId: String, url: URL) -> String {
-        let safeId = episodeId.map { $0.isLetter || $0.isNumber ? $0 : "_" }
-        let base = String(safeId)
+    /// A filesystem-safe, stable, collision-free file name for an episode. The episode
+    /// id can in principle be any string (GUID, URL, hash), so the base is a SHA-256
+    /// digest of the id rather than a lossy character replacement — two distinct ids
+    /// that would sanitize to the same name (e.g. `ep-1` and `ep_1`) get distinct
+    /// files. The same id always maps to the same name; the enclosure's file extension
+    /// is preserved when present so players see a familiar type.
+    /// Not `private` so it can be unit-tested directly.
+    static func fileName(episodeId: String, url: URL) -> String {
+        let base = SHA256.hash(data: Data(episodeId.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
         let ext = url.pathExtension
         return ext.isEmpty ? base : "\(base).\(ext)"
     }
