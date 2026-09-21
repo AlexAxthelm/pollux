@@ -25,6 +25,11 @@ struct EpisodeDetailView: View {
                 artworkHeader
                 titleBlock
                 playbackControls
+                // A delete/cancel initiated here can fail; show the same non-blocking
+                // notice the list uses so the failure is visible without navigating back.
+                if let notice = core.view.subscriptionDetail.downloadNotice {
+                    DownloadNoticeBanner(message: notice)
+                }
                 downloadSection
                 Divider()
                 showNotes

@@ -73,7 +73,7 @@ struct SubscriptionDetailScreen: View {
         } else {
             VStack(spacing: 0) {
                 if let notice = detail.downloadNotice {
-                    downloadNoticeBanner(notice)
+                    DownloadNoticeBanner(message: notice)
                 }
                 List(detail.episodes, id: \.id) { episode in
                     NavigationLink(value: episode) {
@@ -96,24 +96,6 @@ struct SubscriptionDetailScreen: View {
                 .scrollContentBackground(.hidden)
             }
         }
-    }
-
-    /// Non-blocking banner for a failed download *operation* (a persistence write or
-    /// file removal). Unlike the list-load error it sits above the episodes and leaves
-    /// every row and control in place; it clears itself on the next download action.
-    private func downloadNoticeBanner(_ message: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-            Text(message)
-                .font(.caption)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .foregroundStyle(themeColors.error)
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(themeColors.secondaryBackground)
     }
 
     /// Leading-swipe download action, mirroring the row's menu: Download when absent,
