@@ -57,6 +57,9 @@ impl App for Pollux {
                 // from scratch. Best-effort: an error here just leaves nothing queued.
                 let mut cmd = Command::done();
                 if let StorageResult::Episodes(rows) = *result {
+                    // Nothing is in flight at launch, so `maybe_start_next` will start
+                    // the first re-enqueued item (persisting it as `Downloading`).
+                    let will_start_head = model.downloading.is_none();
                     for episode in rows {
                         let already = model.downloading.as_deref() == Some(episode.id.as_str())
                             || model
@@ -66,14 +69,19 @@ impl App for Pollux {
                         if already {
                             continue;
                         }
-                        // Normalize to Queued so an item waiting behind others no
-                        // longer reads as "Downloading" in the DB.
-                        cmd = cmd.and(persist_download_state(
-                            &episode.id,
-                            DownloadStatus::Queued,
-                            None,
-                            None,
-                        ));
+                        // The head item is about to be started, so skip a `Queued` write
+                        // that its `Downloading` write would immediately supersede. Items
+                        // waiting behind it are normalized to `Queued` so one left
+                        // "Downloading" by a prior session no longer reads that way.
+                        let is_head = will_start_head && model.download_queue.is_empty();
+                        if !is_head {
+                            cmd = cmd.and(persist_download_state(
+                                &episode.id,
+                                DownloadStatus::Queued,
+                                None,
+                                None,
+                            ));
+                        }
                         model.download_queue.push(QueuedDownload {
                             episode_id: episode.id,
                             url: episode.enclosure_url,
@@ -1987,6 +1995,30 @@ mod tests {
         assert!(
             has_download_effect_for(&effects, "e1"),
             "an interrupted download should resume at launch"
+        );
+
+        // The head item (e1) is started immediately, so it's persisted only as
+        // Downloading — no redundant Queued write that Downloading would supersede.
+        // The item waiting behind it (e2) is normalized to Queued.
+        let persisted: Vec<(&str, &DownloadStatus)> = effects
+            .iter()
+            .filter_map(|e| match e {
+                Effect::Storage(r) => match &r.operation {
+                    StorageOperation::UpdateDownloadState {
+                        episode_id, status, ..
+                    } => Some((episode_id.as_str(), status)),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            persisted,
+            vec![
+                ("e2", &DownloadStatus::Queued),
+                ("e1", &DownloadStatus::Downloading),
+            ],
+            "head persists Downloading only; the rest persist Queued"
         );
     }
 
