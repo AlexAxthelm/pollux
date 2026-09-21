@@ -416,7 +416,8 @@ impl App for Pollux {
                 // message. The notice clears on the next user download action (see
                 // DownloadEpisode/DeleteDownload/CancelDownload) or on a feed switch.
                 if let StorageResult::Error(e) = *result {
-                    model.download_notice = Some(format!("Couldn't save the download's state: {e}"));
+                    model.download_notice =
+                        Some(format!("Couldn't save the download's state: {e}"));
                 }
                 render()
             }
@@ -1873,7 +1874,10 @@ mod tests {
             model_episode_status(&model, "e1"),
             DownloadStatus::Downloaded
         );
-        assert!(model.download_notice.as_deref().is_some_and(|n| n.contains("disk busy")));
+        assert!(model
+            .download_notice
+            .as_deref()
+            .is_some_and(|n| n.contains("disk busy")));
         assert!(model.detail_error.is_none());
     }
 
