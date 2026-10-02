@@ -76,7 +76,9 @@ the library view (refresh all).
 > a spinner). Consequently, when a refresh (or any path) writes new/updated
 > episodes for the feed currently on screen, it must trigger an **explicit**
 > reload of the details page's episode list; the page will not pick up storage
-> changes on its own. See `SelectSubscription` / `EpisodesLoaded` in
+> changes on its own. Refresh does this in `RefreshSaved`, reloading without
+> setting `detail_loading` so the existing list stays on screen. See
+> `SelectSubscription` / `EpisodesLoaded` / `RefreshSaved` in
 > `shared/src/app.rs`.
 
 Feed refresh interval: 12 is the default, managed by settings (cascading)
@@ -89,7 +91,80 @@ polling/refresh/update/downloads
 should happen in background. If not, then there should be a signal to user
 (panel somewhere?) that the app only updates when it's foregrounded.
 
+### Refresh as built
+
+*Status: implemented, except where listed under "Not yet".*
+
+**Triggers**
+
+| Trigger | Entry point | Scope |
+|---|---|---|
+| Pull-to-refresh on the details page | `RefreshSubscription(id)` | that feed |
+| "Refresh all" toolbar button, or pull-to-refresh on the library list | `RefreshAll` | every feed, in library (title) order |
+| App becomes active, including cold launch | `RefreshStale` | feeds that are due |
+| Background wake-up (`BGAppRefreshTask`) | `RefreshStale` | feeds that are due |
+
+All triggers feed one **serial** queue in the core (one feed fetched at a time,
+mirroring the download queue). A feed already queued or in flight is not queued
+again. Refresh state is deliberately separate from the library's
+`loading`/`error`, which the subscribe flow reads to detect success.
+
+**When a feed is "due"** (automatic triggers only): it has never been refreshed,
+or `last_refreshed` is 12 or more hours ago (`REFRESH_INTERVAL_HOURS`), **and**
+its `retry_after_until` has passed. Manual refresh (details page, Refresh all)
+ignores the backoff: an explicit request wins.
+
+If `RefreshStale` arrives before the library has loaded (cold launch), the core
+holds the request and honours it when the subscriptions arrive.
+
+**Conditional GET.** The last successful response's `ETag` and `Last-Modified`
+are stored on the subscription and replayed as `If-None-Match` /
+`If-Modified-Since`. The shell bypasses URLSession's own cache for feed fetches,
+otherwise a locally cached 200 could hide the 304.
+
+**Outcomes**
+
+| Result | Effect |
+|---|---|
+| 200 | Parse, upsert (see `DATA_MODEL.md`), store new validators, clear the error and backoff, reload the open feed's episodes |
+| 304 | Only `last_refreshed` moves; error and backoff cleared; episodes untouched |
+| 429 | `retry_after_until` = now + `Retry-After` (seconds or HTTP-date, normalized to seconds by the shell), or 1 hour (`RATE_LIMIT_BACKOFF_SECS`) if absent |
+| Other status, network error, unparseable body, failed save | `last_refresh_error` recorded; `retry_after_until` = now + 15 minutes (`FAILURE_BACKOFF_SECS`) so a broken feed isn't retried on every foreground |
+
+A failed refresh never moves `last_refreshed` and never discards the stored
+validators.
+
+**Failure surfacing.** The last error is persisted, shown as a warning marker on
+the library row (the reason is read out by VoiceOver) and as a line under the
+title on the details page. The next success clears it.
+
+**Background refresh.** `BGAppRefreshTask` is best-effort: iOS decides when, and
+whether, it runs, and the request time is only a lower bound. It is requested for
+**3 hours** out each time the app backgrounds and at the start of every run (so
+the chain survives a run cut short). That is deliberately shorter than the 12-hour
+interval: only due feeds are fetched, so an early wake is cheap, whereas a longer
+request would push the system's real run well past the interval. A run gets about
+30 seconds, so it refreshes as many due feeds as fit; the rest wait for the next
+foreground or wake-up. It does not download. It will not run if Background App
+Refresh is off, in Low Power Mode, or after the user force-quits the app, so
+foreground refresh is the reliable path. Declared in `iOS/project.yml`
+(`UIBackgroundModes: fetch`, `BGTaskSchedulerPermittedIdentifiers`); the
+identifier lives in `iOS/Pollux/BackgroundRefresh.swift` and a test checks the
+two agree.
+
+**Not yet**
+
+- Per-feed and global refresh-interval settings. The interval is the hardcoded
+  `REFRESH_INTERVAL_HOURS`; the cascading pattern waits on the Settings feature.
+- Re-evaluating download rules after a refresh (no download rules exist yet).
+- The "app only updates while foregrounded" signal when background refresh is
+  unavailable (deferred to Settings).
+- A per-feed "refreshing" indicator on the details page beyond the pull-to-refresh
+  spinner; the empty state of a feed with no episodes cannot be pulled to refresh.
+
 ## De-listed Episodes
+
+*Status: the marking is implemented; the hiding and toggle below are not.*
 
 When an episode is no longer present in a feed's RSS/Atom/JSONFeed:
 
@@ -98,6 +173,14 @@ When an episode is no longer present in a feed's RSS/Atom/JSONFeed:
 - A "Show unavailable episodes" toggle reveals them
 - If the episode audio file is still on device, it remains playable
 - Episode is marked with "Removed from feed" status (see `episode.md`)
+
+As built, a refresh marks an episode `RemovedFromFeed` only when it is
+`NotDownloaded` or `Failed`. A downloaded, queued, or in-flight episode keeps
+its state so its file stays playable and its download is not orphaned. If a
+marked episode reappears in the feed it returns to `NotDownloaded`. A refresh
+that returns an **empty** feed marks nothing, since that is far more likely a
+broken response than every episode being deleted. The episode list does not yet
+hide removed episodes or offer the "Show unavailable episodes" toggle.
 
 Permanent metadata retention is intentional — it supports the library model
 and keeps the archive complete even as publishers rotate content.
