@@ -163,6 +163,20 @@ impl App for Pollux {
                 enqueue_refresh(model, &id);
                 maybe_start_next_refresh(model).and(render())
             }
+            Event::RefreshAll => {
+                // Library order (as displayed), so the feeds the user sees first
+                // refresh first. Already-pending feeds are skipped by `enqueue_refresh`.
+                let mut ids: Vec<(String, String)> = model
+                    .subscriptions
+                    .iter()
+                    .map(|s| (s.title.to_lowercase(), s.id.clone()))
+                    .collect();
+                ids.sort();
+                for (_, id) in ids {
+                    enqueue_refresh(model, &id);
+                }
+                maybe_start_next_refresh(model).and(render())
+            }
             Event::RefreshFetched {
                 subscription_id,
                 result,
@@ -613,6 +627,7 @@ impl App for Pollux {
                 subscriptions,
                 loading: model.loading,
                 error: model.error.clone(),
+                refreshing: model.refreshing.is_some() || !model.refresh_queue.is_empty(),
             },
             subscription_detail: build_subscription_detail(model),
             theme: theme_view(model.theme_id, model.theme_mode),
@@ -927,6 +942,8 @@ pub enum Event {
     /// Re-fetch one subscription's feed (conditional GET) and merge new episodes.
     /// Metadata only — never triggers downloads.
     RefreshSubscription(String),
+    /// Queue every subscription for refresh, one at a time, in library order.
+    RefreshAll,
     /// Result of a refresh fetch for `subscription_id`.
     RefreshFetched {
         subscription_id: String,
@@ -2764,5 +2781,63 @@ mod tests {
             view.subscription_detail.refreshing,
             "queued counts as refreshing"
         );
+    }
+
+    #[test]
+    fn refresh_all_queues_every_feed_in_library_order_and_starts_the_first() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions.push(make_subscription("z", "Zed"));
+        model.subscriptions.push(make_subscription("a", "alpha"));
+        model.subscriptions.push(make_subscription("m", "Middle"));
+
+        let mut cmd = app.update(Event::RefreshAll, &mut model);
+
+        assert_eq!(http_ops(&mut cmd).len(), 1, "serial: only one fetch starts");
+        assert_eq!(model.refreshing.as_deref(), Some("a"));
+        assert_eq!(model.refresh_queue, vec!["m".to_string(), "z".to_string()]);
+        assert!(app.view(&model).library.refreshing);
+    }
+
+    #[test]
+    fn refresh_all_does_not_double_queue_a_feed_already_refreshing() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a", "b"]);
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let mut cmd = app.update(Event::RefreshAll, &mut model);
+
+        assert!(http_ops(&mut cmd).is_empty());
+        assert_eq!(model.refresh_queue, vec!["b".to_string()]);
+    }
+
+    #[test]
+    fn refresh_all_continues_past_a_failing_feed_and_then_goes_idle() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a", "b"]);
+        let _ = app.update(Event::RefreshAll, &mut model);
+
+        let mut next = app.update(
+            fetched("a", HttpResult::Error("offline".to_string())),
+            &mut model,
+        );
+        assert_eq!(http_ops(&mut next).len(), 1, "b still runs after a fails");
+        let _ = app.update(fetched("b", response(304, vec![])), &mut model);
+
+        assert!(!app.view(&model).library.refreshing);
+        assert_eq!(
+            model.subscriptions[0].last_refresh_error.as_deref(),
+            Some("offline")
+        );
+        assert!(model.subscriptions[1].last_refresh_error.is_none());
+    }
+
+    #[test]
+    fn refresh_all_with_no_subscriptions_is_a_noop() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let mut cmd = app.update(Event::RefreshAll, &mut model);
+        assert!(http_ops(&mut cmd).is_empty());
+        assert!(!app.view(&model).library.refreshing);
     }
 }

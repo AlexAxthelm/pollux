@@ -18,6 +18,8 @@ pub struct LibraryView {
     pub subscriptions: Vec<SubscriptionSummary>,
     pub loading: bool,
     pub error: Option<String>,
+    /// Any feed is queued for or being refreshed (drives the "Refresh all" button).
+    pub refreshing: bool,
 }
 
 #[derive(Facet, Serialize, Deserialize, Clone)]

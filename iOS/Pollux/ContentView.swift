@@ -10,6 +10,15 @@ struct ContentView: View {
         feedUrl.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Dispatches a refresh of every feed and holds the pull-to-refresh spinner until
+    /// the core reports the queue has drained.
+    private func refreshAll() async {
+        core.update(.refreshAll)
+        while core.view.library.refreshing, !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -22,12 +31,12 @@ struct ContentView: View {
                     } else {
                         List(core.view.library.subscriptions, id: \.id) { sub in
                             NavigationLink(value: sub) {
-                                Text(sub.title)
-                                    .foregroundStyle(themeColors.text)
+                                SubscriptionRow(subscription: sub)
                             }
                             .listRowBackground(themeColors.secondaryBackground)
                         }
                         .scrollContentBackground(.hidden)
+                        .refreshable { await refreshAll() }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -54,6 +63,21 @@ struct ContentView: View {
             }
             .background(themeColors.background)
             .navigationTitle("Library")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        core.update(.refreshAll)
+                    } label: {
+                        if core.view.library.refreshing {
+                            ProgressView()
+                        } else {
+                            Label("Refresh all", systemImage: "arrow.clockwise")
+                        }
+                    }
+                    .disabled(core.view.library.subscriptions.isEmpty || core.view.library.refreshing)
+                    .accessibilityLabel(core.view.library.refreshing ? "Refreshing" : "Refresh all")
+                }
+            }
             .navigationDestination(for: SubscriptionSummary.self) { sub in
                 SubscriptionDetailScreen(core: core, subscription: sub)
             }
