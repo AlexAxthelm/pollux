@@ -74,6 +74,16 @@ actor DatabaseManager {
                 columns: ["subscription_id"],
             )
         }
+        // Refresh bookkeeping: conditional-GET validators, the last refresh failure, and
+        // the time before which a rate-limited host asked not to be hit again.
+        migrator.registerMigration("v2_refresh") { db in
+            try db.alter(table: "subscriptions") { t in
+                t.add(column: "etag", .text)
+                t.add(column: "last_modified", .text)
+                t.add(column: "last_refresh_error", .text)
+                t.add(column: "retry_after_until", .integer)
+            }
+        }
         try migrator.migrate(db)
     }
 
@@ -95,6 +105,11 @@ actor DatabaseManager {
             try await deleteSubscription(id: id)
         case let .upsertFeedWithEpisodes(subscription, episodes):
             try await upsertFeedWithEpisodes(subscription: subscription, episodes: episodes)
+        case let .updateRefreshState(subscriptionId, lastRefreshed, lastRefreshError, retryAfterUntil):
+            try await updateRefreshState(
+                subscriptionId: subscriptionId, lastRefreshed: lastRefreshed,
+                lastRefreshError: lastRefreshError, retryAfterUntil: retryAfterUntil,
+            )
         default:
             try await executeEpisode(operation)
         }
@@ -171,8 +186,27 @@ actor DatabaseManager {
             for episode in episodes {
                 try Self.upsertEpisodeRow(episode, subscriptionId: canonical.id, db: db)
             }
+            try Self.markRemovedFromFeed(
+                subscriptionId: canonical.id, keeping: Set(episodes.map(\.feedGuid)), db: db,
+            )
             return .subscription(canonical)
         }
+    }
+
+    /// Persists the outcome of a refresh that produced no new body (304, rate limit,
+    /// or failure). `last_refreshed` is only moved when provided; the error and
+    /// retry-after columns are written verbatim so a success clears them.
+    private func updateRefreshState(
+        subscriptionId: String, lastRefreshed: Int64?, lastRefreshError: String?,
+        retryAfterUntil: Int64?,
+    ) async throws -> StorageResult {
+        try await db.write { db in
+            try Self.updateRefreshStateRow(
+                subscriptionId: subscriptionId, lastRefreshed: lastRefreshed,
+                lastRefreshError: lastRefreshError, retryAfterUntil: retryAfterUntil, db: db,
+            )
+        }
+        return .success
     }
 
     private func deleteSubscription(id: String) async throws -> StorageResult {

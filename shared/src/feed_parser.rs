@@ -33,6 +33,11 @@ pub fn parse_feed(url: &str, body: Vec<u8>) -> Result<(Subscription, Vec<Episode
         artwork_url: feed.logo.map(|img| img.uri),
         last_refreshed: Some(now),
         created_at: now,
+        // Validators come from the HTTP response, not the body; the caller fills them.
+        etag: None,
+        last_modified: None,
+        last_refresh_error: None,
+        retry_after_until: None,
     };
 
     // Episode identity is (subscription, feed_guid) in storage, where a repeat
@@ -106,7 +111,7 @@ pub fn parse_feed(url: &str, body: Vec<u8>) -> Result<(Subscription, Vec<Episode
     Ok((subscription, episodes))
 }
 
-fn now_unix() -> i64 {
+pub(crate) fn now_unix() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()

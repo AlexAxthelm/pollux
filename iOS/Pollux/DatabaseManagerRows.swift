@@ -10,18 +10,25 @@ extension DatabaseManager {
         try db.execute(
             sql: """
             INSERT INTO subscriptions
-                (id, feed_url, title, artwork_url, description, last_refreshed, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (id, feed_url, title, artwork_url, description, last_refreshed, created_at,
+                 etag, last_modified, last_refresh_error, retry_after_until)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(feed_url) DO UPDATE SET
                 title = excluded.title,
                 artwork_url = excluded.artwork_url,
                 description = excluded.description,
-                last_refreshed = excluded.last_refreshed
+                last_refreshed = excluded.last_refreshed,
+                etag = excluded.etag,
+                last_modified = excluded.last_modified,
+                last_refresh_error = excluded.last_refresh_error,
+                retry_after_until = excluded.retry_after_until
             """,
             arguments: [
                 subscription.id, subscription.feedUrl, subscription.title,
                 subscription.artworkUrl, subscription.description,
                 subscription.lastRefreshed, subscription.createdAt,
+                subscription.etag, subscription.lastModified,
+                subscription.lastRefreshError, subscription.retryAfterUntil,
             ],
         )
     }
@@ -44,14 +51,18 @@ extension DatabaseManager {
                 artwork_url = excluded.artwork_url,
                 pub_date = excluded.pub_date,
                 duration_secs = excluded.duration_secs,
-                -- note(refresh): download_status/local_path are preserved on
-                -- conflict, but file_size_bytes is overwritten with the feed's
-                -- advertised <enclosure length>. For a downloaded episode this clobbers
-                -- the real on-disk size that updateDownloadState recorded. There's no
-                -- refresh feature yet, so it can't fire today; when feed refresh lands,
-                -- stop overwriting file_size_bytes for rows whose download_status is
-                -- Downloaded (or drop it from this SET and let the download path own it).
-                file_size_bytes = excluded.file_size_bytes
+                -- A downloaded episode's size is the real on-disk size recorded by
+                -- updateDownloadState; the feed's advertised <enclosure length> must not
+                -- clobber it. Otherwise the feed's value is the freshest we have.
+                file_size_bytes = CASE
+                    WHEN episodes.download_status = 'Downloaded' THEN episodes.file_size_bytes
+                    ELSE excluded.file_size_bytes
+                END,
+                -- An episode that dropped out of the feed and came back is available again.
+                download_status = CASE
+                    WHEN episodes.download_status = 'RemovedFromFeed' THEN 'NotDownloaded'
+                    ELSE episodes.download_status
+                END
             """,
             arguments: [
                 episode.id, episode.feedGuid, subscriptionId,
@@ -67,6 +78,47 @@ extension DatabaseManager {
         )
     }
 
+    static func updateRefreshStateRow(
+        subscriptionId: String, lastRefreshed: Int64?, lastRefreshError: String?,
+        retryAfterUntil: Int64?, db: Database,
+    ) throws {
+        try db.execute(
+            sql: """
+            UPDATE subscriptions
+            SET last_refreshed = COALESCE(?, last_refreshed),
+                last_refresh_error = ?,
+                retry_after_until = ?
+            WHERE id = ?
+            """,
+            arguments: [lastRefreshed, lastRefreshError, retryAfterUntil, subscriptionId],
+        )
+    }
+
+    /// Flags episodes that are no longer in the feed. Only rows with nothing to lose are
+    /// flagged (`NotDownloaded`/`Failed`): a downloaded, queued, or in-flight episode
+    /// keeps its state so its file stays playable and its download isn't orphaned. An
+    /// empty feed flags nothing — that's far more likely a broken response than every
+    /// episode being deleted.
+    static func markRemovedFromFeed(
+        subscriptionId: String, keeping feedGuids: Set<String>, db: Database,
+    ) throws {
+        guard !feedGuids.isEmpty else { return }
+        let candidates = try Row.fetchAll(
+            db,
+            sql: """
+            SELECT id, feed_guid FROM episodes
+            WHERE subscription_id = ? AND download_status IN ('NotDownloaded', 'Failed')
+            """,
+            arguments: [subscriptionId],
+        )
+        for row in candidates where !feedGuids.contains(row["feed_guid"] as String) {
+            try db.execute(
+                sql: "UPDATE episodes SET download_status = 'RemovedFromFeed' WHERE id = ?",
+                arguments: [row["id"] as String],
+            )
+        }
+    }
+
     static func subscription(from row: Row) -> Subscription {
         Subscription(
             id: row["id"],
@@ -76,6 +128,10 @@ extension DatabaseManager {
             description: row["description"],
             lastRefreshed: row["last_refreshed"],
             createdAt: row["created_at"],
+            etag: row["etag"],
+            lastModified: row["last_modified"],
+            lastRefreshError: row["last_refresh_error"],
+            retryAfterUntil: row["retry_after_until"],
         )
     }
 

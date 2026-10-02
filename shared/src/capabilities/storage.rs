@@ -45,6 +45,15 @@ pub enum StorageOperation {
         local_path: Option<String>,
         size_bytes: Option<u64>,
     },
+    /// Records the outcome of a refresh that did not produce a new feed body (304,
+    /// 429, or a failure). `last_refreshed` is left unchanged when `None`; the error
+    /// and retry-after columns are written verbatim (NULL when `None`).
+    UpdateRefreshState {
+        subscription_id: String,
+        last_refreshed: Option<i64>,
+        last_refresh_error: Option<String>,
+        retry_after_until: Option<i64>,
+    },
     UpsertFeedWithEpisodes {
         subscription: Subscription,
         episodes: Vec<Episode>,

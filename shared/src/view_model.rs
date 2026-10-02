@@ -25,6 +25,11 @@ pub struct SubscriptionSummary {
     pub id: String,
     pub title: String,
     pub artwork_url: Option<String>,
+    /// Queued for, or in the middle of, a refresh.
+    pub refreshing: bool,
+    /// Why the last refresh failed, for the row's failure indicator. Absent after a
+    /// successful refresh.
+    pub refresh_error: Option<String>,
 }
 
 /// The selected subscription's episode list, shown on the details page. Empty by
@@ -44,6 +49,8 @@ pub struct SubscriptionDetailView {
     /// the episode it concerns so an episode's detail page shows it only when it's
     /// about that episode, while the list shows it for any.
     pub download_notice: Option<DownloadNotice>,
+    /// The open feed is queued for or being refreshed.
+    pub refreshing: bool,
 }
 
 /// A failed-download-operation notice, paired with the episode it's about. Transient

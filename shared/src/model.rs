@@ -48,6 +48,14 @@ pub struct Model {
     // starts another download action or switches feeds.
     pub download_notice: Option<DownloadNotice>,
 
+    // Feed refresh. Serial like downloads: at most one feed is fetched at a time
+    // (`refreshing` holds its subscription id), the rest wait in `refresh_queue`
+    // (front = next up). Kept apart from the library `loading`/`error`, which the
+    // subscribe flow reads to detect success. In-memory only; per-feed outcomes
+    // (error, retry-after) live on the `Subscription` and are persisted.
+    pub refresh_queue: Vec<String>,
+    pub refreshing: Option<String>,
+
     // Active theme selection. Defaults (System / FollowSystem) reproduce the OS's
     // native appearance. Hard-coded for now — no UI changes it until the Settings
     // appearance section lands and drives `Event::SetTheme`.

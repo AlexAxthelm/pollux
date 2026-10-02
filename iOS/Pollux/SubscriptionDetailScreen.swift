@@ -37,6 +37,22 @@ struct SubscriptionDetailScreen: View {
         }
     }
 
+    /// Dispatches a refresh and holds the pull-to-refresh spinner until the core reports
+    /// the feed is no longer queued or in flight. The core owns the work (and any
+    /// serial queue ordering), so this only observes it.
+    private func refresh() async {
+        core.update(.refreshSubscription(subscription.id))
+        while detail.refreshing, !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+    }
+
+    /// The live library row for this feed. `subscription` is a snapshot from when the
+    /// screen was pushed, so refresh outcomes are read from here instead.
+    private var liveSummary: SubscriptionSummary {
+        core.view.library.subscriptions.first { $0.id == subscription.id } ?? subscription
+    }
+
     private var header: some View {
         HStack(spacing: 12) {
             ArtworkView(urlString: subscription.artworkUrl, size: 72)
@@ -48,6 +64,12 @@ struct SubscriptionDetailScreen: View {
                 Text(episodeCountText)
                     .font(.caption)
                     .foregroundStyle(themeColors.secondaryText)
+                if let refreshError = liveSummary.refreshError {
+                    Label("Couldn't refresh: \(refreshError)", systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(themeColors.warning)
+                        .lineLimit(2)
+                }
             }
             Spacer(minLength: 0)
         }
@@ -95,6 +117,7 @@ struct SubscriptionDetailScreen: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
+                .refreshable { await refresh() }
             }
         }
     }
