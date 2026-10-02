@@ -55,6 +55,11 @@ pub struct Model {
     // (error, retry-after) live on the `Subscription` and are persisted.
     pub refresh_queue: Vec<String>,
     pub refreshing: Option<String>,
+    // Auto-refresh can be requested (the app became active) before the first library
+    // load lands, when there is nothing to judge staleness against. The request is held
+    // here and honoured as soon as the subscriptions arrive.
+    pub subscriptions_loaded: bool,
+    pub auto_refresh_pending: bool,
 
     // Active theme selection. Defaults (System / FollowSystem) reproduce the OS's
     // native appearance. Hard-coded for now — no UI changes it until the Settings

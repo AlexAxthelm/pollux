@@ -18,6 +18,7 @@ struct PolluxApp: App {
 private struct RootView: View {
     @ObservedObject var core: Core
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
 
     private var theme: ThemeView {
         core.view.theme
@@ -33,5 +34,13 @@ private struct RootView: View {
             .tint(colors.accent)
             .background(colors.background.ignoresSafeArea())
             .preferredColorScheme(theme.preferredColorScheme)
+            .onChange(of: scenePhase, initial: true) { _, phase in
+                // Foreground auto-refresh: the core decides which feeds are due (12h
+                // interval, honouring backoff), and holds the request if the library
+                // hasn't loaded yet, so firing on every activation incl. cold launch is safe.
+                if phase == .active {
+                    core.update(.refreshStale)
+                }
+            }
     }
 }

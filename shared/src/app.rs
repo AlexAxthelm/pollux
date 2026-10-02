@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::capabilities::download::{DownloadOperation, DownloadResult};
 use crate::capabilities::http::{HttpOperation, HttpResult};
 use crate::capabilities::storage::{StorageOperation, StorageResult};
-use crate::defaults::RATE_LIMIT_BACKOFF_SECS;
+use crate::defaults::{FAILURE_BACKOFF_SECS, RATE_LIMIT_BACKOFF_SECS, REFRESH_INTERVAL_HOURS};
 use crate::domain::{DownloadStatus, Episode, EpisodeSortOrder};
 use crate::effect::Effect;
 use crate::feed_parser::{now_unix, parse_feed};
@@ -45,13 +45,18 @@ impl App for Pollux {
                     StorageResult::Subscriptions(rows) => {
                         model.subscriptions = rows;
                         model.error = None;
+                        model.subscriptions_loaded = true;
                     }
                     StorageResult::Error(e) => model.error = Some(e),
                     unexpected => {
                         model.error = Some(format!("unexpected storage result: {unexpected:?}"))
                     }
                 }
-                render()
+                if model.subscriptions_loaded && model.auto_refresh_pending {
+                    model.auto_refresh_pending = false;
+                    enqueue_due_refreshes(model);
+                }
+                maybe_start_next_refresh(model).and(render())
             }
             Event::PendingDownloadsLoaded(result) => {
                 // Rebuild the queue from downloads a prior session left in flight and
@@ -163,6 +168,14 @@ impl App for Pollux {
                 enqueue_refresh(model, &id);
                 maybe_start_next_refresh(model).and(render())
             }
+            Event::RefreshStale => {
+                if model.subscriptions_loaded {
+                    enqueue_due_refreshes(model);
+                } else {
+                    model.auto_refresh_pending = true;
+                }
+                maybe_start_next_refresh(model).and(render())
+            }
             Event::RefreshAll => {
                 // Library order (as displayed), so the feeds the user sees first
                 // refresh first. Already-pending feeds are skipped by `enqueue_refresh`.
@@ -197,7 +210,7 @@ impl App for Pollux {
                         &subscription_id,
                         None,
                         Some(e),
-                        sub.retry_after_until,
+                        Some(failure_backoff_until()),
                     ),
                     HttpResult::Response {
                         status: 200,
@@ -291,20 +304,19 @@ impl App for Pollux {
                     }
                     cmd.and(maybe_start_next_refresh(model)).and(render())
                 }
-                StorageResult::Error(e) => {
-                    let retry = model
-                        .subscriptions
-                        .iter()
-                        .find(|s| s.id == subscription_id)
-                        .and_then(|s| s.retry_after_until);
-                    record_refresh_outcome(model, &subscription_id, None, Some(e), retry)
-                }
+                StorageResult::Error(e) => record_refresh_outcome(
+                    model,
+                    &subscription_id,
+                    None,
+                    Some(e),
+                    Some(failure_backoff_until()),
+                ),
                 unexpected => record_refresh_outcome(
                     model,
                     &subscription_id,
                     None,
                     Some(format!("unexpected storage result: {unexpected:?}")),
-                    None,
+                    Some(failure_backoff_until()),
                 ),
             },
             Event::RefreshStatePersisted(_result) => {
@@ -853,6 +865,35 @@ fn enqueue_refresh(model: &mut Model, id: &str) {
     }
 }
 
+/// Queues every feed that is due for an automatic refresh: not refreshed within the
+/// interval (or never) and not inside a `retry_after_until` backoff. Library order, like
+/// `RefreshAll`.
+fn enqueue_due_refreshes(model: &mut Model) {
+    let now = now_unix();
+    let interval = i64::from(REFRESH_INTERVAL_HOURS) * 3600;
+    let mut due: Vec<(String, String)> = model
+        .subscriptions
+        .iter()
+        .filter(|s| {
+            let stale = s
+                .last_refreshed
+                .is_none_or(|t| now.saturating_sub(t) >= interval);
+            let backing_off = s.retry_after_until.is_some_and(|t| t > now);
+            stale && !backing_off
+        })
+        .map(|s| (s.title.to_lowercase(), s.id.clone()))
+        .collect();
+    due.sort();
+    for (_, id) in due {
+        enqueue_refresh(model, &id);
+    }
+}
+
+/// When auto-refresh may retry a feed whose refresh just failed.
+fn failure_backoff_until() -> i64 {
+    now_unix().saturating_add(FAILURE_BACKOFF_SECS)
+}
+
 /// Clears the in-flight marker when the active refresh reaches a terminal state.
 fn finish_refresh(model: &mut Model, id: &str) {
     if model.refreshing.as_deref() == Some(id) {
@@ -944,6 +985,10 @@ pub enum Event {
     RefreshSubscription(String),
     /// Queue every subscription for refresh, one at a time, in library order.
     RefreshAll,
+    /// Refresh the feeds that are due (older than the refresh interval and not backing
+    /// off). Sent when the app becomes active; held until the library has loaded if it
+    /// arrives first (i.e. at launch).
+    RefreshStale,
     /// Result of a refresh fetch for `subscription_id`.
     RefreshFetched {
         subscription_id: String,
@@ -2839,5 +2884,165 @@ mod tests {
         let mut cmd = app.update(Event::RefreshAll, &mut model);
         assert!(http_ops(&mut cmd).is_empty());
         assert!(!app.view(&model).library.refreshing);
+    }
+
+    // --- foreground auto-refresh ---
+
+    fn loaded_model(subs: Vec<Subscription>) -> Model {
+        Model {
+            subscriptions: subs,
+            subscriptions_loaded: true,
+            ..Model::default()
+        }
+    }
+
+    fn sub_refreshed(id: &str, age_secs: Option<i64>) -> Subscription {
+        let mut s = make_subscription(id, id);
+        s.last_refreshed = age_secs.map(|a| now_unix() - a);
+        s
+    }
+
+    const HOUR: i64 = 3600;
+
+    #[test]
+    fn refresh_stale_queues_only_feeds_past_the_interval() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![
+            sub_refreshed("fresh", Some(HOUR)),
+            sub_refreshed("old", Some(13 * HOUR)),
+            sub_refreshed("never", None),
+        ]);
+
+        let mut cmd = app.update(Event::RefreshStale, &mut model);
+
+        assert_eq!(http_ops(&mut cmd).len(), 1);
+        let mut pending = model.refresh_queue.clone();
+        pending.extend(model.refreshing.clone());
+        pending.sort();
+        assert_eq!(pending, vec!["never".to_string(), "old".to_string()]);
+    }
+
+    #[test]
+    fn refresh_stale_respects_the_twelve_hour_boundary() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![
+            sub_refreshed("just-under", Some(12 * HOUR - 60)),
+            sub_refreshed("exactly", Some(12 * HOUR)),
+        ]);
+
+        let _ = app.update(Event::RefreshStale, &mut model);
+
+        assert_eq!(model.refreshing.as_deref(), Some("exactly"));
+        assert!(model.refresh_queue.is_empty());
+    }
+
+    #[test]
+    fn refresh_stale_skips_feeds_still_backing_off() {
+        let app = Pollux;
+        let mut limited = sub_refreshed("limited", Some(24 * HOUR));
+        limited.retry_after_until = Some(now_unix() + 600);
+        let mut expired = sub_refreshed("expired", Some(24 * HOUR));
+        expired.retry_after_until = Some(now_unix() - 600);
+        let mut model = loaded_model(vec![limited, expired]);
+
+        let _ = app.update(Event::RefreshStale, &mut model);
+
+        assert_eq!(model.refreshing.as_deref(), Some("expired"));
+        assert!(model.refresh_queue.is_empty());
+    }
+
+    #[test]
+    fn manual_refresh_ignores_backoff() {
+        let app = Pollux;
+        let mut limited = sub_refreshed("limited", Some(HOUR));
+        limited.retry_after_until = Some(now_unix() + 600);
+        let mut model = loaded_model(vec![limited]);
+
+        let mut cmd = app.update(
+            Event::RefreshSubscription("limited".to_string()),
+            &mut model,
+        );
+
+        assert_eq!(http_ops(&mut cmd).len(), 1, "an explicit request wins");
+    }
+
+    #[test]
+    fn refresh_stale_before_the_library_loads_is_held_then_honoured() {
+        let app = Pollux;
+        let mut model = Model::default();
+
+        let mut early = app.update(Event::RefreshStale, &mut model);
+        assert!(http_ops(&mut early).is_empty());
+        assert!(model.auto_refresh_pending);
+
+        let mut loaded = app.update(
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Subscriptions(vec![
+                sub_refreshed("old", Some(24 * HOUR)),
+            ]))),
+            &mut model,
+        );
+
+        assert!(!model.auto_refresh_pending);
+        assert_eq!(http_ops(&mut loaded).len(), 1);
+        assert_eq!(model.refreshing.as_deref(), Some("old"));
+    }
+
+    #[test]
+    fn a_later_library_reload_does_not_retrigger_auto_refresh() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![]);
+        let mut cmd = app.update(
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Subscriptions(vec![
+                sub_refreshed("old", Some(24 * HOUR)),
+            ]))),
+            &mut model,
+        );
+        assert!(http_ops(&mut cmd).is_empty());
+    }
+
+    #[test]
+    fn refresh_stale_does_not_double_queue_feeds_already_pending() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![sub_refreshed("old", Some(24 * HOUR))]);
+        let _ = app.update(Event::RefreshStale, &mut model);
+
+        let mut again = app.update(Event::RefreshStale, &mut model);
+
+        assert!(http_ops(&mut again).is_empty());
+        assert!(model.refresh_queue.is_empty());
+    }
+
+    #[test]
+    fn a_failed_refresh_backs_off_so_auto_refresh_skips_it() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![sub_refreshed("old", Some(24 * HOUR))]);
+        let _ = app.update(Event::RefreshStale, &mut model);
+        let _ = app.update(
+            fetched("old", HttpResult::Error("offline".to_string())),
+            &mut model,
+        );
+
+        let until = model.subscriptions[0]
+            .retry_after_until
+            .expect("backoff set");
+        assert!(until > now_unix());
+
+        let mut next = app.update(Event::RefreshStale, &mut model);
+        assert!(
+            http_ops(&mut next).is_empty(),
+            "a broken feed isn't retried on every foreground"
+        );
+    }
+
+    #[test]
+    fn a_successful_refresh_clears_the_backoff() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![sub_refreshed("a", Some(24 * HOUR))]);
+        model.subscriptions[0].retry_after_until = Some(now_unix() - 1);
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let _ = app.update(fetched("a", response(304, vec![])), &mut model);
+
+        assert!(model.subscriptions[0].retry_after_until.is_none());
     }
 }
