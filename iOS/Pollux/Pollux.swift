@@ -9,6 +9,9 @@ struct PolluxApp: App {
         WindowGroup {
             RootView(core: core)
         }
+        .backgroundTask(.appRefresh(BackgroundRefresh.identifier)) { [core] in
+            await BackgroundRefresh.run(core: core)
+        }
     }
 }
 
@@ -38,8 +41,14 @@ private struct RootView: View {
                 // Foreground auto-refresh: the core decides which feeds are due (12h
                 // interval, honouring backoff), and holds the request if the library
                 // hasn't loaded yet, so firing on every activation incl. cold launch is safe.
-                if phase == .active {
+                switch phase {
+                case .active:
                     core.update(.refreshStale)
+                case .background:
+                    // Queue the next best-effort background wake-up.
+                    BackgroundRefresh.schedule()
+                default:
+                    break
                 }
             }
     }

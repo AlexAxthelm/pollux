@@ -50,6 +50,18 @@ class Core: ObservableObject {
         update(.started)
     }
 
+    /// Requests a refresh of due feeds and returns once the library has loaded and the
+    /// refresh queue has drained (or the calling task is cancelled). Used by the
+    /// background task, which has no UI to observe. `loading` is true from launch until
+    /// the library loads, so waiting on it also covers a cold background launch, where the
+    /// core holds the request until there are subscriptions to judge.
+    func refreshStaleAndWait() async {
+        update(.refreshStale)
+        while view.library.loading || view.library.refreshing, !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+    }
+
     func update(_ event: Event) {
         guard let serialized = try? event.bincodeSerialize() else {
             fatalError("Failed to serialize Event: \(event)")

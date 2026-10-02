@@ -22,6 +22,9 @@ targets:
       path: Pollux/Info.plist
       properties:
         UILaunchScreen: {}
+        # Background feed refresh (BGAppRefreshTask); see Pollux/BackgroundRefresh.swift.
+        UIBackgroundModes: [fetch]
+        BGTaskSchedulerPermittedIdentifiers: [com.example.pollux.refresh]
     dependencies:
       - package: Shared
       - package: App
