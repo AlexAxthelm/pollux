@@ -366,20 +366,26 @@ impl App for Pollux {
                 subscription_id,
                 result,
             } => {
-                // The in-memory subscription already reflects the outcome, and a failed
-                // write only costs durability across a restart, so there is nothing to
-                // surface. The one thing worth acting on: a 304 flagged episodes as
-                // removed, so the open feed's list on screen is out of date.
+                // The refresh is only over now, not when its outcome was decided: the
+                // shell's background task ends once nothing is busy, and the OS may
+                // suspend the app right after, so the write must have committed first.
+                // A failed write only costs durability across a restart (the in-memory
+                // subscription already reflects the outcome), so it ends the refresh
+                // like a successful one and surfaces nothing.
+                finish_refresh(model, &subscription_id);
+                // The one result worth acting on: a 304 flagged episodes as removed, so
+                // the open feed's list on screen is out of date.
                 let flagged = matches!(*result, StorageResult::EpisodesRemoved(n) if n > 0);
                 let open = model
                     .selected_subscription
                     .as_ref()
                     .is_some_and(|s| s.id == subscription_id);
-                if flagged && open {
+                let reload = if flagged && open {
                     load_episodes(&subscription_id)
                 } else {
                     Command::done()
-                }
+                };
+                reload.and(maybe_start_next_refresh(model)).and(render())
             }
             Event::SelectSubscription(id) => {
                 // Re-selecting the feed already on screen (e.g. returning from an
@@ -1084,7 +1090,9 @@ fn maybe_start_next_refresh(model: &mut Model) -> Command<Effect, Event> {
 }
 
 /// Ends the active refresh without a new feed body: applies the outcome to the
-/// in-memory subscription, persists it, and starts the next queued refresh.
+/// in-memory subscription and persists it. The refresh stays in flight until the write
+/// is acknowledged (`RefreshStatePersisted`), which then starts the next queued one; a
+/// feed that no longer exists has nothing to persist, so it ends at once.
 /// `last_refreshed` is only moved when `Some` (a 304); `error` is the failure reason.
 fn record_refresh_outcome(
     model: &mut Model,
@@ -1093,8 +1101,6 @@ fn record_refresh_outcome(
     error: Option<String>,
     retry_after_until: Option<i64>,
 ) -> Command<Effect, Event> {
-    finish_refresh(model, id);
-    let mut persist = Command::done();
     for sub in [
         model.subscriptions.iter_mut().find(|s| s.id == id),
         model.selected_subscription.as_mut().filter(|s| s.id == id),
@@ -1109,21 +1115,21 @@ fn record_refresh_outcome(
         sub.retry_after_until = retry_after_until;
     }
     if model.subscriptions.iter().any(|s| s.id == id) {
-        persist = Command::request_from_shell(StorageOperation::UpdateRefreshState {
+        let ack_id = id.to_string();
+        return Command::request_from_shell(StorageOperation::UpdateRefreshState {
             subscription_id: id.to_string(),
             last_refreshed,
             last_refresh_error: error,
             retry_after_until,
         })
-        .then_send({
-            let id = id.to_string();
-            move |r| Event::RefreshStatePersisted {
-                subscription_id: id.clone(),
-                result: Box::new(r),
-            }
-        });
+        .then_send(move |r| Event::RefreshStatePersisted {
+            subscription_id: ack_id.clone(),
+            result: Box::new(r),
+        })
+        .and(render());
     }
-    persist.and(maybe_start_next_refresh(model)).and(render())
+    finish_refresh(model, id);
+    maybe_start_next_refresh(model).and(render())
 }
 
 #[derive(Facet, Serialize, Deserialize, Clone, Debug)]
@@ -2161,6 +2167,7 @@ mod tests {
             lists_episodes(&storage_ops(&mut cmd)),
             "the 304 is the chance to fix the stale list"
         );
+        let _ = ack(&app, &mut model, "sub-id");
         assert!(
             model.refreshing.is_none(),
             "the refresh itself finished normally"
@@ -2186,6 +2193,11 @@ mod tests {
             subscription_id: id.to_string(),
             result: Box::new(result),
         }
+    }
+
+    /// The shell's acknowledgement of the outcome write, which is what ends a refresh.
+    fn ack(app: &Pollux, model: &mut Model, id: &str) -> Command<Effect, Event> {
+        app.update(persisted(id, StorageResult::Success), model)
     }
 
     #[test]
@@ -3254,10 +3266,60 @@ mod tests {
         assert!(http_ops(&mut second).is_empty(), "b waits behind a");
         assert_eq!(model.refresh_queue, vec!["b".to_string()]);
 
-        let mut next = app.update(fetched("a", response(304, vec![])), &mut model);
+        let mut outcome = app.update(fetched("a", response(304, vec![])), &mut model);
+        assert!(
+            http_ops(&mut outcome).is_empty(),
+            "a is not finished until its outcome is written"
+        );
+        assert_eq!(model.refreshing.as_deref(), Some("a"));
+
+        let mut next = ack(&app, &mut model, "a");
         let ops = http_ops(&mut next);
         assert_eq!(ops.len(), 1, "finishing a starts b");
         assert_eq!(model.refreshing.as_deref(), Some("b"));
+    }
+
+    #[test]
+    fn a_refresh_stays_busy_until_its_outcome_is_written() {
+        // The background task ends once nothing is busy, and iOS may suspend the app
+        // right after, so "finished" must mean "the outcome is committed".
+        let app = Pollux;
+        let mut model = model_with_subs(&["a"]);
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let _ = app.update(fetched("a", response(304, vec![])), &mut model);
+        assert!(app.view(&model).library.refreshing, "write not acknowledged");
+
+        let _ = ack(&app, &mut model, "a");
+        assert!(!app.view(&model).library.refreshing);
+    }
+
+    #[test]
+    fn a_failed_outcome_write_still_ends_the_refresh_and_starts_the_next() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a", "b"]);
+        let _ = app.update(Event::RefreshAll, &mut model);
+        let _ = app.update(fetched("a", response(304, vec![])), &mut model);
+
+        let mut next = app.update(
+            persisted("a", StorageResult::Error("db busy".to_string())),
+            &mut model,
+        );
+
+        assert_eq!(http_ops(&mut next).len(), 1, "b must not be stuck behind a");
+        assert_eq!(model.refreshing.as_deref(), Some("b"));
+    }
+
+    #[test]
+    fn a_refresh_of_an_unsubscribed_feed_has_nothing_to_write_and_ends_at_once() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a", "b"]);
+        let _ = app.update(Event::RefreshAll, &mut model);
+        model.subscriptions.retain(|s| s.id != "a");
+
+        let mut next = app.update(fetched("a", response(304, vec![])), &mut model);
+
+        assert_eq!(http_ops(&mut next).len(), 1, "b starts without waiting");
     }
 
     #[test]
@@ -3269,6 +3331,7 @@ mod tests {
         let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
 
         let mut cmd = app.update(fetched("a", response(304, vec![])), &mut model);
+        let _ = ack(&app, &mut model, "a");
 
         let sub = &model.subscriptions[0];
         assert!(sub.last_refreshed.is_some());
@@ -3402,6 +3465,7 @@ mod tests {
             fetched("a", HttpResult::Error("offline".to_string())),
             &mut model,
         );
+        let _ = ack(&app, &mut model, "a");
 
         assert_eq!(
             model.subscriptions[0].last_refresh_error.as_deref(),
@@ -3836,12 +3900,14 @@ mod tests {
         let mut model = model_with_subs(&["a", "b"]);
         let _ = app.update(Event::RefreshAll, &mut model);
 
-        let mut next = app.update(
+        let _ = app.update(
             fetched("a", HttpResult::Error("offline".to_string())),
             &mut model,
         );
+        let mut next = ack(&app, &mut model, "a");
         assert_eq!(http_ops(&mut next).len(), 1, "b still runs after a fails");
         let _ = app.update(fetched("b", response(304, vec![])), &mut model);
+        let _ = ack(&app, &mut model, "b");
 
         assert!(!app.view(&model).library.refreshing);
         assert_eq!(
@@ -4267,6 +4333,7 @@ mod tests {
             let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
 
             let _ = app.update(failure, &mut model);
+            let _ = ack(&app, &mut model, "a");
 
             let sub = &model.subscriptions[0];
             assert!(sub.last_refresh_error.is_some(), "{name}: error recorded");
@@ -4314,7 +4381,8 @@ mod tests {
 
         // The in-flight fetch resolves normally and records its outcome, but nothing
         // further starts.
-        let mut done = app.update(fetched("a", response(304, vec![])), &mut model);
+        let _ = app.update(fetched("a", response(304, vec![])), &mut model);
+        let mut done = ack(&app, &mut model, "a");
         assert!(http_ops(&mut done).is_empty(), "no next feed after cancel");
         assert!(model.refreshing.is_none());
         assert!(
@@ -4403,10 +4471,12 @@ mod tests {
             fetched("a", HttpResult::Unreachable("offline".to_string())),
             &mut model,
         );
+        let _ = ack(&app, &mut model, "a");
         let _ = app.update(
             fetched("b", HttpResult::Unreachable("offline".to_string())),
             &mut model,
         );
+        let _ = ack(&app, &mut model, "b");
         assert!(model.refreshing.is_none());
 
         let mut back_online = app.update(Event::RefreshStale, &mut model);

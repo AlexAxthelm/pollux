@@ -212,7 +212,11 @@ request would push the system's real run well past the interval. A run gets abou
 foreground or wake-up. When the system expires the task, the shell sends
 `CancelRefresh`: the feeds still waiting are dropped (and any auto-refresh held
 for the library load), while the fetch already in flight is left to finish and
-have its outcome recorded, so nothing further starts. It does not download, and
+have its outcome recorded, so nothing further starts. A refresh counts as busy
+until its outcome is **written** (`RefreshStatePersisted`), not merely decided:
+the run ends once nothing is busy and iOS may suspend the app right after, so
+finishing earlier could lose the timestamp, error or backoff. A failed write ends
+the refresh like a successful one. It does not download, and
 a background launch does not resume interrupted downloads either: the core only
 loads those on `ResumePendingDownloads`, which the shell sends the first time
 the app becomes active, never from `Started`. It will not run if Background App
