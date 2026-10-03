@@ -55,10 +55,20 @@ class Core: ObservableObject {
     /// background task, which has no UI to observe. `loading` is true from launch until
     /// the library loads, so waiting on it also covers a cold background launch, where the
     /// core holds the request until there are subscriptions to judge.
+    ///
+    /// When the system expires the task, the task is cancelled; that stops this wait, but
+    /// the core's queue is in-memory Rust state that task cancellation can't reach. So
+    /// cancellation also sends `.cancelRefresh`, which drops the feeds still waiting. The
+    /// fetch already in flight is left to finish: the core records its outcome, and
+    /// nothing further starts.
     func refreshStaleAndWait() async {
         update(.refreshStale)
-        while view.library.loading || view.library.refreshing, !Task.isCancelled {
-            try? await Task.sleep(for: .milliseconds(200))
+        await withTaskCancellationHandler {
+            while view.library.loading || view.library.refreshing, !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(200))
+            }
+        } onCancel: {
+            Task { @MainActor in self.update(.cancelRefresh) }
         }
     }
 

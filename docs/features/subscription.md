@@ -145,7 +145,10 @@ the chain survives a run cut short). That is deliberately shorter than the 12-ho
 interval: only due feeds are fetched, so an early wake is cheap, whereas a longer
 request would push the system's real run well past the interval. A run gets about
 30 seconds, so it refreshes as many due feeds as fit; the rest wait for the next
-foreground or wake-up. It does not download. It will not run if Background App
+foreground or wake-up. When the system expires the task, the shell sends
+`CancelRefresh`: the feeds still waiting are dropped (and any auto-refresh held
+for the library load), while the fetch already in flight is left to finish and
+have its outcome recorded, so nothing further starts. It does not download. It will not run if Background App
 Refresh is off, in Low Power Mode, or after the user force-quits the app, so
 foreground refresh is the reliable path. Declared in `iOS/project.yml`
 (`UIBackgroundModes: fetch`, `BGTaskSchedulerPermittedIdentifiers`); the

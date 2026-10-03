@@ -190,6 +190,16 @@ impl App for Pollux {
                 }
                 maybe_start_next_refresh(model).and(render())
             }
+            Event::CancelRefresh => {
+                // Drops what is waiting, not what is running: the fetch already in
+                // flight resolves normally (its outcome is still recorded), but
+                // finishing it no longer starts the next feed. Also drops an
+                // auto-refresh held for the library to load, which would otherwise
+                // fire after cancellation.
+                model.refresh_queue.clear();
+                model.auto_refresh_pending = false;
+                render()
+            }
             Event::RefreshFetched {
                 subscription_id,
                 result,
@@ -989,6 +999,11 @@ pub enum Event {
     /// off). Sent when the app becomes active; held until the library has loaded if it
     /// arrives first (i.e. at launch).
     RefreshStale,
+    /// Stop starting new refreshes: clear the waiting queue and any held auto-refresh.
+    /// The fetch already in flight is left to finish. Sent when the background task
+    /// expires, so the app doesn't keep working through the queue after being told to
+    /// stop.
+    CancelRefresh,
     /// Result of a refresh fetch for `subscription_id`.
     RefreshFetched {
         subscription_id: String,
@@ -3093,6 +3108,78 @@ mod tests {
                 "{name}: auto-refresh must skip the feed while it backs off"
             );
         }
+    }
+
+    #[test]
+    fn cancel_refresh_drops_the_queue_but_lets_the_active_fetch_finish() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![
+            sub_refreshed("a", Some(24 * HOUR)),
+            sub_refreshed("b", Some(24 * HOUR)),
+            sub_refreshed("c", Some(24 * HOUR)),
+        ]);
+        let _ = app.update(Event::RefreshStale, &mut model);
+        assert_eq!(model.refreshing.as_deref(), Some("a"));
+        assert_eq!(model.refresh_queue.len(), 2);
+
+        let _ = app.update(Event::CancelRefresh, &mut model);
+
+        assert!(model.refresh_queue.is_empty());
+        assert_eq!(
+            model.refreshing.as_deref(),
+            Some("a"),
+            "in-flight is untouched"
+        );
+        assert!(
+            app.view(&model).library.refreshing,
+            "still busy until it lands"
+        );
+
+        // The in-flight fetch resolves normally and records its outcome, but nothing
+        // further starts.
+        let mut done = app.update(fetched("a", response(304, vec![])), &mut model);
+        assert!(http_ops(&mut done).is_empty(), "no next feed after cancel");
+        assert!(model.refreshing.is_none());
+        assert!(model.subscriptions[0].last_refreshed.unwrap() > now_unix() - 5);
+        assert!(!app.view(&model).library.refreshing);
+        assert!(
+            model.subscriptions[1].last_refreshed < Some(now_unix() - 23 * HOUR),
+            "cancelled feeds are left for a later wake-up"
+        );
+    }
+
+    #[test]
+    fn cancel_refresh_drops_an_auto_refresh_held_for_the_library_load() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let _ = app.update(Event::RefreshStale, &mut model);
+        assert!(model.auto_refresh_pending);
+
+        let _ = app.update(Event::CancelRefresh, &mut model);
+        let mut loaded = app.update(
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Subscriptions(vec![
+                sub_refreshed("old", Some(24 * HOUR)),
+            ]))),
+            &mut model,
+        );
+
+        assert!(!model.auto_refresh_pending);
+        assert!(
+            http_ops(&mut loaded).is_empty(),
+            "cancelled before it could run"
+        );
+    }
+
+    #[test]
+    fn cancel_refresh_when_idle_is_harmless_and_a_later_refresh_still_works() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![sub_refreshed("a", Some(24 * HOUR))]);
+
+        let mut cmd = app.update(Event::CancelRefresh, &mut model);
+        assert!(http_ops(&mut cmd).is_empty());
+
+        let mut next = app.update(Event::RefreshStale, &mut model);
+        assert_eq!(http_ops(&mut next).len(), 1, "cancel isn't sticky");
     }
 
     #[test]
