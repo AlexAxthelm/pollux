@@ -37,12 +37,4 @@ enum BackgroundRefresh {
             NSLog("BackgroundRefresh: could not schedule: \(error.localizedDescription)")
         }
     }
-
-    /// The task body. Reschedules first so the chain survives a run cut short by the
-    /// system, then refreshes whatever is due until the queue drains or the task is
-    /// cancelled at expiry.
-    static func run(core: Core) async {
-        await MainActor.run { schedule() }
-        await core.refreshStaleAndWait()
-    }
 }

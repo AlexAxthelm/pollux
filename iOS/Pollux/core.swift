@@ -9,21 +9,46 @@ class Core: ObservableObject {
     private var core: CoreFfi
     private let db: DatabaseManager
     private let downloads: DownloadManager
+    /// The session feed fetches go through. Injectable so tests can stub the network.
+    private let feedSession: URLSession
+    /// Asks the system for a future background-refresh wake-up. Injectable so tests can
+    /// observe it without touching `BGTaskScheduler`.
+    private let scheduleBackgroundRefresh: @MainActor () -> Void
     /// Storage operations are funnelled here and executed one at a time, in order.
     private let storage: AsyncStream<(StorageOperation, UInt32)>.Continuation
 
-    init() {
-        core = CoreFfi()
+    /// The app's real collaborators: the on-disk database and downloads folder, the shared
+    /// URL session, and the system scheduler.
+    convenience init() {
+        let db: DatabaseManager
         do {
             db = try DatabaseManager()
         } catch {
             fatalError("Failed to initialize DatabaseManager: \(error)")
         }
+        let downloads: DownloadManager
         do {
             downloads = try DownloadManager()
         } catch {
             fatalError("Failed to initialize DownloadManager: \(error)")
         }
+        self.init(db: db, downloads: downloads)
+    }
+
+    /// Everything the shell does on the core's behalf is injectable, so tests can drive a
+    /// real `Core` (and the real Rust core behind it) against a temporary database and a
+    /// stubbed network.
+    init(
+        db: DatabaseManager,
+        downloads: DownloadManager,
+        feedSession: URLSession = .shared,
+        scheduleBackgroundRefresh: @escaping @MainActor () -> Void = { BackgroundRefresh.schedule() },
+    ) {
+        core = CoreFfi()
+        self.db = db
+        self.downloads = downloads
+        self.feedSession = feedSession
+        self.scheduleBackgroundRefresh = scheduleBackgroundRefresh
         // One serial consumer so writes for a given episode apply in submission order
         // (Queued → Downloading → terminal). A Task per op could reorder them — a fast
         // failure/cancel racing the Downloading write would leave a stale status in the
@@ -48,6 +73,32 @@ class Core: ObservableObject {
             }
         }
         update(.started)
+    }
+
+    // MARK: - Lifecycle
+
+    /// The app came to the foreground (including at cold launch). The core decides which
+    /// feeds are due, and holds the request if the library hasn't loaded yet, so sending
+    /// this on every activation is safe. Interrupted downloads resume only here, never from
+    /// `Started`: a background launch (the refresh task) never becomes active, so it can't
+    /// start a download inside its short window. The core ignores every activation after the
+    /// first for that.
+    func appBecameActive() {
+        update(.refreshStale)
+        update(.resumePendingDownloads)
+    }
+
+    /// The app went to the background: queue the next best-effort wake-up.
+    func appEnteredBackground() {
+        scheduleBackgroundRefresh()
+    }
+
+    /// The body of the system's background-refresh task. Reschedules first so the chain
+    /// survives a run cut short by the system, then refreshes whatever is due until the
+    /// queue drains or the task is cancelled at expiry.
+    func runBackgroundRefresh() async {
+        scheduleBackgroundRefresh()
+        await refreshStaleAndWait()
     }
 
     /// Requests a refresh of due feeds and returns once the library has loaded and the
@@ -100,8 +151,9 @@ class Core: ObservableObject {
 
         case let .http(operation):
             let requestId = request.id
+            let session = feedSession
             Task.detached { [weak self] in
-                let result = await Core.fetchHttp(operation)
+                let result = await Core.fetchHttp(operation, session: session)
                 await MainActor.run { [weak self] in
                     self?.resolveAndDispatch(requestId: requestId, result: result)
                 }
@@ -148,10 +200,10 @@ class Core: ObservableObject {
 
     // MARK: - HTTP
 
-    private static func fetchHttp(_ operation: HttpOperation) async -> HttpResult {
+    private static func fetchHttp(_ operation: HttpOperation, session: URLSession) async -> HttpResult {
         switch operation {
         case let .fetchFeed(url, etag, lastModified):
-            await FeedFetcher.fetch(url: url, etag: etag, lastModified: lastModified)
+            await FeedFetcher.fetch(url: url, etag: etag, lastModified: lastModified, session: session)
         }
     }
 

@@ -10,7 +10,7 @@ struct PolluxApp: App {
             RootView(core: core)
         }
         .backgroundTask(.appRefresh(BackgroundRefresh.identifier)) { [core] in
-            await BackgroundRefresh.run(core: core)
+            await core.runBackgroundRefresh()
         }
     }
 }
@@ -38,20 +38,13 @@ private struct RootView: View {
             .background(colors.background.ignoresSafeArea())
             .preferredColorScheme(theme.preferredColorScheme)
             .onChange(of: scenePhase, initial: true) { _, phase in
-                // Foreground auto-refresh: the core decides which feeds are due (12h
-                // interval, honouring backoff), and holds the request if the library
-                // hasn't loaded yet, so firing on every activation incl. cold launch is safe.
+                // The lifecycle logic lives in `Core` so it can be tested; this only maps
+                // the scene phase onto it. `initial: true` covers cold launch.
                 switch phase {
                 case .active:
-                    core.update(.refreshStale)
-                    // Resume interrupted downloads only once the app is actually in the
-                    // foreground. A background launch (the refresh task) never reaches
-                    // `.active`, so it can't start a download inside its short window.
-                    // The core ignores every activation after the first.
-                    core.update(.resumePendingDownloads)
+                    core.appBecameActive()
                 case .background:
-                    // Queue the next best-effort background wake-up.
-                    BackgroundRefresh.schedule()
+                    core.appEnteredBackground()
                 default:
                     break
                 }
