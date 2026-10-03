@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 use crate::capabilities::download::{DownloadOperation, DownloadResult};
 use crate::capabilities::http::{HttpOperation, HttpResult};
 use crate::capabilities::storage::{StorageOperation, StorageResult};
-use crate::defaults::{FAILURE_BACKOFF_SECS, RATE_LIMIT_BACKOFF_SECS, REFRESH_INTERVAL_HOURS};
+use crate::defaults::{
+    FAILURE_BACKOFF_SECS, MAX_RETRY_AFTER_SECS, RATE_LIMIT_BACKOFF_SECS, REFRESH_INTERVAL_HOURS,
+};
 use crate::domain::{DownloadStatus, Episode, EpisodeSortOrder};
 use crate::effect::Effect;
 use crate::feed_parser::{now_unix, parse_feed};
@@ -285,18 +287,13 @@ impl App for Pollux {
                         status: 429,
                         retry_after_secs,
                         ..
-                    } => {
-                        let wait = retry_after_secs
-                            .and_then(|s| i64::try_from(s).ok())
-                            .unwrap_or(RATE_LIMIT_BACKOFF_SECS);
-                        record_refresh_outcome(
-                            model,
-                            &subscription_id,
-                            None,
-                            Some("The host asked us to slow down (HTTP 429)".to_string()),
-                            Some(now_unix().saturating_add(wait)),
-                        )
-                    }
+                    } => record_refresh_outcome(
+                        model,
+                        &subscription_id,
+                        None,
+                        Some("The host asked us to slow down (HTTP 429)".to_string()),
+                        Some(now_unix().saturating_add(rate_limit_wait_secs(retry_after_secs))),
+                    ),
                     HttpResult::Response { status, .. } => record_refresh_outcome(
                         model,
                         &subscription_id,
@@ -921,6 +918,17 @@ fn enqueue_due_refreshes(model: &mut Model) {
     for (_, id) in due {
         enqueue_refresh(model, &id);
     }
+}
+
+/// How long to leave a feed alone after a 429: the host's `Retry-After` when it sent one,
+/// otherwise the default, but never more than `MAX_RETRY_AFTER_SECS`. A value too large
+/// for an `i64` clamps to the cap rather than falling back to the (much shorter) default.
+fn rate_limit_wait_secs(retry_after_secs: Option<u64>) -> i64 {
+    retry_after_secs
+        .map_or(RATE_LIMIT_BACKOFF_SECS, |s| {
+            i64::try_from(s).unwrap_or(i64::MAX)
+        })
+        .min(MAX_RETRY_AFTER_SECS)
 }
 
 /// When auto-refresh may retry a feed whose refresh just failed.
@@ -2802,6 +2810,59 @@ mod tests {
 
         let until = model.subscriptions[0].retry_after_until.expect("retry set");
         assert!(until >= before + RATE_LIMIT_BACKOFF_SECS);
+    }
+
+    #[test]
+    fn rate_limit_wait_honours_the_hosts_value_up_to_the_cap() {
+        assert_eq!(rate_limit_wait_secs(Some(600)), 600);
+        assert_eq!(rate_limit_wait_secs(Some(0)), 0);
+        assert_eq!(
+            rate_limit_wait_secs(Some(MAX_RETRY_AFTER_SECS as u64)),
+            MAX_RETRY_AFTER_SECS,
+            "exactly the cap is allowed"
+        );
+        assert_eq!(rate_limit_wait_secs(None), RATE_LIMIT_BACKOFF_SECS);
+    }
+
+    #[test]
+    fn rate_limit_wait_is_capped() {
+        let year = 365 * 24 * 3600;
+        assert_eq!(
+            rate_limit_wait_secs(Some(MAX_RETRY_AFTER_SECS as u64 + 1)),
+            MAX_RETRY_AFTER_SECS
+        );
+        assert_eq!(rate_limit_wait_secs(Some(year)), MAX_RETRY_AFTER_SECS);
+        // Too big even for an i64: must clamp to the cap, not fall back to the default.
+        assert_eq!(rate_limit_wait_secs(Some(u64::MAX)), MAX_RETRY_AFTER_SECS);
+    }
+
+    #[test]
+    fn a_huge_retry_after_only_silences_auto_refresh_for_the_cap() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a"]);
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+        let before = now_unix();
+
+        let _ = app.update(
+            fetched(
+                "a",
+                HttpResult::Response {
+                    status: 429,
+                    body: vec![],
+                    etag: None,
+                    last_modified: None,
+                    retry_after_secs: Some(365 * 24 * 3600),
+                },
+            ),
+            &mut model,
+        );
+
+        let until = model.subscriptions[0].retry_after_until.expect("retry set");
+        assert!(until >= before + MAX_RETRY_AFTER_SECS);
+        assert!(
+            until <= now_unix() + MAX_RETRY_AFTER_SECS,
+            "a year-long Retry-After must not mute the feed for a year"
+        );
     }
 
     #[test]
