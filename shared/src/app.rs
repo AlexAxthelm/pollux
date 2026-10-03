@@ -8,7 +8,7 @@ use crate::capabilities::storage::{StorageOperation, StorageResult};
 use crate::defaults::{
     FAILURE_BACKOFF_SECS, MAX_RETRY_AFTER_SECS, RATE_LIMIT_BACKOFF_SECS, REFRESH_INTERVAL_HOURS,
 };
-use crate::domain::{DownloadStatus, Episode, EpisodeSortOrder};
+use crate::domain::{DownloadStatus, Episode, EpisodeSortOrder, Subscription};
 use crate::effect::Effect;
 use crate::feed_parser::{now_unix, parse_feed};
 use crate::html::strip_html_preview;
@@ -206,17 +206,7 @@ impl App for Pollux {
                 }
             }
             Event::RefreshAll => {
-                // Library order (as displayed), so the feeds the user sees first
-                // refresh first. Already-pending feeds are skipped by `enqueue_refresh`.
-                let mut ids: Vec<(String, String)> = model
-                    .subscriptions
-                    .iter()
-                    .map(|s| (s.title.to_lowercase(), s.id.clone()))
-                    .collect();
-                ids.sort();
-                for (_, id) in ids {
-                    enqueue_refresh(model, &id);
-                }
+                enqueue_in_library_order(model, |_| true);
                 maybe_start_next_refresh(model).and(render())
             }
             Event::CancelRefresh => {
@@ -911,28 +901,35 @@ fn enqueue_refresh(model: &mut Model, id: &str) {
     }
 }
 
+/// Queues every subscription `include` accepts, in library order: case-insensitive by
+/// title, as the library list is displayed (see `view`), with the id breaking ties so the
+/// order is deterministic. The feeds the user sees first refresh first. Feeds already
+/// queued or in flight are skipped by `enqueue_refresh`.
+fn enqueue_in_library_order(model: &mut Model, include: impl Fn(&Subscription) -> bool) {
+    let mut ids: Vec<(String, String)> = model
+        .subscriptions
+        .iter()
+        .filter(|s| include(s))
+        .map(|s| (s.title.to_lowercase(), s.id.clone()))
+        .collect();
+    ids.sort();
+    for (_, id) in ids {
+        enqueue_refresh(model, &id);
+    }
+}
+
 /// Queues every feed that is due for an automatic refresh: not refreshed within the
-/// interval (or never) and not inside a `retry_after_until` backoff. Library order, like
-/// `RefreshAll`.
+/// interval (or never) and not inside a `retry_after_until` backoff.
 fn enqueue_due_refreshes(model: &mut Model) {
     let now = now_unix();
     let interval = i64::from(REFRESH_INTERVAL_HOURS) * 3600;
-    let mut due: Vec<(String, String)> = model
-        .subscriptions
-        .iter()
-        .filter(|s| {
-            let stale = s
-                .last_refreshed
-                .is_none_or(|t| now.saturating_sub(t) >= interval);
-            let backing_off = s.retry_after_until.is_some_and(|t| t > now);
-            stale && !backing_off
-        })
-        .map(|s| (s.title.to_lowercase(), s.id.clone()))
-        .collect();
-    due.sort();
-    for (_, id) in due {
-        enqueue_refresh(model, &id);
-    }
+    enqueue_in_library_order(model, |s| {
+        let stale = s
+            .last_refreshed
+            .is_none_or(|t| now.saturating_sub(t) >= interval);
+        let backing_off = s.retry_after_until.is_some_and(|t| t > now);
+        stale && !backing_off
+    });
 }
 
 /// How long to leave a feed alone after a 429: the host's `Retry-After` when it sent one,
@@ -3020,6 +3017,40 @@ mod tests {
         assert_eq!(model.refreshing.as_deref(), Some("a"));
         assert_eq!(model.refresh_queue, vec!["m".to_string(), "z".to_string()]);
         assert!(app.view(&model).library.refreshing);
+    }
+
+    #[test]
+    fn feeds_with_the_same_title_refresh_in_a_stable_order() {
+        // The id breaks title ties, so the order doesn't depend on storage order.
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions.push(make_subscription("b", "Same"));
+        model.subscriptions.push(make_subscription("a", "same"));
+        model.subscriptions.push(make_subscription("c", "SAME"));
+
+        let _ = app.update(Event::RefreshAll, &mut model);
+
+        // Same title ignoring case, so it falls to the ids: a, b, c.
+        assert_eq!(model.refreshing.as_deref(), Some("a"));
+        assert_eq!(model.refresh_queue, vec!["b".to_string(), "c".to_string()]);
+    }
+
+    #[test]
+    fn auto_refresh_queues_due_feeds_in_the_same_order_as_refresh_all() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![
+            sub_refreshed("z", Some(24 * HOUR)),
+            sub_refreshed("a", Some(24 * HOUR)),
+            sub_refreshed("m", Some(HOUR)), // fresh: not due
+        ]);
+        for s in &mut model.subscriptions {
+            s.title = s.id.clone();
+        }
+
+        let _ = app.update(Event::RefreshStale, &mut model);
+
+        assert_eq!(model.refreshing.as_deref(), Some("a"));
+        assert_eq!(model.refresh_queue, vec!["z".to_string()]);
     }
 
     #[test]
