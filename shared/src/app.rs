@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crux_core::{render::render, App, Command};
 use facet::Facet;
 use serde::{Deserialize, Serialize};
@@ -663,6 +665,11 @@ impl App for Pollux {
     fn view(&self, model: &Model) -> ViewModel {
         // Display order is owned here rather than at each mutation site, so the
         // core does not depend on the shell returning rows in any given order.
+        //
+        // The feeds queued for refresh are collected once: asking `is_refresh_pending`
+        // per row would scan the queue for every subscription on every render, which is
+        // quadratic while a Refresh all of a large library works through its queue.
+        let pending = refresh_pending_ids(model);
         let mut subscriptions: Vec<SubscriptionSummary> = model
             .subscriptions
             .iter()
@@ -670,7 +677,7 @@ impl App for Pollux {
                 id: s.id.clone(),
                 title: s.title.clone(),
                 artwork_url: s.artwork_url.clone(),
-                refreshing: is_refresh_pending(model, &s.id),
+                refreshing: pending.contains(s.id.as_str()),
                 refresh_error: s.last_refresh_error.clone(),
             })
             .collect();
@@ -938,9 +945,22 @@ fn episodes_load_failed(model: &mut Model, reason: String) {
     }
 }
 
-/// True while `id` is being fetched or waiting its turn in the refresh queue.
+/// True while `id` is being fetched or waiting its turn in the refresh queue. Fine for a
+/// single lookup; to test many subscriptions at once use `refresh_pending_ids`.
 fn is_refresh_pending(model: &Model, id: &str) -> bool {
     model.refreshing.as_deref() == Some(id) || model.refresh_queue.iter().any(|q| q == id)
+}
+
+/// Every subscription id currently being fetched or waiting in the refresh queue, built
+/// once so a caller checking many subscriptions (the library view) does one pass over the
+/// queue instead of one per subscription.
+fn refresh_pending_ids(model: &Model) -> HashSet<&str> {
+    model
+        .refreshing
+        .as_deref()
+        .into_iter()
+        .chain(model.refresh_queue.iter().map(String::as_str))
+        .collect()
 }
 
 /// Queues a known subscription for refresh. Unknown ids and ones already queued or in
@@ -3520,6 +3540,71 @@ mod tests {
         );
 
         assert!(storage_ops(&mut cmd).is_empty());
+    }
+
+    #[test]
+    fn the_library_view_flags_exactly_the_in_flight_and_queued_feeds() {
+        // A large library with a mix: one in flight, some queued, the rest idle. Guards
+        // the single-pass lookup the view uses against the per-row scan it replaced.
+        let app = Pollux;
+        let ids: Vec<String> = (0..500).map(|i| format!("id-{i:03}")).collect();
+        let mut model = Model::default();
+        for id in &ids {
+            model.subscriptions.push(make_subscription(id, id));
+        }
+        model.refreshing = Some("id-007".to_string());
+        model.refresh_queue = vec![
+            "id-100".to_string(),
+            "id-250".to_string(),
+            "id-499".to_string(),
+        ];
+
+        let view = app.view(&model);
+
+        let flagged: Vec<&str> = view
+            .library
+            .subscriptions
+            .iter()
+            .filter(|s| s.refreshing)
+            .map(|s| s.id.as_str())
+            .collect();
+        assert_eq!(flagged, vec!["id-007", "id-100", "id-250", "id-499"]);
+        assert_eq!(
+            view.library.subscriptions.len(),
+            500,
+            "every feed is still listed"
+        );
+        assert!(view.library.refreshing);
+    }
+
+    #[test]
+    fn nothing_is_flagged_when_nothing_is_refreshing() {
+        let app = Pollux;
+        let model = model_with_subs(&["a", "b", "c"]);
+
+        let view = app.view(&model);
+
+        assert!(view.library.subscriptions.iter().all(|s| !s.refreshing));
+        assert!(!view.library.refreshing);
+    }
+
+    #[test]
+    fn a_feed_both_in_flight_and_queued_is_flagged_once_not_twice() {
+        // The set collapses duplicates; the row is simply flagged.
+        let app = Pollux;
+        let mut model = model_with_subs(&["a", "b"]);
+        model.refreshing = Some("a".to_string());
+        model.refresh_queue = vec!["a".to_string()];
+
+        let view = app.view(&model);
+
+        let flags: Vec<(&str, bool)> = view
+            .library
+            .subscriptions
+            .iter()
+            .map(|s| (s.id.as_str(), s.refreshing))
+            .collect();
+        assert_eq!(flags, vec![("a", true), ("b", false)]);
     }
 
     #[test]
