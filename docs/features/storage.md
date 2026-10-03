@@ -105,7 +105,7 @@ If the platformOS supports background app refresh / tasks, then downlopad should
 proceed with that. If not, then there should be a warning to user that it only
 downloads while open.
 
-> **TODO (not built):** downloads currently stop when the app is suspended.
+> **Not built:** downloads currently stop when the app is suspended.
 > `DownloadManager` uses a foreground `URLSession` (default configuration, one
 > session per download). The ~30s `BGAppRefreshTask` budget used by feed refresh
 > is the wrong tool; iOS background downloads need a **background `URLSession`**
