@@ -198,15 +198,17 @@ composed by `rust.yml`, `swift.yml`, and `admin.yml`.
 
 ## Current State
 
-The MVP foundation is in place: RSS feed parsing and subscribing, a library and
-per-feed episode list, and an offline **download manager** (serial queue, live
-progress, resume-on-launch, cancel). A base16 **theming** system is wired
-through the `ViewModel`. State lives in the Rust core; the iOS shell handles
-SQLite (GRDB), HTTP, downloads (URLSession), and rendering.
+The MVP foundation is in place: RSS feed parsing and subscribing, **feed refresh**
+(manual, on foreground, and best-effort in the background, using conditional GETs;
+see `docs/features/subscription.md`), a library and per-feed episode list, and an
+offline **download manager** (serial queue, live progress, resume on first
+foreground, cancel). A base16 **theming** system is wired through the
+`ViewModel`. State lives in the Rust core; the iOS shell handles SQLite (GRDB),
+HTTP, downloads (URLSession), and rendering.
 
 Still to come (see `docs/ROADMAP.md`): audio playback, playlists (the core
-differentiator), a Settings screen, and feed refresh. Sync is out of scope for
-MVP and v1.0. Feature intent and priorities live in `docs/features/`.
+differentiator), and a Settings screen. Sync is out of scope for MVP and v1.0.
+Feature intent and priorities live in `docs/features/`.
 
 When adding a new domain feature, the typical change surface is:
 

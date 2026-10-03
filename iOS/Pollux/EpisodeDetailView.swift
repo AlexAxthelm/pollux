@@ -41,7 +41,7 @@ struct EpisodeDetailView: View {
                 // notice the list uses so the failure is visible without navigating back
                 // — but only when it's about this episode (see `episodeNotice`).
                 if let notice = episodeNotice {
-                    DownloadNoticeBanner(message: notice)
+                    NoticeBanner(message: notice)
                 }
                 downloadSection
                 Divider()

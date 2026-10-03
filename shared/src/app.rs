@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crux_core::{render::render, App, Command};
 use facet::Facet;
 use serde::{Deserialize, Serialize};
@@ -5,9 +7,12 @@ use serde::{Deserialize, Serialize};
 use crate::capabilities::download::{DownloadOperation, DownloadResult};
 use crate::capabilities::http::{HttpOperation, HttpResult};
 use crate::capabilities::storage::{StorageOperation, StorageResult};
-use crate::domain::{DownloadStatus, Episode, EpisodeSortOrder};
+use crate::defaults::{
+    FAILURE_BACKOFF_SECS, MAX_RETRY_AFTER_SECS, RATE_LIMIT_BACKOFF_SECS, REFRESH_INTERVAL_HOURS,
+};
+use crate::domain::{DownloadStatus, Episode, EpisodeSortOrder, Subscription};
 use crate::effect::Effect;
-use crate::feed_parser::parse_feed;
+use crate::feed_parser::{now_unix, parse_feed};
 use crate::html::strip_html_preview;
 use crate::model::{DownloadProgress, Model, QueuedDownload};
 use crate::theme::{theme_view, ThemeId, ThemeMode};
@@ -29,14 +34,26 @@ impl App for Pollux {
         match event {
             Event::Started => {
                 model.loading = true;
-                let subscriptions =
-                    Command::request_from_shell(StorageOperation::ListSubscriptions)
-                        .then_send(|r| Event::SubscriptionsLoaded(Box::new(r)));
+                // Interrupted downloads are deliberately NOT resumed here: the core is
+                // also created when iOS launches the app in the background (for a
+                // refresh task), and that launch must stay metadata-only. They resume
+                // on the first foreground activation instead (`ResumePendingDownloads`).
+                Command::request_from_shell(StorageOperation::ListSubscriptions)
+                    .then_send(|r| Event::SubscriptionsLoaded(Box::new(r)))
+                    .and(render())
+            }
+            Event::ResumePendingDownloads => {
+                // Once per process: the shell sends this on every activation, but the
+                // queue only needs rebuilding from the DB the first time. Later
+                // activations would re-list episodes already in the in-memory queue.
+                if model.pending_downloads_requested {
+                    return Command::done();
+                }
+                model.pending_downloads_requested = true;
                 // Rebuild the download queue for anything a previous session left
                 // mid-download, and resume it.
-                let pending = Command::request_from_shell(StorageOperation::ListPendingDownloads)
-                    .then_send(|r| Event::PendingDownloadsLoaded(Box::new(r)));
-                subscriptions.and(pending).and(render())
+                Command::request_from_shell(StorageOperation::ListPendingDownloads)
+                    .then_send(|r| Event::PendingDownloadsLoaded(Box::new(r)))
             }
             Event::SubscriptionsLoaded(result) => {
                 model.loading = false;
@@ -44,13 +61,18 @@ impl App for Pollux {
                     StorageResult::Subscriptions(rows) => {
                         model.subscriptions = rows;
                         model.error = None;
+                        model.subscriptions_loaded = true;
                     }
                     StorageResult::Error(e) => model.error = Some(e),
                     unexpected => {
                         model.error = Some(format!("unexpected storage result: {unexpected:?}"))
                     }
                 }
-                render()
+                if model.subscriptions_loaded && model.auto_refresh_pending {
+                    model.auto_refresh_pending = false;
+                    enqueue_due_refreshes(model);
+                }
+                maybe_start_next_refresh(model).and(render())
             }
             Event::PendingDownloadsLoaded(result) => {
                 // Rebuild the queue from downloads a prior session left in flight and
@@ -94,21 +116,41 @@ impl App for Pollux {
             Event::FetchFeed(url) => {
                 model.loading = true;
                 model.error = None;
-                Command::request_from_shell(HttpOperation::FetchFeed { url: url.clone() })
-                    .then_send(move |r| Event::FeedFetched {
-                        url,
-                        result: Box::new(r),
-                    })
-                    .and(render())
+                Command::request_from_shell(HttpOperation::FetchFeed {
+                    url: url.clone(),
+                    etag: None,
+                    last_modified: None,
+                })
+                .then_send(move |r| Event::FeedFetched {
+                    url,
+                    result: Box::new(r),
+                })
+                .and(render())
             }
             Event::FeedFetched { url, result } => match *result {
-                HttpResult::Error(e) => {
+                HttpResult::Error(e) | HttpResult::Unreachable(e) => {
                     model.loading = false;
                     model.error = Some(e);
                     render()
                 }
-                HttpResult::Response { status: 200, body } => match parse_feed(&url, body) {
-                    Ok((subscription, episodes)) => {
+                HttpResult::Response {
+                    status: 200,
+                    body,
+                    etag,
+                    last_modified,
+                    ..
+                } => match parse_feed(&url, body) {
+                    Ok((mut subscription, episodes)) => {
+                        // Re-adding a feed we already have goes through the same upsert
+                        // as a refresh, so it gets the same protection.
+                        if let Some(existing) =
+                            model.subscriptions.iter().find(|s| s.feed_url == url)
+                        {
+                            subscription.inherit_missing_metadata(existing);
+                        }
+                        // Keep the validators so the first refresh can be conditional.
+                        subscription.etag = etag;
+                        subscription.last_modified = last_modified;
                         Command::request_from_shell(StorageOperation::UpsertFeedWithEpisodes {
                             subscription,
                             episodes,
@@ -145,6 +187,206 @@ impl App for Pollux {
                 }
                 render()
             }
+            Event::RefreshSubscription(id) => {
+                enqueue_refresh(model, &id);
+                maybe_start_next_refresh(model).and(render())
+            }
+            Event::RefreshStale => {
+                if model.subscriptions_loaded {
+                    enqueue_due_refreshes(model);
+                    maybe_start_next_refresh(model).and(render())
+                } else {
+                    // Nothing to judge staleness against yet: hold the request until the
+                    // library arrives (see `SubscriptionsLoaded`).
+                    model.auto_refresh_pending = true;
+                    if model.loading {
+                        // The launch load is still in flight and will honour it.
+                        render()
+                    } else {
+                        // Not loaded and nothing loading means the last load failed.
+                        // Nothing else retries it, so without this the held request
+                        // (and the library itself) would stay stuck until the app is
+                        // relaunched. Retry on each activation; success honours it.
+                        model.loading = true;
+                        Command::request_from_shell(StorageOperation::ListSubscriptions)
+                            .then_send(|r| Event::SubscriptionsLoaded(Box::new(r)))
+                            .and(render())
+                    }
+                }
+            }
+            Event::RefreshAll => {
+                enqueue_in_library_order(model, |_| true);
+                maybe_start_next_refresh(model).and(render())
+            }
+            Event::CancelRefresh => {
+                // Drops what is waiting, not what is running: the fetch already in
+                // flight resolves normally (its outcome is still recorded), but
+                // finishing it no longer starts the next feed. Also drops an
+                // auto-refresh held for the library to load, which would otherwise
+                // fire after cancellation.
+                model.refresh_queue.clear();
+                model.auto_refresh_pending = false;
+                render()
+            }
+            Event::RefreshFetched {
+                subscription_id,
+                result,
+            } => {
+                let Some(sub) = model
+                    .subscriptions
+                    .iter()
+                    .find(|s| s.id == subscription_id)
+                    .cloned()
+                else {
+                    // Unsubscribed while the fetch was in flight.
+                    finish_refresh(model, &subscription_id);
+                    return maybe_start_next_refresh(model).and(render());
+                };
+                match *result {
+                    // The device is offline (or similar): nothing is wrong with this
+                    // feed. Record why it didn't refresh so the user sees it, but leave
+                    // `retry_after_until` alone. Backing the feed off would keep
+                    // auto-refresh away for 15 minutes after connectivity returns, and
+                    // would do it to every feed at once.
+                    HttpResult::Unreachable(e) => record_refresh_outcome(
+                        model,
+                        &subscription_id,
+                        None,
+                        Some(e),
+                        sub.retry_after_until,
+                    ),
+                    HttpResult::Error(e) => record_refresh_outcome(
+                        model,
+                        &subscription_id,
+                        None,
+                        Some(e),
+                        Some(failure_backoff_until()),
+                    ),
+                    HttpResult::Response {
+                        status: 200,
+                        body,
+                        etag,
+                        last_modified,
+                        ..
+                    } => match parse_feed(&sub.feed_url, body) {
+                        Ok((mut fresh, episodes)) => {
+                            // A partial response must not wipe the title, artwork or
+                            // description we already have (storage writes these as-is).
+                            fresh.inherit_missing_metadata(&sub);
+                            fresh.etag = etag;
+                            fresh.last_modified = last_modified;
+                            Command::request_from_shell(StorageOperation::UpsertFeedWithEpisodes {
+                                subscription: fresh,
+                                episodes,
+                            })
+                            .then_send(move |r| Event::RefreshSaved {
+                                subscription_id: subscription_id.clone(),
+                                result: Box::new(r),
+                            })
+                        }
+                        Err(e) => record_refresh_outcome(
+                            model,
+                            &subscription_id,
+                            None,
+                            Some(e),
+                            Some(failure_backoff_until()),
+                        ),
+                    },
+                    // Unchanged since the validators we sent: only the timestamp moves,
+                    // unless the open feed's list is stale from a failed reload.
+                    HttpResult::Response { status: 304, .. } => {
+                        let outcome = record_refresh_outcome(
+                            model,
+                            &subscription_id,
+                            Some(now_unix()),
+                            None,
+                            None,
+                        );
+                        outcome.and(reload_if_open_list_is_stale(model, &subscription_id))
+                    }
+                    HttpResult::Response {
+                        status: 429,
+                        retry_after_secs,
+                        ..
+                    } => record_refresh_outcome(
+                        model,
+                        &subscription_id,
+                        None,
+                        Some("The host asked us to slow down (HTTP 429)".to_string()),
+                        Some(now_unix().saturating_add(rate_limit_wait_secs(retry_after_secs))),
+                    ),
+                    HttpResult::Response { status, .. } => record_refresh_outcome(
+                        model,
+                        &subscription_id,
+                        None,
+                        Some(format!("feed fetch failed: HTTP {status}")),
+                        Some(failure_backoff_until()),
+                    ),
+                }
+            }
+            Event::RefreshSaved {
+                subscription_id,
+                result,
+            } => match *result {
+                StorageResult::Subscription(saved) => {
+                    let selected = model
+                        .selected_subscription
+                        .as_ref()
+                        .is_some_and(|s| s.id == saved.id);
+                    if let Some(pos) = model.subscriptions.iter().position(|s| s.id == saved.id) {
+                        model.subscriptions[pos] = saved.clone();
+                    }
+                    finish_refresh(model, &subscription_id);
+                    let mut cmd = Command::done();
+                    if selected {
+                        // `SelectSubscription` is idempotent, so a refresh must reload
+                        // the open feed's episodes explicitly. No `detail_loading`: the
+                        // existing list stays on screen while the new rows load.
+                        model.selected_subscription = Some(saved);
+                        cmd = load_episodes(&subscription_id);
+                    }
+                    cmd.and(maybe_start_next_refresh(model)).and(render())
+                }
+                StorageResult::Error(e) => record_refresh_outcome(
+                    model,
+                    &subscription_id,
+                    None,
+                    Some(e),
+                    Some(failure_backoff_until()),
+                ),
+                unexpected => record_refresh_outcome(
+                    model,
+                    &subscription_id,
+                    None,
+                    Some(format!("unexpected storage result: {unexpected:?}")),
+                    Some(failure_backoff_until()),
+                ),
+            },
+            Event::RefreshStatePersisted {
+                subscription_id,
+                result,
+            } => {
+                // The refresh is only over now, not when its outcome was decided: the
+                // shell's background task ends once nothing is busy, and the OS may
+                // suspend the app right after, so the write must have committed first.
+                // A failed write only costs durability across a restart (the in-memory
+                // subscription already reflects the outcome), so it ends the refresh
+                // like a successful one and surfaces nothing.
+                finish_refresh(model, &subscription_id);
+                // The one result worth acting on: a 304 flagged episodes as removed, so
+                // the open feed's list on screen is out of date.
+                let flagged = matches!(*result, StorageResult::EpisodesRemoved(n) if n > 0);
+                let open = model
+                    .selected_subscription
+                    .as_ref()
+                    .is_some_and(|s| s.id == subscription_id);
+                let reload = if flagged && open {
+                    load_episodes(&subscription_id)
+                } else {
+                    Command::done()
+                };
+                reload.and(maybe_start_next_refresh(model)).and(render())
+            }
             Event::SelectSubscription(id) => {
                 // Re-selecting the feed already on screen (e.g. returning from an
                 // episode detail, which re-fires the shell's selection task) must
@@ -153,16 +395,21 @@ impl App for Pollux {
                 // previous load errored and should be retried.
                 //
                 // NOTE: this makes re-selection a no-op even if the feed's stored
-                // episodes changed since the last load. That is fine today because
-                // nothing refreshes an existing feed's episodes, but when a feed
-                // refresh/refetch lands it must trigger an explicit reload event
+                // episodes changed since the last load. A feed refresh therefore
+                // reloads the open feed's episodes explicitly (see `RefreshSaved`)
                 // rather than relying on re-selection. See docs/features/subscription.md.
-                let already_showing = model
+                let same_feed = model
                     .selected_subscription
                     .as_ref()
-                    .is_some_and(|s| s.id == id)
-                    && model.detail_error.is_none();
-                if already_showing {
+                    .is_some_and(|s| s.id == id);
+                let already_showing = same_feed && model.detail_error.is_none();
+                if already_showing && model.list_notice.is_some() {
+                    // The list on screen is stale because a post-refresh reload failed,
+                    // and the banner says so. Re-entering the feed is the user's retry:
+                    // reload in place, keeping the rows visible (no spinner, no cleared
+                    // list). Success clears the notice; failure leaves it.
+                    load_episodes(&id).and(render())
+                } else if already_showing {
                     render()
                 } else {
                     // Remember the chosen feed (for the details header) from the
@@ -174,14 +421,8 @@ impl App for Pollux {
                     model.detail_error = None;
                     // A notice from the previous feed doesn't apply to this one.
                     model.download_notice = None;
-                    Command::request_from_shell(StorageOperation::ListEpisodesBySubscription {
-                        subscription_id: id.clone(),
-                    })
-                    .then_send(move |r| Event::EpisodesLoaded {
-                        subscription_id: id,
-                        result: Box::new(r),
-                    })
-                    .and(render())
+                    model.list_notice = None;
+                    load_episodes(&id).and(render())
                 }
             }
             Event::EpisodesLoaded {
@@ -202,12 +443,13 @@ impl App for Pollux {
                         StorageResult::Episodes(rows) => {
                             model.episodes = rows;
                             model.detail_error = None;
+                            model.list_notice = None;
                         }
-                        StorageResult::Error(e) => model.detail_error = Some(e),
-                        unexpected => {
-                            model.detail_error =
-                                Some(format!("unexpected storage result: {unexpected:?}"))
-                        }
+                        StorageResult::Error(e) => episodes_load_failed(model, e),
+                        unexpected => episodes_load_failed(
+                            model,
+                            format!("unexpected storage result: {unexpected:?}"),
+                        ),
                     }
                 }
                 render()
@@ -442,6 +684,11 @@ impl App for Pollux {
     fn view(&self, model: &Model) -> ViewModel {
         // Display order is owned here rather than at each mutation site, so the
         // core does not depend on the shell returning rows in any given order.
+        //
+        // The feeds queued for refresh are collected once: asking `is_refresh_pending`
+        // per row would scan the queue for every subscription on every render, which is
+        // quadratic while a Refresh all of a large library works through its queue.
+        let pending = refresh_pending_ids(model);
         let mut subscriptions: Vec<SubscriptionSummary> = model
             .subscriptions
             .iter()
@@ -449,6 +696,8 @@ impl App for Pollux {
                 id: s.id.clone(),
                 title: s.title.clone(),
                 artwork_url: s.artwork_url.clone(),
+                refreshing: pending.contains(s.id.as_str()),
+                refresh_error: s.last_refresh_error.clone(),
             })
             .collect();
         subscriptions.sort_by_cached_key(|s| s.title.to_lowercase());
@@ -458,6 +707,7 @@ impl App for Pollux {
                 subscriptions,
                 loading: model.loading,
                 error: model.error.clone(),
+                refreshing: model.refreshing.is_some() || !model.refresh_queue.is_empty(),
             },
             subscription_detail: build_subscription_detail(model),
             theme: theme_view(model.theme_id, model.theme_mode),
@@ -505,6 +755,11 @@ fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
         loading: model.detail_loading,
         error: model.detail_error.clone(),
         download_notice: model.download_notice.clone(),
+        list_notice: model.list_notice.clone(),
+        refreshing: model
+            .selected_subscription
+            .as_ref()
+            .is_some_and(|s| is_refresh_pending(model, &s.id)),
     }
 }
 
@@ -666,13 +921,229 @@ fn maybe_start_next(model: &mut Model) -> Command<Effect, Event> {
     persist.and(download)
 }
 
+/// Asks storage for a feed's episodes; the result comes back as `EpisodesLoaded`, which
+/// ignores it if that feed is no longer the one on screen.
+fn load_episodes(subscription_id: &str) -> Command<Effect, Event> {
+    let id = subscription_id.to_string();
+    Command::request_from_shell(StorageOperation::ListEpisodesBySubscription {
+        subscription_id: id.clone(),
+    })
+    .then_send(move |r| Event::EpisodesLoaded {
+        subscription_id: id.clone(),
+        result: Box::new(r),
+    })
+}
+
+/// A refresh that found nothing new (a 304) normally leaves the episode list alone. But
+/// if the open feed's list is flagged stale because an earlier reload failed, the 304
+/// is the chance to fix it: the stored episodes are newer than what's on screen, so
+/// reload them now. Any other feed, or a list not flagged stale, needs nothing.
+fn reload_if_open_list_is_stale(model: &Model, refreshed_id: &str) -> Command<Effect, Event> {
+    let open_and_stale = model.list_notice.is_some()
+        && model
+            .selected_subscription
+            .as_ref()
+            .is_some_and(|s| s.id == refreshed_id);
+    if open_and_stale {
+        load_episodes(refreshed_id)
+    } else {
+        Command::done()
+    }
+}
+
+/// Records that loading the open feed's episodes failed. With nothing on screen yet (the
+/// initial load, which starts from a cleared list) that is a blocking error, as before.
+/// With a list already showing (a reload after a refresh) it must not replace that list
+/// with an error screen: the rows are still valid, just possibly out of date, so it
+/// becomes a non-blocking notice and the list stays.
+fn episodes_load_failed(model: &mut Model, reason: String) {
+    if model.episodes.is_empty() {
+        model.detail_error = Some(reason);
+    } else {
+        model.list_notice = Some(format!("Couldn't update the episode list: {reason}"));
+    }
+}
+
+/// True while `id` is being fetched or waiting its turn in the refresh queue. Fine for a
+/// single lookup; to test many subscriptions at once use `refresh_pending_ids`.
+fn is_refresh_pending(model: &Model, id: &str) -> bool {
+    model.refreshing.as_deref() == Some(id) || model.refresh_queue.iter().any(|q| q == id)
+}
+
+/// Every subscription id currently being fetched or waiting in the refresh queue, built
+/// once so a caller checking many subscriptions (the library view) does one pass over the
+/// queue instead of one per subscription.
+fn refresh_pending_ids(model: &Model) -> HashSet<&str> {
+    model
+        .refreshing
+        .as_deref()
+        .into_iter()
+        .chain(model.refresh_queue.iter().map(String::as_str))
+        .collect()
+}
+
+/// Queues a known subscription for refresh. Unknown ids and ones already queued or in
+/// flight are ignored, so a repeated pull-to-refresh can't double-fetch a feed.
+fn enqueue_refresh(model: &mut Model, id: &str) {
+    if model.subscriptions.iter().any(|s| s.id == id) && !is_refresh_pending(model, id) {
+        model.refresh_queue.push(id.to_string());
+    }
+}
+
+/// Queues every subscription `include` accepts, in library order: case-insensitive by
+/// title, as the library list is displayed (see `view`), with the id breaking ties so the
+/// order is deterministic. The feeds the user sees first refresh first. Feeds already
+/// queued or in flight are skipped by `enqueue_refresh`.
+fn enqueue_in_library_order(model: &mut Model, include: impl Fn(&Subscription) -> bool) {
+    let mut ids: Vec<(String, String)> = model
+        .subscriptions
+        .iter()
+        .filter(|s| include(s))
+        .map(|s| (s.title.to_lowercase(), s.id.clone()))
+        .collect();
+    ids.sort();
+    for (_, id) in ids {
+        enqueue_refresh(model, &id);
+    }
+}
+
+/// Queues every feed that is due for an automatic refresh (see `is_due_for_auto_refresh`).
+fn enqueue_due_refreshes(model: &mut Model) {
+    let now = now_unix();
+    enqueue_in_library_order(model, |s| is_due_for_auto_refresh(s, now));
+}
+
+/// Whether `sub` is due for an *automatic* refresh at `now`: never refreshed or last
+/// refreshed at least `REFRESH_INTERVAL_HOURS` ago, and not inside a backoff.
+///
+/// Both timestamps are wall-clock values written earlier, so they can be wrong in a way
+/// that would otherwise keep a feed out of auto-refresh for as long as the error is large:
+///
+/// - A `last_refreshed` in the future means the clock was ahead (or has since stepped
+///   back) when it was written. A bare `now - last_refreshed >= interval` would stay
+///   false until real time reached it, so a feed stamped a year ahead would never refresh.
+///   It is treated as stale; a conditional GET makes the redundant fetch cheap, and the
+///   result stamps a correct time.
+/// - A `retry_after_until` is never written more than `MAX_RETRY_AFTER_SECS` ahead of the
+///   clock at the time, and the clock only moves forward in normal use, so one further
+///   out than that can only be skew. It is ignored rather than honoured for a year.
+fn is_due_for_auto_refresh(sub: &Subscription, now: i64) -> bool {
+    let interval = i64::from(REFRESH_INTERVAL_HOURS) * 3600;
+    let stale = sub
+        .last_refreshed
+        .is_none_or(|t| t > now || now.saturating_sub(t) >= interval);
+    let backing_off = sub
+        .retry_after_until
+        .is_some_and(|t| t > now && t.saturating_sub(now) <= MAX_RETRY_AFTER_SECS);
+    stale && !backing_off
+}
+
+/// How long to leave a feed alone after a 429: the host's `Retry-After` when it sent one,
+/// otherwise the default, but never more than `MAX_RETRY_AFTER_SECS`. A value too large
+/// for an `i64` clamps to the cap rather than falling back to the (much shorter) default.
+fn rate_limit_wait_secs(retry_after_secs: Option<u64>) -> i64 {
+    retry_after_secs
+        .map_or(RATE_LIMIT_BACKOFF_SECS, |s| {
+            i64::try_from(s).unwrap_or(i64::MAX)
+        })
+        .min(MAX_RETRY_AFTER_SECS)
+}
+
+/// When auto-refresh may retry a feed whose refresh just failed.
+fn failure_backoff_until() -> i64 {
+    now_unix().saturating_add(FAILURE_BACKOFF_SECS)
+}
+
+/// Clears the in-flight marker when the active refresh reaches a terminal state.
+fn finish_refresh(model: &mut Model, id: &str) {
+    if model.refreshing.as_deref() == Some(id) {
+        model.refreshing = None;
+    }
+}
+
+/// Starts the next queued refresh if none is in flight (serial). Sends the stored
+/// validators so an unchanged feed answers 304. Empty when busy or the queue is empty.
+fn maybe_start_next_refresh(model: &mut Model) -> Command<Effect, Event> {
+    while model.refreshing.is_none() && !model.refresh_queue.is_empty() {
+        let id = model.refresh_queue.remove(0);
+        // The feed may have been removed since it was queued.
+        let Some(sub) = model.subscriptions.iter().find(|s| s.id == id) else {
+            continue;
+        };
+        let (url, etag, last_modified) = (
+            sub.feed_url.clone(),
+            sub.etag.clone(),
+            sub.last_modified.clone(),
+        );
+        model.refreshing = Some(id.clone());
+        return Command::request_from_shell(HttpOperation::FetchFeed {
+            url,
+            etag,
+            last_modified,
+        })
+        .then_send(move |r| Event::RefreshFetched {
+            subscription_id: id.clone(),
+            result: Box::new(r),
+        });
+    }
+    Command::done()
+}
+
+/// Ends the active refresh without a new feed body: applies the outcome to the
+/// in-memory subscription and persists it. The refresh stays in flight until the write
+/// is acknowledged (`RefreshStatePersisted`), which then starts the next queued one; a
+/// feed that no longer exists has nothing to persist, so it ends at once.
+/// `last_refreshed` is only moved when `Some` (a 304); `error` is the failure reason.
+fn record_refresh_outcome(
+    model: &mut Model,
+    id: &str,
+    last_refreshed: Option<i64>,
+    error: Option<String>,
+    retry_after_until: Option<i64>,
+) -> Command<Effect, Event> {
+    for sub in [
+        model.subscriptions.iter_mut().find(|s| s.id == id),
+        model.selected_subscription.as_mut().filter(|s| s.id == id),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if last_refreshed.is_some() {
+            sub.last_refreshed = last_refreshed;
+        }
+        sub.last_refresh_error = error.clone();
+        sub.retry_after_until = retry_after_until;
+    }
+    if model.subscriptions.iter().any(|s| s.id == id) {
+        let ack_id = id.to_string();
+        return Command::request_from_shell(StorageOperation::UpdateRefreshState {
+            subscription_id: id.to_string(),
+            last_refreshed,
+            last_refresh_error: error,
+            retry_after_until,
+        })
+        .then_send(move |r| Event::RefreshStatePersisted {
+            subscription_id: ack_id.clone(),
+            result: Box::new(r),
+        })
+        .and(render());
+    }
+    finish_refresh(model, id);
+    maybe_start_next_refresh(model).and(render())
+}
+
 #[derive(Facet, Serialize, Deserialize, Clone, Debug)]
 #[repr(C)]
 pub enum Event {
     Started,
     SubscriptionsLoaded(Box<StorageResult>),
-    /// Episodes left `Downloading`/`Queued` by a previous session, loaded at launch
-    /// so their downloads can be re-enqueued and resumed.
+    /// Rebuild the download queue from episodes a previous session left
+    /// `Downloading`/`Queued`, and resume them. Sent when the app first becomes
+    /// active, never at launch, so a background launch (e.g. for feed refresh) can't
+    /// start a download. Idempotent: only the first one per process does anything.
+    ResumePendingDownloads,
+    /// Episodes left `Downloading`/`Queued` by a previous session, so their downloads
+    /// can be re-enqueued and resumed (see `ResumePendingDownloads`).
     PendingDownloadsLoaded(Box<StorageResult>),
     FetchFeed(String),
     FeedFetched {
@@ -680,6 +1151,36 @@ pub enum Event {
         result: Box<HttpResult>,
     },
     FeedSaved(Box<StorageResult>),
+    /// Re-fetch one subscription's feed (conditional GET) and merge new episodes.
+    /// Metadata only — never triggers downloads.
+    RefreshSubscription(String),
+    /// Queue every subscription for refresh, one at a time, in library order.
+    RefreshAll,
+    /// Refresh the feeds that are due (older than the refresh interval and not backing
+    /// off). Sent when the app becomes active; held until the library has loaded if it
+    /// arrives first (i.e. at launch).
+    RefreshStale,
+    /// Stop starting new refreshes: clear the waiting queue and any held auto-refresh.
+    /// The fetch already in flight is left to finish. Sent when the background task
+    /// expires, so the app doesn't keep working through the queue after being told to
+    /// stop.
+    CancelRefresh,
+    /// Result of a refresh fetch for `subscription_id`.
+    RefreshFetched {
+        subscription_id: String,
+        result: Box<HttpResult>,
+    },
+    /// Result of saving a refreshed feed's new body.
+    RefreshSaved {
+        subscription_id: String,
+        result: Box<StorageResult>,
+    },
+    /// Answer to the `UpdateRefreshState` request. Only a 304 can change episodes
+    /// (flagging ones that stayed missing past the grace period).
+    RefreshStatePersisted {
+        subscription_id: String,
+        result: Box<StorageResult>,
+    },
     SelectSubscription(String),
     EpisodesLoaded {
         subscription_id: String,
@@ -741,6 +1242,20 @@ mod tests {
             description: None,
             last_refreshed: None,
             created_at: 0,
+            etag: None,
+            last_modified: None,
+            last_refresh_error: None,
+            retry_after_until: None,
+        }
+    }
+
+    fn response(status: u16, body: Vec<u8>) -> HttpResult {
+        HttpResult::Response {
+            status,
+            body,
+            etag: None,
+            last_modified: None,
+            retry_after_secs: None,
         }
     }
 
@@ -827,24 +1342,82 @@ mod tests {
         assert!(model.loading);
 
         let effects: Vec<Effect> = cmd.effects().collect();
-        // ListSubscriptions + ListPendingDownloads + render.
-        assert_eq!(effects.len(), 3);
+        // ListSubscriptions + render.
+        assert_eq!(effects.len(), 2);
 
         let has_storage = effects
             .iter()
             .any(|e| matches!(e, Effect::Storage(r) if matches!(r.operation, StorageOperation::ListSubscriptions)));
         assert!(has_storage, "expected a ListSubscriptions storage effect");
 
-        let has_pending = effects
-            .iter()
-            .any(|e| matches!(e, Effect::Storage(r) if matches!(r.operation, StorageOperation::ListPendingDownloads)));
-        assert!(
-            has_pending,
-            "expected a ListPendingDownloads storage effect to resume interrupted downloads"
-        );
-
         let has_render = effects.iter().any(|e| matches!(e, Effect::Render(_)));
         assert!(has_render, "expected a render effect");
+    }
+
+    #[test]
+    fn started_does_not_touch_downloads_so_a_background_launch_stays_metadata_only() {
+        // The core is also built when iOS launches the app in the background for a
+        // refresh task, and that launch must never start a download.
+        let app = Pollux;
+        let mut model = Model::default();
+
+        let mut cmd = app.update(Event::Started, &mut model);
+
+        assert!(
+            !storage_ops(&mut cmd)
+                .iter()
+                .any(|o| matches!(o, StorageOperation::ListPendingDownloads)),
+            "Started must not load interrupted downloads"
+        );
+        assert!(model.download_queue.is_empty());
+        assert!(model.downloading.is_none());
+        assert!(!model.pending_downloads_requested);
+    }
+
+    #[test]
+    fn resume_pending_downloads_requests_the_interrupted_downloads() {
+        let app = Pollux;
+        let mut model = Model::default();
+
+        let mut cmd = app.update(Event::ResumePendingDownloads, &mut model);
+
+        assert!(model.pending_downloads_requested);
+        assert!(
+            storage_ops(&mut cmd)
+                .iter()
+                .any(|o| matches!(o, StorageOperation::ListPendingDownloads)),
+            "expected a ListPendingDownloads storage effect"
+        );
+    }
+
+    #[test]
+    fn resume_pending_downloads_only_acts_once_per_process() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let _ = app.update(Event::ResumePendingDownloads, &mut model);
+
+        // The shell sends this on every activation; later ones must not re-list
+        // episodes that are already in the in-memory queue.
+        let mut again = app.update(Event::ResumePendingDownloads, &mut model);
+
+        assert!(storage_ops(&mut again).is_empty());
+    }
+
+    #[test]
+    fn resumed_downloads_start_after_the_pending_list_loads() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let _ = app.update(Event::ResumePendingDownloads, &mut model);
+        let mut episode = make_episode("e1", "Interrupted", Some(1));
+        episode.download_status = DownloadStatus::Downloading;
+
+        let mut cmd = app.update(
+            Event::PendingDownloadsLoaded(Box::new(StorageResult::Episodes(vec![episode]))),
+            &mut model,
+        );
+
+        assert_eq!(model.downloading.as_deref(), Some("e1"));
+        assert!(cmd.effects().any(|e| matches!(e, Effect::Download(_))));
     }
 
     #[test]
@@ -973,7 +1546,7 @@ mod tests {
 
         let has_http = effects.iter().any(|e| matches!(
             e,
-            Effect::Http(r) if matches!(&r.operation, HttpOperation::FetchFeed { url } if url == "https://example.com/feed.rss")
+            Effect::Http(r) if matches!(&r.operation, HttpOperation::FetchFeed { url, etag: None, last_modified: None } if url == "https://example.com/feed.rss")
         ));
         assert!(has_http, "expected a FetchFeed http effect");
 
@@ -1009,10 +1582,7 @@ mod tests {
         let mut cmd = app.update(
             Event::FeedFetched {
                 url: "https://example.com/feed.rss".to_string(),
-                result: Box::new(HttpResult::Response {
-                    status: 404,
-                    body: vec![],
-                }),
+                result: Box::new(response(404, vec![])),
             },
             &mut model,
         );
@@ -1033,10 +1603,7 @@ mod tests {
         let mut cmd = app.update(
             Event::FeedFetched {
                 url: url.clone(),
-                result: Box::new(HttpResult::Response {
-                    status: 200,
-                    body: MINIMAL_RSS.as_bytes().to_vec(),
-                }),
+                result: Box::new(response(200, MINIMAL_RSS.as_bytes().to_vec())),
             },
             &mut model,
         );
@@ -1064,10 +1631,7 @@ mod tests {
         let mut cmd = app.update(
             Event::FeedFetched {
                 url: "https://example.com/feed.rss".to_string(),
-                result: Box::new(HttpResult::Response {
-                    status: 200,
-                    body: b"this is not xml".to_vec(),
-                }),
+                result: Box::new(response(200, b"this is not xml".to_vec())),
             },
             &mut model,
         );
@@ -1345,6 +1909,417 @@ mod tests {
 
         assert!(!model.detail_loading);
         assert_eq!(model.detail_error.as_deref(), Some("db gone"));
+    }
+
+    fn model_showing_a_list() -> Model {
+        let mut model = Model::default();
+        model.subscriptions = vec![make_subscription("sub-id", "Feed")];
+        model.selected_subscription = Some(model.subscriptions[0].clone());
+        model.episodes = vec![
+            make_episode("e1", "First", Some(2_000)),
+            make_episode("e2", "Second", Some(1_000)),
+        ];
+        model
+    }
+
+    fn reload_failed(app: &Pollux, model: &mut Model, result: StorageResult) {
+        let _ = app.update(
+            Event::EpisodesLoaded {
+                subscription_id: "sub-id".to_string(),
+                result: Box::new(result),
+            },
+            model,
+        );
+    }
+
+    #[test]
+    fn a_failed_reload_keeps_the_list_and_shows_a_non_blocking_notice() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Error("db busy".to_string()),
+        );
+
+        assert!(
+            model.detail_error.is_none(),
+            "the list must not become an error screen"
+        );
+        assert_eq!(model.episodes.len(), 2, "the rows already on screen stay");
+        let detail = app.view(&model).subscription_detail;
+        assert!(detail.error.is_none());
+        assert_eq!(detail.episodes.len(), 2);
+        let notice = detail.list_notice.expect("a notice");
+        assert!(notice.contains("db busy"), "the reason is shown: {notice}");
+    }
+
+    #[test]
+    fn an_unexpected_result_on_reload_is_handled_the_same_way() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+
+        reload_failed(&app, &mut model, StorageResult::Success);
+
+        assert!(model.detail_error.is_none());
+        assert_eq!(model.episodes.len(), 2);
+        assert!(model.list_notice.is_some());
+    }
+
+    #[test]
+    fn the_initial_load_failing_is_still_a_blocking_error() {
+        // Nothing is on screen yet (SelectSubscription starts from a cleared list), so
+        // there is no list to keep.
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions = vec![make_subscription("sub-id", "Feed")];
+        let _ = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Error("db gone".to_string()),
+        );
+
+        assert_eq!(model.detail_error.as_deref(), Some("db gone"));
+        assert!(model.list_notice.is_none());
+    }
+
+    #[test]
+    fn a_successful_reload_clears_the_notice() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Error("db busy".to_string()),
+        );
+        assert!(model.list_notice.is_some());
+
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Episodes(vec![make_episode("e3", "Fresh", Some(3_000))]),
+        );
+
+        assert!(model.list_notice.is_none());
+        assert_eq!(model.episodes.len(), 1);
+    }
+
+    #[test]
+    fn switching_feeds_clears_the_notice() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+        model
+            .subscriptions
+            .push(make_subscription("other", "Other"));
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Error("db busy".to_string()),
+        );
+
+        let _ = app.update(Event::SelectSubscription("other".to_string()), &mut model);
+
+        assert!(
+            model.list_notice.is_none(),
+            "a notice about the old feed doesn't apply"
+        );
+    }
+
+    #[test]
+    fn a_refresh_whose_reload_fails_leaves_the_open_list_visible() {
+        // End to end: refresh the open feed, the save succeeds, the follow-up episode
+        // reload fails. The refresh itself still succeeded.
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+        let _ = app.update(Event::RefreshSubscription("sub-id".to_string()), &mut model);
+        let _ = app.update(
+            Event::RefreshSaved {
+                subscription_id: "sub-id".to_string(),
+                result: Box::new(StorageResult::Subscription(make_subscription(
+                    "sub-id", "Feed",
+                ))),
+            },
+            &mut model,
+        );
+
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Error("db busy".to_string()),
+        );
+
+        let view = app.view(&model);
+        assert!(view.subscription_detail.error.is_none());
+        assert_eq!(view.subscription_detail.episodes.len(), 2);
+        assert!(view.subscription_detail.list_notice.is_some());
+        assert!(
+            view.library.subscriptions[0].refresh_error.is_none(),
+            "the refresh succeeded; only the display reload failed"
+        );
+    }
+
+    fn model_with_a_stale_list() -> Model {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Error("db busy".to_string()),
+        );
+        assert!(model.list_notice.is_some());
+        model
+    }
+
+    fn lists_episodes(ops: &[StorageOperation]) -> bool {
+        ops.iter()
+            .any(|o| matches!(o, StorageOperation::ListEpisodesBySubscription { .. }))
+    }
+
+    #[test]
+    fn re_entering_a_feed_with_a_stale_list_retries_the_load_in_place() {
+        let app = Pollux;
+        let mut model = model_with_a_stale_list();
+
+        let mut cmd = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+
+        assert!(
+            lists_episodes(&storage_ops(&mut cmd)),
+            "the reload is retried"
+        );
+        assert_eq!(model.episodes.len(), 2, "the rows stay on screen meanwhile");
+        assert!(!model.detail_loading, "no spinner: this isn't a first load");
+        assert!(model.detail_error.is_none());
+    }
+
+    #[test]
+    fn a_successful_retry_clears_the_banner_and_updates_the_list() {
+        let app = Pollux;
+        let mut model = model_with_a_stale_list();
+        let _ = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Episodes(vec![
+                make_episode("e1", "First", Some(3_000)),
+                make_episode("e2", "Second", Some(2_000)),
+                make_episode("e3", "Newly arrived", Some(1_000)),
+            ]),
+        );
+
+        assert!(model.list_notice.is_none());
+        assert_eq!(
+            model.episodes.len(),
+            3,
+            "the episodes the failed reload missed"
+        );
+    }
+
+    #[test]
+    fn a_failing_retry_keeps_the_rows_and_the_banner() {
+        let app = Pollux;
+        let mut model = model_with_a_stale_list();
+        let _ = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Error("still busy".to_string()),
+        );
+
+        assert_eq!(model.episodes.len(), 2);
+        assert!(
+            model.detail_error.is_none(),
+            "never an error screen over a list"
+        );
+        assert!(model
+            .list_notice
+            .as_deref()
+            .is_some_and(|n| n.contains("still busy")));
+    }
+
+    #[test]
+    fn re_entering_a_feed_without_a_banner_is_still_a_no_op() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+
+        let mut cmd = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+
+        assert!(
+            storage_ops(&mut cmd).is_empty(),
+            "no reload, no flash of a spinner"
+        );
+        assert_eq!(model.episodes.len(), 2);
+    }
+
+    #[test]
+    fn a_304_refresh_of_the_open_feed_reloads_a_stale_list() {
+        let app = Pollux;
+        let mut model = model_with_a_stale_list();
+        let _ = app.update(Event::RefreshSubscription("sub-id".to_string()), &mut model);
+
+        let mut cmd = app.update(fetched("sub-id", response(304, vec![])), &mut model);
+
+        assert!(
+            lists_episodes(&storage_ops(&mut cmd)),
+            "the 304 is the chance to fix the stale list"
+        );
+        let _ = ack(&app, &mut model, "sub-id");
+        assert!(
+            model.refreshing.is_none(),
+            "the refresh itself finished normally"
+        );
+    }
+
+    #[test]
+    fn a_304_refresh_leaves_a_list_that_is_not_stale_alone() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+        let _ = app.update(Event::RefreshSubscription("sub-id".to_string()), &mut model);
+
+        let mut cmd = app.update(fetched("sub-id", response(304, vec![])), &mut model);
+
+        assert!(
+            !lists_episodes(&storage_ops(&mut cmd)),
+            "nothing new, nothing to reload"
+        );
+    }
+
+    fn persisted(id: &str, result: StorageResult) -> Event {
+        Event::RefreshStatePersisted {
+            subscription_id: id.to_string(),
+            result: Box::new(result),
+        }
+    }
+
+    /// The shell's acknowledgement of the outcome write, which is what ends a refresh.
+    fn ack(app: &Pollux, model: &mut Model, id: &str) -> Command<Effect, Event> {
+        app.update(persisted(id, StorageResult::Success), model)
+    }
+
+    #[test]
+    fn a_304_that_flags_episodes_reloads_the_open_list() {
+        // The open list still shows the episodes the 304 just flagged as removed.
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+
+        let mut cmd = app.update(
+            persisted("sub-id", StorageResult::EpisodesRemoved(2)),
+            &mut model,
+        );
+
+        assert!(lists_episodes(&storage_ops(&mut cmd)));
+    }
+
+    #[test]
+    fn a_304_that_flags_nothing_leaves_the_open_list_alone() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+
+        let mut cmd = app.update(
+            persisted("sub-id", StorageResult::EpisodesRemoved(0)),
+            &mut model,
+        );
+
+        assert!(!lists_episodes(&storage_ops(&mut cmd)));
+    }
+
+    #[test]
+    fn flagged_episodes_of_a_feed_that_is_not_open_need_no_reload() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+
+        let mut cmd = app.update(
+            persisted("other", StorageResult::EpisodesRemoved(3)),
+            &mut model,
+        );
+
+        assert!(!lists_episodes(&storage_ops(&mut cmd)));
+    }
+
+    #[test]
+    fn a_failed_refresh_state_write_reloads_nothing() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+
+        let mut cmd = app.update(
+            persisted("sub-id", StorageResult::Error("db busy".to_string())),
+            &mut model,
+        );
+
+        assert!(!lists_episodes(&storage_ops(&mut cmd)));
+    }
+
+    #[test]
+    fn a_304_refresh_of_another_feed_does_not_reload_the_open_list() {
+        let app = Pollux;
+        let mut model = model_with_a_stale_list();
+        model
+            .subscriptions
+            .push(make_subscription("other", "Other"));
+        let _ = app.update(Event::RefreshSubscription("other".to_string()), &mut model);
+
+        let mut cmd = app.update(fetched("other", response(304, vec![])), &mut model);
+
+        assert!(!lists_episodes(&storage_ops(&mut cmd)));
+        assert!(
+            model.list_notice.is_some(),
+            "the open feed's banner is untouched"
+        );
+    }
+
+    #[test]
+    fn a_failed_refresh_does_not_reload_the_stale_list() {
+        // Only a successful refresh says the stored episodes are current.
+        let app = Pollux;
+        let mut model = model_with_a_stale_list();
+        let _ = app.update(Event::RefreshSubscription("sub-id".to_string()), &mut model);
+
+        let mut cmd = app.update(
+            fetched("sub-id", HttpResult::Error("refused".to_string())),
+            &mut model,
+        );
+
+        assert!(!lists_episodes(&storage_ops(&mut cmd)));
+    }
+
+    #[test]
+    fn the_stuck_banner_scenario_from_the_review_now_recovers() {
+        // A 200 saves new episodes but the reload fails; the next pull-to-refresh answers
+        // 304 (nothing changed on the server). Previously nothing could clear the banner.
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+        let _ = app.update(Event::RefreshSubscription("sub-id".to_string()), &mut model);
+        let _ = app.update(
+            Event::RefreshSaved {
+                subscription_id: "sub-id".to_string(),
+                result: Box::new(StorageResult::Subscription(make_subscription(
+                    "sub-id", "Feed",
+                ))),
+            },
+            &mut model,
+        );
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Error("db busy".to_string()),
+        );
+        assert!(model.list_notice.is_some());
+
+        let _ = app.update(Event::RefreshSubscription("sub-id".to_string()), &mut model);
+        let mut cmd = app.update(fetched("sub-id", response(304, vec![])), &mut model);
+        assert!(lists_episodes(&storage_ops(&mut cmd)));
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Episodes(vec![make_episode("e9", "New", Some(9_000))]),
+        );
+
+        assert!(model.list_notice.is_none());
+        assert_eq!(model.episodes.len(), 1);
     }
 
     #[test]
@@ -2201,5 +3176,1368 @@ mod tests {
             !has_download_effect_for(&effects, "e1"),
             "a redundant download request must not issue a second fetch"
         );
+    }
+
+    // --- feed refresh ---
+
+    fn model_with_subs(ids: &[&str]) -> Model {
+        let mut model = Model::default();
+        for id in ids {
+            model.subscriptions.push(make_subscription(id, id));
+        }
+        model
+    }
+
+    fn http_ops(cmd: &mut Command<Effect, Event>) -> Vec<HttpOperation> {
+        cmd.effects()
+            .filter_map(|e| match e {
+                Effect::Http(r) => Some(r.operation.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn storage_ops(cmd: &mut Command<Effect, Event>) -> Vec<StorageOperation> {
+        cmd.effects()
+            .filter_map(|e| match e {
+                Effect::Storage(r) => Some(r.operation.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn fetched(id: &str, result: HttpResult) -> Event {
+        Event::RefreshFetched {
+            subscription_id: id.to_string(),
+            result: Box::new(result),
+        }
+    }
+
+    #[test]
+    fn refresh_sends_stored_validators_and_marks_in_flight() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a"]);
+        model.subscriptions[0].etag = Some("\"v1\"".to_string());
+        model.subscriptions[0].last_modified = Some("Wed, 01 Oct 2026 00:00:00 GMT".to_string());
+
+        let mut cmd = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        assert_eq!(model.refreshing.as_deref(), Some("a"));
+        let ops = http_ops(&mut cmd);
+        assert_eq!(ops.len(), 1);
+        let HttpOperation::FetchFeed {
+            url,
+            etag,
+            last_modified,
+        } = &ops[0];
+        assert_eq!(url, "https://example.com/a.rss");
+        assert_eq!(etag.as_deref(), Some("\"v1\""));
+        assert_eq!(
+            last_modified.as_deref(),
+            Some("Wed, 01 Oct 2026 00:00:00 GMT")
+        );
+        // Refresh must not borrow the subscribe flow's loading/error state.
+        assert!(!model.loading);
+        assert!(model.error.is_none());
+    }
+
+    #[test]
+    fn refresh_ignores_unknown_and_duplicate_requests() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a"]);
+
+        let mut unknown = app.update(Event::RefreshSubscription("zzz".to_string()), &mut model);
+        assert!(http_ops(&mut unknown).is_empty());
+        assert!(model.refreshing.is_none());
+
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+        let mut again = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+        assert!(http_ops(&mut again).is_empty());
+        assert!(model.refresh_queue.is_empty());
+    }
+
+    #[test]
+    fn refresh_runs_serially_in_request_order() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a", "b"]);
+
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+        let mut second = app.update(Event::RefreshSubscription("b".to_string()), &mut model);
+        assert!(http_ops(&mut second).is_empty(), "b waits behind a");
+        assert_eq!(model.refresh_queue, vec!["b".to_string()]);
+
+        let mut outcome = app.update(fetched("a", response(304, vec![])), &mut model);
+        assert!(
+            http_ops(&mut outcome).is_empty(),
+            "a is not finished until its outcome is written"
+        );
+        assert_eq!(model.refreshing.as_deref(), Some("a"));
+
+        let mut next = ack(&app, &mut model, "a");
+        let ops = http_ops(&mut next);
+        assert_eq!(ops.len(), 1, "finishing a starts b");
+        assert_eq!(model.refreshing.as_deref(), Some("b"));
+    }
+
+    #[test]
+    fn a_refresh_stays_busy_until_its_outcome_is_written() {
+        // The background task ends once nothing is busy, and iOS may suspend the app
+        // right after, so "finished" must mean "the outcome is committed".
+        let app = Pollux;
+        let mut model = model_with_subs(&["a"]);
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let _ = app.update(fetched("a", response(304, vec![])), &mut model);
+        assert!(
+            app.view(&model).library.refreshing,
+            "write not acknowledged"
+        );
+
+        let _ = ack(&app, &mut model, "a");
+        assert!(!app.view(&model).library.refreshing);
+    }
+
+    #[test]
+    fn a_failed_outcome_write_still_ends_the_refresh_and_starts_the_next() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a", "b"]);
+        let _ = app.update(Event::RefreshAll, &mut model);
+        let _ = app.update(fetched("a", response(304, vec![])), &mut model);
+
+        let mut next = app.update(
+            persisted("a", StorageResult::Error("db busy".to_string())),
+            &mut model,
+        );
+
+        assert_eq!(http_ops(&mut next).len(), 1, "b must not be stuck behind a");
+        assert_eq!(model.refreshing.as_deref(), Some("b"));
+    }
+
+    #[test]
+    fn a_refresh_of_an_unsubscribed_feed_has_nothing_to_write_and_ends_at_once() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a", "b"]);
+        let _ = app.update(Event::RefreshAll, &mut model);
+        model.subscriptions.retain(|s| s.id != "a");
+
+        let mut next = app.update(fetched("a", response(304, vec![])), &mut model);
+
+        assert_eq!(http_ops(&mut next).len(), 1, "b starts without waiting");
+    }
+
+    #[test]
+    fn refresh_304_only_touches_timestamp_and_clears_error() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a"]);
+        model.subscriptions[0].last_refresh_error = Some("old".to_string());
+        model.subscriptions[0].retry_after_until = Some(5);
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let mut cmd = app.update(fetched("a", response(304, vec![])), &mut model);
+        let _ = ack(&app, &mut model, "a");
+
+        let sub = &model.subscriptions[0];
+        assert!(sub.last_refreshed.is_some());
+        assert!(sub.last_refresh_error.is_none());
+        assert!(sub.retry_after_until.is_none());
+        assert!(model.refreshing.is_none());
+        let ops = storage_ops(&mut cmd);
+        assert!(ops.iter().any(|o| matches!(
+            o,
+            StorageOperation::UpdateRefreshState {
+                last_refreshed: Some(_),
+                last_refresh_error: None,
+                retry_after_until: None,
+                ..
+            }
+        )));
+        assert!(
+            !ops.iter()
+                .any(|o| matches!(o, StorageOperation::UpsertFeedWithEpisodes { .. })),
+            "304 must not rewrite episodes"
+        );
+    }
+
+    #[test]
+    fn refresh_429_persists_retry_after_and_error() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a"]);
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+        let before = now_unix();
+
+        let mut cmd = app.update(
+            fetched(
+                "a",
+                HttpResult::Response {
+                    status: 429,
+                    body: vec![],
+                    etag: None,
+                    last_modified: None,
+                    retry_after_secs: Some(600),
+                },
+            ),
+            &mut model,
+        );
+
+        let until = model.subscriptions[0].retry_after_until.expect("retry set");
+        assert!(until >= before + 600 && until <= now_unix() + 600);
+        assert!(model.subscriptions[0].last_refresh_error.is_some());
+        assert!(storage_ops(&mut cmd).iter().any(|o| matches!(
+            o,
+            StorageOperation::UpdateRefreshState {
+                retry_after_until: Some(_),
+                last_refresh_error: Some(_),
+                ..
+            }
+        )));
+    }
+
+    #[test]
+    fn refresh_429_without_retry_after_uses_default_backoff() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a"]);
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+        let before = now_unix();
+
+        let _ = app.update(fetched("a", response(429, vec![])), &mut model);
+
+        let until = model.subscriptions[0].retry_after_until.expect("retry set");
+        assert!(until >= before + RATE_LIMIT_BACKOFF_SECS);
+    }
+
+    #[test]
+    fn rate_limit_wait_honours_the_hosts_value_up_to_the_cap() {
+        assert_eq!(rate_limit_wait_secs(Some(600)), 600);
+        assert_eq!(rate_limit_wait_secs(Some(0)), 0);
+        assert_eq!(
+            rate_limit_wait_secs(Some(MAX_RETRY_AFTER_SECS as u64)),
+            MAX_RETRY_AFTER_SECS,
+            "exactly the cap is allowed"
+        );
+        assert_eq!(rate_limit_wait_secs(None), RATE_LIMIT_BACKOFF_SECS);
+    }
+
+    #[test]
+    fn rate_limit_wait_is_capped() {
+        let year = 365 * 24 * 3600;
+        assert_eq!(
+            rate_limit_wait_secs(Some(MAX_RETRY_AFTER_SECS as u64 + 1)),
+            MAX_RETRY_AFTER_SECS
+        );
+        assert_eq!(rate_limit_wait_secs(Some(year)), MAX_RETRY_AFTER_SECS);
+        // Too big even for an i64: must clamp to the cap, not fall back to the default.
+        assert_eq!(rate_limit_wait_secs(Some(u64::MAX)), MAX_RETRY_AFTER_SECS);
+    }
+
+    #[test]
+    fn a_huge_retry_after_only_silences_auto_refresh_for_the_cap() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a"]);
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+        let before = now_unix();
+
+        let _ = app.update(
+            fetched(
+                "a",
+                HttpResult::Response {
+                    status: 429,
+                    body: vec![],
+                    etag: None,
+                    last_modified: None,
+                    retry_after_secs: Some(365 * 24 * 3600),
+                },
+            ),
+            &mut model,
+        );
+
+        let until = model.subscriptions[0].retry_after_until.expect("retry set");
+        assert!(until >= before + MAX_RETRY_AFTER_SECS);
+        assert!(
+            until <= now_unix() + MAX_RETRY_AFTER_SECS,
+            "a year-long Retry-After must not mute the feed for a year"
+        );
+    }
+
+    #[test]
+    fn refresh_failure_records_error_without_touching_library_error() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a"]);
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let _ = app.update(
+            fetched("a", HttpResult::Error("offline".to_string())),
+            &mut model,
+        );
+        let _ = ack(&app, &mut model, "a");
+
+        assert_eq!(
+            model.subscriptions[0].last_refresh_error.as_deref(),
+            Some("offline")
+        );
+        assert!(model.error.is_none());
+        assert!(model.refreshing.is_none());
+        assert_eq!(
+            app.view(&model).library.subscriptions[0]
+                .refresh_error
+                .as_deref(),
+            Some("offline")
+        );
+    }
+
+    #[test]
+    fn refresh_200_upserts_with_validators_from_response() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a"]);
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let mut cmd = app.update(
+            fetched(
+                "a",
+                HttpResult::Response {
+                    status: 200,
+                    body: MINIMAL_RSS.as_bytes().to_vec(),
+                    etag: Some("\"v2\"".to_string()),
+                    last_modified: Some("Thu, 02 Oct 2026 00:00:00 GMT".to_string()),
+                    retry_after_secs: None,
+                },
+            ),
+            &mut model,
+        );
+
+        let ops = storage_ops(&mut cmd);
+        assert!(ops.iter().any(|o| matches!(
+            o,
+            StorageOperation::UpsertFeedWithEpisodes { subscription, .. }
+                if subscription.feed_url == "https://example.com/a.rss"
+                    && subscription.etag.as_deref() == Some("\"v2\"")
+                    && subscription.last_modified.as_deref()
+                        == Some("Thu, 02 Oct 2026 00:00:00 GMT")
+        )));
+        // Still in flight until the save resolves.
+        assert_eq!(model.refreshing.as_deref(), Some("a"));
+    }
+
+    /// A feed that parses fine but carries no channel title, description or image, like a
+    /// degraded or partial response.
+    const BARE_RSS: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+  <link>https://example.com</link>
+  <item>
+    <title>Episode 1</title>
+    <guid>episode-1-guid</guid>
+    <enclosure url="https://example.com/ep1.mp3" type="audio/mpeg" length="1"/>
+  </item>
+</channel>
+</rss>"#;
+
+    fn known_subscription(id: &str) -> Subscription {
+        let mut s = make_subscription(id, "Real Title");
+        s.artwork_url = Some("https://example.com/art.png".to_string());
+        s.description = Some("About the show".to_string());
+        s
+    }
+
+    /// The subscription carried by the `UpsertFeedWithEpisodes` a command emitted.
+    fn upserted_subscription(cmd: &mut Command<Effect, Event>) -> Subscription {
+        storage_ops(cmd)
+            .into_iter()
+            .find_map(|o| match o {
+                StorageOperation::UpsertFeedWithEpisodes { subscription, .. } => Some(subscription),
+                _ => None,
+            })
+            .expect("expected an UpsertFeedWithEpisodes effect")
+    }
+
+    #[test]
+    fn a_refresh_response_without_metadata_keeps_the_stored_title_artwork_and_description() {
+        let app = Pollux;
+        let mut model = model_with_subs(&[]);
+        model.subscriptions.push(known_subscription("a"));
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let mut cmd = app.update(
+            fetched("a", response(200, BARE_RSS.as_bytes().to_vec())),
+            &mut model,
+        );
+
+        let saved = upserted_subscription(&mut cmd);
+        assert_eq!(saved.title, "Real Title", "not renamed to the feed URL");
+        assert_eq!(
+            saved.artwork_url.as_deref(),
+            Some("https://example.com/art.png")
+        );
+        assert_eq!(saved.description.as_deref(), Some("About the show"));
+    }
+
+    /// Like `BARE_RSS`, but the channel metadata elements are present and *blank*, which
+    /// feed-rs passes through as empty strings rather than as missing.
+    const BLANK_METADATA_RSS: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+  <title></title>
+  <description>   </description>
+  <image><url>  </url></image>
+  <link>https://example.com</link>
+  <item>
+    <title>Episode 1</title>
+    <guid>episode-1-guid</guid>
+    <enclosure url="https://example.com/ep1.mp3" type="audio/mpeg" length="1"/>
+  </item>
+</channel>
+</rss>"#;
+
+    #[test]
+    fn a_refresh_response_with_blank_metadata_keeps_the_stored_values() {
+        // An empty `<title></title>` is not the same as a missing one to the parser, so a
+        // degraded response used to blank the stored title, description and artwork.
+        let app = Pollux;
+        let mut model = model_with_subs(&[]);
+        model.subscriptions.push(known_subscription("a"));
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let mut cmd = app.update(
+            fetched("a", response(200, BLANK_METADATA_RSS.as_bytes().to_vec())),
+            &mut model,
+        );
+
+        let saved = upserted_subscription(&mut cmd);
+        assert_eq!(saved.title, "Real Title", "not blanked");
+        assert_eq!(
+            saved.artwork_url.as_deref(),
+            Some("https://example.com/art.png")
+        );
+        assert_eq!(saved.description.as_deref(), Some("About the show"));
+    }
+
+    #[test]
+    fn a_new_feed_with_a_blank_title_gets_its_url_not_an_empty_row() {
+        let app = Pollux;
+        let mut model = Model {
+            loading: true,
+            ..Model::default()
+        };
+
+        let mut cmd = app.update(
+            Event::FeedFetched {
+                url: "https://example.com/blank.rss".to_string(),
+                result: Box::new(response(200, BLANK_METADATA_RSS.as_bytes().to_vec())),
+            },
+            &mut model,
+        );
+
+        let saved = upserted_subscription(&mut cmd);
+        assert_eq!(saved.title, "https://example.com/blank.rss");
+        assert!(saved.description.is_none());
+        assert!(saved.artwork_url.is_none());
+    }
+
+    #[test]
+    fn a_refresh_response_with_new_metadata_replaces_it_field_by_field() {
+        let app = Pollux;
+        let mut model = model_with_subs(&[]);
+        model.subscriptions.push(known_subscription("a"));
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        // MINIMAL_RSS has a title and description but no image.
+        let mut cmd = app.update(
+            fetched("a", response(200, MINIMAL_RSS.as_bytes().to_vec())),
+            &mut model,
+        );
+
+        let saved = upserted_subscription(&mut cmd);
+        assert_eq!(
+            saved.title, "Test Podcast",
+            "the publisher's new title wins"
+        );
+        assert_eq!(saved.description.as_deref(), Some("A test feed"));
+        assert_eq!(
+            saved.artwork_url.as_deref(),
+            Some("https://example.com/art.png"),
+            "no image in the response, so the known one stays"
+        );
+    }
+
+    #[test]
+    fn re_adding_an_existing_feed_keeps_its_metadata_too() {
+        let app = Pollux;
+        let mut model = model_with_subs(&[]);
+        model.subscriptions.push(known_subscription("a"));
+        model.loading = true;
+
+        let mut cmd = app.update(
+            Event::FeedFetched {
+                url: "https://example.com/a.rss".to_string(),
+                result: Box::new(response(200, BARE_RSS.as_bytes().to_vec())),
+            },
+            &mut model,
+        );
+
+        let saved = upserted_subscription(&mut cmd);
+        assert_eq!(saved.title, "Real Title");
+        assert_eq!(
+            saved.artwork_url.as_deref(),
+            Some("https://example.com/art.png")
+        );
+    }
+
+    #[test]
+    fn a_brand_new_feed_without_a_title_still_falls_back_to_its_url() {
+        let app = Pollux;
+        let mut model = Model {
+            loading: true,
+            ..Model::default()
+        };
+
+        let mut cmd = app.update(
+            Event::FeedFetched {
+                url: "https://example.com/new.rss".to_string(),
+                result: Box::new(response(200, BARE_RSS.as_bytes().to_vec())),
+            },
+            &mut model,
+        );
+
+        let saved = upserted_subscription(&mut cmd);
+        assert_eq!(saved.title, "https://example.com/new.rss");
+        assert!(saved.artwork_url.is_none());
+    }
+
+    #[test]
+    fn refresh_saved_reloads_episodes_of_the_open_feed() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a"]);
+        model.selected_subscription = Some(model.subscriptions[0].clone());
+        model.episodes = vec![make_episode("e1", "Old", Some(1))];
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let mut saved = make_subscription("a", "a");
+        saved.title = "Renamed".to_string();
+        let mut cmd = app.update(
+            Event::RefreshSaved {
+                subscription_id: "a".to_string(),
+                result: Box::new(StorageResult::Subscription(saved)),
+            },
+            &mut model,
+        );
+
+        assert!(model.refreshing.is_none());
+        assert_eq!(model.subscriptions[0].title, "Renamed");
+        assert_eq!(
+            model
+                .selected_subscription
+                .as_ref()
+                .map(|s| s.title.as_str()),
+            Some("Renamed")
+        );
+        assert!(!model.detail_loading, "no spinner flash on refresh");
+        assert!(storage_ops(&mut cmd).iter().any(|o| matches!(
+            o,
+            StorageOperation::ListEpisodesBySubscription { subscription_id } if subscription_id == "a"
+        )));
+    }
+
+    #[test]
+    fn refresh_saved_for_other_feed_does_not_reload_episodes() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a", "b"]);
+        model.selected_subscription = Some(model.subscriptions[1].clone());
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let mut cmd = app.update(
+            Event::RefreshSaved {
+                subscription_id: "a".to_string(),
+                result: Box::new(StorageResult::Subscription(make_subscription("a", "a"))),
+            },
+            &mut model,
+        );
+
+        assert!(storage_ops(&mut cmd).is_empty());
+    }
+
+    #[test]
+    fn the_library_view_flags_exactly_the_in_flight_and_queued_feeds() {
+        // A large library with a mix: one in flight, some queued, the rest idle. Guards
+        // the single-pass lookup the view uses against the per-row scan it replaced.
+        let app = Pollux;
+        let ids: Vec<String> = (0..500).map(|i| format!("id-{i:03}")).collect();
+        let mut model = Model::default();
+        for id in &ids {
+            model.subscriptions.push(make_subscription(id, id));
+        }
+        model.refreshing = Some("id-007".to_string());
+        model.refresh_queue = vec![
+            "id-100".to_string(),
+            "id-250".to_string(),
+            "id-499".to_string(),
+        ];
+
+        let view = app.view(&model);
+
+        let flagged: Vec<&str> = view
+            .library
+            .subscriptions
+            .iter()
+            .filter(|s| s.refreshing)
+            .map(|s| s.id.as_str())
+            .collect();
+        assert_eq!(flagged, vec!["id-007", "id-100", "id-250", "id-499"]);
+        assert_eq!(
+            view.library.subscriptions.len(),
+            500,
+            "every feed is still listed"
+        );
+        assert!(view.library.refreshing);
+    }
+
+    #[test]
+    fn nothing_is_flagged_when_nothing_is_refreshing() {
+        let app = Pollux;
+        let model = model_with_subs(&["a", "b", "c"]);
+
+        let view = app.view(&model);
+
+        assert!(view.library.subscriptions.iter().all(|s| !s.refreshing));
+        assert!(!view.library.refreshing);
+    }
+
+    #[test]
+    fn a_feed_both_in_flight_and_queued_is_flagged_once_not_twice() {
+        // The set collapses duplicates; the row is simply flagged.
+        let app = Pollux;
+        let mut model = model_with_subs(&["a", "b"]);
+        model.refreshing = Some("a".to_string());
+        model.refresh_queue = vec!["a".to_string()];
+
+        let view = app.view(&model);
+
+        let flags: Vec<(&str, bool)> = view
+            .library
+            .subscriptions
+            .iter()
+            .map(|s| (s.id.as_str(), s.refreshing))
+            .collect();
+        assert_eq!(flags, vec![("a", true), ("b", false)]);
+    }
+
+    #[test]
+    fn refresh_state_is_visible_in_the_view() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a", "b"]);
+        model.selected_subscription = Some(model.subscriptions[1].clone());
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+        let _ = app.update(Event::RefreshSubscription("b".to_string()), &mut model);
+
+        let view = app.view(&model);
+        assert!(view.library.subscriptions.iter().all(|s| s.refreshing));
+        assert!(
+            view.subscription_detail.refreshing,
+            "queued counts as refreshing"
+        );
+    }
+
+    #[test]
+    fn refresh_all_queues_every_feed_in_library_order_and_starts_the_first() {
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions.push(make_subscription("z", "Zed"));
+        model.subscriptions.push(make_subscription("a", "alpha"));
+        model.subscriptions.push(make_subscription("m", "Middle"));
+
+        let mut cmd = app.update(Event::RefreshAll, &mut model);
+
+        assert_eq!(http_ops(&mut cmd).len(), 1, "serial: only one fetch starts");
+        assert_eq!(model.refreshing.as_deref(), Some("a"));
+        assert_eq!(model.refresh_queue, vec!["m".to_string(), "z".to_string()]);
+        assert!(app.view(&model).library.refreshing);
+    }
+
+    #[test]
+    fn feeds_with_the_same_title_refresh_in_a_stable_order() {
+        // The id breaks title ties, so the order doesn't depend on storage order.
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions.push(make_subscription("b", "Same"));
+        model.subscriptions.push(make_subscription("a", "same"));
+        model.subscriptions.push(make_subscription("c", "SAME"));
+
+        let _ = app.update(Event::RefreshAll, &mut model);
+
+        // Same title ignoring case, so it falls to the ids: a, b, c.
+        assert_eq!(model.refreshing.as_deref(), Some("a"));
+        assert_eq!(model.refresh_queue, vec!["b".to_string(), "c".to_string()]);
+    }
+
+    #[test]
+    fn auto_refresh_queues_due_feeds_in_the_same_order_as_refresh_all() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![
+            sub_refreshed("z", Some(24 * HOUR)),
+            sub_refreshed("a", Some(24 * HOUR)),
+            sub_refreshed("m", Some(HOUR)), // fresh: not due
+        ]);
+        for s in &mut model.subscriptions {
+            s.title = s.id.clone();
+        }
+
+        let _ = app.update(Event::RefreshStale, &mut model);
+
+        assert_eq!(model.refreshing.as_deref(), Some("a"));
+        assert_eq!(model.refresh_queue, vec!["z".to_string()]);
+    }
+
+    #[test]
+    fn refresh_all_does_not_double_queue_a_feed_already_refreshing() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a", "b"]);
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let mut cmd = app.update(Event::RefreshAll, &mut model);
+
+        assert!(http_ops(&mut cmd).is_empty());
+        assert_eq!(model.refresh_queue, vec!["b".to_string()]);
+    }
+
+    #[test]
+    fn refresh_all_continues_past_a_failing_feed_and_then_goes_idle() {
+        let app = Pollux;
+        let mut model = model_with_subs(&["a", "b"]);
+        let _ = app.update(Event::RefreshAll, &mut model);
+
+        let _ = app.update(
+            fetched("a", HttpResult::Error("offline".to_string())),
+            &mut model,
+        );
+        let mut next = ack(&app, &mut model, "a");
+        assert_eq!(http_ops(&mut next).len(), 1, "b still runs after a fails");
+        let _ = app.update(fetched("b", response(304, vec![])), &mut model);
+        let _ = ack(&app, &mut model, "b");
+
+        assert!(!app.view(&model).library.refreshing);
+        assert_eq!(
+            model.subscriptions[0].last_refresh_error.as_deref(),
+            Some("offline")
+        );
+        assert!(model.subscriptions[1].last_refresh_error.is_none());
+    }
+
+    #[test]
+    fn refresh_all_with_no_subscriptions_is_a_noop() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let mut cmd = app.update(Event::RefreshAll, &mut model);
+        assert!(http_ops(&mut cmd).is_empty());
+        assert!(!app.view(&model).library.refreshing);
+    }
+
+    // --- foreground auto-refresh ---
+
+    fn loaded_model(subs: Vec<Subscription>) -> Model {
+        Model {
+            subscriptions: subs,
+            subscriptions_loaded: true,
+            ..Model::default()
+        }
+    }
+
+    fn sub_refreshed(id: &str, age_secs: Option<i64>) -> Subscription {
+        let mut s = make_subscription(id, id);
+        s.last_refreshed = age_secs.map(|a| now_unix() - a);
+        s
+    }
+
+    const HOUR: i64 = 3600;
+
+    #[test]
+    fn refresh_stale_queues_only_feeds_past_the_interval() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![
+            sub_refreshed("fresh", Some(HOUR)),
+            sub_refreshed("old", Some(13 * HOUR)),
+            sub_refreshed("never", None),
+        ]);
+
+        let mut cmd = app.update(Event::RefreshStale, &mut model);
+
+        assert_eq!(http_ops(&mut cmd).len(), 1);
+        let mut pending = model.refresh_queue.clone();
+        pending.extend(model.refreshing.clone());
+        pending.sort();
+        assert_eq!(pending, vec!["never".to_string(), "old".to_string()]);
+    }
+
+    fn due_sub(last_refreshed: Option<i64>, retry_after_until: Option<i64>) -> Subscription {
+        let mut s = make_subscription("a", "a");
+        s.last_refreshed = last_refreshed;
+        s.retry_after_until = retry_after_until;
+        s
+    }
+
+    // Fixed "now" so these don't depend on the real clock.
+    const NOW: i64 = 1_800_000_000;
+
+    #[test]
+    fn a_last_refreshed_in_the_future_counts_as_stale() {
+        // Stamped while the clock was ahead, then the clock was corrected: without this
+        // the feed would stay not-due until real time reached the stored value.
+        assert!(is_due_for_auto_refresh(
+            &due_sub(Some(NOW + 365 * 24 * 3600), None),
+            NOW
+        ));
+        assert!(is_due_for_auto_refresh(&due_sub(Some(NOW + 1), None), NOW));
+    }
+
+    #[test]
+    fn a_recent_last_refreshed_is_still_not_due() {
+        assert!(!is_due_for_auto_refresh(&due_sub(Some(NOW), None), NOW));
+        assert!(!is_due_for_auto_refresh(
+            &due_sub(Some(NOW - HOUR), None),
+            NOW
+        ));
+        assert!(!is_due_for_auto_refresh(
+            &due_sub(Some(NOW - 12 * HOUR + 1), None),
+            NOW
+        ));
+        assert!(is_due_for_auto_refresh(
+            &due_sub(Some(NOW - 12 * HOUR), None),
+            NOW
+        ));
+        assert!(is_due_for_auto_refresh(&due_sub(None, None), NOW));
+    }
+
+    #[test]
+    fn a_retry_after_further_out_than_the_cap_is_ignored_as_skew() {
+        let stale = Some(NOW - 24 * HOUR);
+        // Wrote a year of backoff under a fast clock; now `now` is correct.
+        assert!(is_due_for_auto_refresh(
+            &due_sub(stale, Some(NOW + 365 * 24 * 3600)),
+            NOW
+        ));
+        assert!(is_due_for_auto_refresh(
+            &due_sub(stale, Some(NOW + MAX_RETRY_AFTER_SECS + 1)),
+            NOW
+        ));
+    }
+
+    #[test]
+    fn a_legitimate_backoff_is_still_honoured_up_to_the_cap() {
+        let stale = Some(NOW - 24 * HOUR);
+        assert!(!is_due_for_auto_refresh(
+            &due_sub(stale, Some(NOW + 600)),
+            NOW
+        ));
+        assert!(
+            !is_due_for_auto_refresh(&due_sub(stale, Some(NOW + MAX_RETRY_AFTER_SECS)), NOW),
+            "exactly the cap is the longest value we ever write"
+        );
+        // Expired or exactly now: no longer backing off.
+        assert!(is_due_for_auto_refresh(&due_sub(stale, Some(NOW)), NOW));
+        assert!(is_due_for_auto_refresh(&due_sub(stale, Some(NOW - 1)), NOW));
+    }
+
+    #[test]
+    fn extreme_timestamps_do_not_overflow() {
+        assert!(is_due_for_auto_refresh(&due_sub(Some(i64::MIN), None), NOW));
+        assert!(is_due_for_auto_refresh(&due_sub(Some(i64::MAX), None), NOW));
+        assert!(is_due_for_auto_refresh(
+            &due_sub(Some(NOW - 24 * HOUR), Some(i64::MAX)),
+            NOW
+        ));
+    }
+
+    #[test]
+    fn auto_refresh_recovers_a_feed_stamped_in_the_future() {
+        let app = Pollux;
+        let mut skewed = sub_refreshed("a", None);
+        skewed.last_refreshed = Some(now_unix() + 365 * 24 * 3600);
+        skewed.retry_after_until = Some(now_unix() + 365 * 24 * 3600);
+        let mut model = loaded_model(vec![skewed]);
+
+        let mut cmd = app.update(Event::RefreshStale, &mut model);
+
+        assert_eq!(http_ops(&mut cmd).len(), 1, "the skewed feed is refreshed");
+
+        // A 304 stamps a correct time, so it isn't stuck again afterwards.
+        let _ = app.update(fetched("a", response(304, vec![])), &mut model);
+        let sub = &model.subscriptions[0];
+        assert!(sub.last_refreshed <= Some(now_unix()));
+        assert!(sub.retry_after_until.is_none());
+        let mut again = app.update(Event::RefreshStale, &mut model);
+        assert!(http_ops(&mut again).is_empty(), "now properly fresh");
+    }
+
+    #[test]
+    fn refresh_stale_respects_the_twelve_hour_boundary() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![
+            sub_refreshed("just-under", Some(12 * HOUR - 60)),
+            sub_refreshed("exactly", Some(12 * HOUR)),
+        ]);
+
+        let _ = app.update(Event::RefreshStale, &mut model);
+
+        assert_eq!(model.refreshing.as_deref(), Some("exactly"));
+        assert!(model.refresh_queue.is_empty());
+    }
+
+    #[test]
+    fn refresh_stale_skips_feeds_still_backing_off() {
+        let app = Pollux;
+        let mut limited = sub_refreshed("limited", Some(24 * HOUR));
+        limited.retry_after_until = Some(now_unix() + 600);
+        let mut expired = sub_refreshed("expired", Some(24 * HOUR));
+        expired.retry_after_until = Some(now_unix() - 600);
+        let mut model = loaded_model(vec![limited, expired]);
+
+        let _ = app.update(Event::RefreshStale, &mut model);
+
+        assert_eq!(model.refreshing.as_deref(), Some("expired"));
+        assert!(model.refresh_queue.is_empty());
+    }
+
+    #[test]
+    fn manual_refresh_ignores_backoff() {
+        let app = Pollux;
+        let mut limited = sub_refreshed("limited", Some(HOUR));
+        limited.retry_after_until = Some(now_unix() + 600);
+        let mut model = loaded_model(vec![limited]);
+
+        let mut cmd = app.update(
+            Event::RefreshSubscription("limited".to_string()),
+            &mut model,
+        );
+
+        assert_eq!(http_ops(&mut cmd).len(), 1, "an explicit request wins");
+    }
+
+    #[test]
+    fn refresh_stale_before_the_library_loads_is_held_then_honoured() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let _ = app.update(Event::Started, &mut model);
+
+        let mut early = app.update(Event::RefreshStale, &mut model);
+        assert!(http_ops(&mut early).is_empty());
+        assert!(
+            !storage_ops(&mut early)
+                .iter()
+                .any(|o| matches!(o, StorageOperation::ListSubscriptions)),
+            "the launch load is still in flight, so it must not be requested twice"
+        );
+        assert!(model.auto_refresh_pending);
+
+        let mut loaded = app.update(
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Subscriptions(vec![
+                sub_refreshed("old", Some(24 * HOUR)),
+            ]))),
+            &mut model,
+        );
+
+        assert!(!model.auto_refresh_pending);
+        assert_eq!(http_ops(&mut loaded).len(), 1);
+        assert_eq!(model.refreshing.as_deref(), Some("old"));
+    }
+
+    fn started_with_a_failed_library_load() -> Model {
+        let app = Pollux;
+        let mut model = Model::default();
+        let _ = app.update(Event::Started, &mut model);
+        let _ = app.update(
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Error("db locked".to_string()))),
+            &mut model,
+        );
+        assert!(!model.subscriptions_loaded);
+        assert!(!model.loading);
+        model
+    }
+
+    #[test]
+    fn a_failed_library_load_is_retried_on_the_next_activation_and_then_auto_refreshes() {
+        let app = Pollux;
+        let mut model = started_with_a_failed_library_load();
+
+        let mut activated = app.update(Event::RefreshStale, &mut model);
+
+        assert!(model.loading, "retrying shows the library as loading again");
+        assert!(
+            model.auto_refresh_pending,
+            "the request is held for the retry"
+        );
+        assert!(
+            storage_ops(&mut activated)
+                .iter()
+                .any(|o| matches!(o, StorageOperation::ListSubscriptions)),
+            "the failed load must be retried, or nothing ever recovers it"
+        );
+
+        let mut loaded = app.update(
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Subscriptions(vec![
+                sub_refreshed("old", Some(24 * HOUR)),
+            ]))),
+            &mut model,
+        );
+
+        assert!(model.subscriptions_loaded);
+        assert!(model.error.is_none(), "the earlier load error is cleared");
+        assert!(!model.auto_refresh_pending);
+        assert_eq!(
+            http_ops(&mut loaded).len(),
+            1,
+            "the held auto-refresh now runs"
+        );
+    }
+
+    #[test]
+    fn a_library_load_that_keeps_failing_is_retried_every_activation_not_stuck() {
+        let app = Pollux;
+        let mut model = started_with_a_failed_library_load();
+
+        for _ in 0..3 {
+            let mut activated = app.update(Event::RefreshStale, &mut model);
+            assert!(
+                storage_ops(&mut activated)
+                    .iter()
+                    .any(|o| matches!(o, StorageOperation::ListSubscriptions)),
+                "each activation retries the load"
+            );
+            let _ = app.update(
+                Event::SubscriptionsLoaded(Box::new(StorageResult::Error(
+                    "still locked".to_string(),
+                ))),
+                &mut model,
+            );
+            assert!(!model.loading);
+            assert!(
+                model.error.is_some(),
+                "the error stays visible between retries"
+            );
+        }
+    }
+
+    #[test]
+    fn a_retry_in_flight_is_not_requested_again_by_another_activation() {
+        let app = Pollux;
+        let mut model = started_with_a_failed_library_load();
+        let _ = app.update(Event::RefreshStale, &mut model);
+
+        let mut again = app.update(Event::RefreshStale, &mut model);
+
+        assert!(storage_ops(&mut again).is_empty(), "one load at a time");
+    }
+
+    #[test]
+    fn cancelling_before_a_retried_library_load_lands_drops_the_held_auto_refresh() {
+        let app = Pollux;
+        let mut model = started_with_a_failed_library_load();
+        let _ = app.update(Event::RefreshStale, &mut model);
+        let _ = app.update(Event::CancelRefresh, &mut model);
+
+        let mut loaded = app.update(
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Subscriptions(vec![
+                sub_refreshed("old", Some(24 * HOUR)),
+            ]))),
+            &mut model,
+        );
+
+        assert!(
+            model.subscriptions_loaded,
+            "the library itself still recovers"
+        );
+        assert!(
+            http_ops(&mut loaded).is_empty(),
+            "but the cancelled refresh doesn't run"
+        );
+    }
+
+    #[test]
+    fn a_later_library_reload_does_not_retrigger_auto_refresh() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![]);
+        let mut cmd = app.update(
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Subscriptions(vec![
+                sub_refreshed("old", Some(24 * HOUR)),
+            ]))),
+            &mut model,
+        );
+        assert!(http_ops(&mut cmd).is_empty());
+    }
+
+    #[test]
+    fn refresh_stale_does_not_double_queue_feeds_already_pending() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![sub_refreshed("old", Some(24 * HOUR))]);
+        let _ = app.update(Event::RefreshStale, &mut model);
+
+        let mut again = app.update(Event::RefreshStale, &mut model);
+
+        assert!(http_ops(&mut again).is_empty());
+        assert!(model.refresh_queue.is_empty());
+    }
+
+    #[test]
+    fn a_failed_refresh_backs_off_so_auto_refresh_skips_it() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![sub_refreshed("old", Some(24 * HOUR))]);
+        let _ = app.update(Event::RefreshStale, &mut model);
+        let _ = app.update(
+            fetched("old", HttpResult::Error("offline".to_string())),
+            &mut model,
+        );
+
+        let until = model.subscriptions[0]
+            .retry_after_until
+            .expect("backoff set");
+        assert!(until > now_unix());
+
+        let mut next = app.update(Event::RefreshStale, &mut model);
+        assert!(
+            http_ops(&mut next).is_empty(),
+            "a broken feed isn't retried on every foreground"
+        );
+    }
+
+    #[test]
+    fn every_kind_of_refresh_failure_backs_off_auto_refresh() {
+        // Each failure path must set the backoff itself; carrying forward a missing or
+        // expired `retry_after_until` would leave the feed due on every foreground.
+        let failures: Vec<(&str, Event)> = vec![
+            (
+                "network error",
+                fetched("a", HttpResult::Error("offline".to_string())),
+            ),
+            (
+                "malformed 200",
+                fetched("a", response(200, b"this is not xml".to_vec())),
+            ),
+            ("HTTP 404", fetched("a", response(404, vec![]))),
+            ("HTTP 500", fetched("a", response(500, vec![]))),
+            (
+                "save error",
+                Event::RefreshSaved {
+                    subscription_id: "a".to_string(),
+                    result: Box::new(StorageResult::Error("disk full".to_string())),
+                },
+            ),
+            (
+                "unexpected save result",
+                Event::RefreshSaved {
+                    subscription_id: "a".to_string(),
+                    result: Box::new(StorageResult::Success),
+                },
+            ),
+        ];
+
+        for (name, failure) in failures {
+            let app = Pollux;
+            // A feed whose backoff already expired: the failure case that used to slip
+            // through by preserving the old (expired) value.
+            let mut stale = sub_refreshed("a", Some(24 * HOUR));
+            stale.retry_after_until = Some(now_unix() - 600);
+            let mut model = loaded_model(vec![stale]);
+            let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+            let _ = app.update(failure, &mut model);
+            let _ = ack(&app, &mut model, "a");
+
+            let sub = &model.subscriptions[0];
+            assert!(sub.last_refresh_error.is_some(), "{name}: error recorded");
+            let until = sub
+                .retry_after_until
+                .unwrap_or_else(|| panic!("{name}: backoff not set"));
+            assert!(
+                until >= now_unix() + FAILURE_BACKOFF_SECS - 5,
+                "{name}: backoff should be about {FAILURE_BACKOFF_SECS}s out"
+            );
+            assert!(model.refreshing.is_none(), "{name}: refresh finished");
+
+            let mut next = app.update(Event::RefreshStale, &mut model);
+            assert!(
+                http_ops(&mut next).is_empty(),
+                "{name}: auto-refresh must skip the feed while it backs off"
+            );
+        }
+    }
+
+    #[test]
+    fn cancel_refresh_drops_the_queue_but_lets_the_active_fetch_finish() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![
+            sub_refreshed("a", Some(24 * HOUR)),
+            sub_refreshed("b", Some(24 * HOUR)),
+            sub_refreshed("c", Some(24 * HOUR)),
+        ]);
+        let _ = app.update(Event::RefreshStale, &mut model);
+        assert_eq!(model.refreshing.as_deref(), Some("a"));
+        assert_eq!(model.refresh_queue.len(), 2);
+
+        let _ = app.update(Event::CancelRefresh, &mut model);
+
+        assert!(model.refresh_queue.is_empty());
+        assert_eq!(
+            model.refreshing.as_deref(),
+            Some("a"),
+            "in-flight is untouched"
+        );
+        assert!(
+            app.view(&model).library.refreshing,
+            "still busy until it lands"
+        );
+
+        // The in-flight fetch resolves normally and records its outcome, but nothing
+        // further starts.
+        let _ = app.update(fetched("a", response(304, vec![])), &mut model);
+        let mut done = ack(&app, &mut model, "a");
+        assert!(http_ops(&mut done).is_empty(), "no next feed after cancel");
+        assert!(model.refreshing.is_none());
+        assert!(
+            model.subscriptions[0].last_refreshed > Some(now_unix() - 5),
+            "the in-flight fetch's 304 still records its timestamp"
+        );
+        assert!(!app.view(&model).library.refreshing);
+        assert!(
+            model.subscriptions[1].last_refreshed < Some(now_unix() - 23 * HOUR),
+            "cancelled feeds are left for a later wake-up"
+        );
+    }
+
+    #[test]
+    fn cancel_refresh_drops_an_auto_refresh_held_for_the_library_load() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let _ = app.update(Event::RefreshStale, &mut model);
+        assert!(model.auto_refresh_pending);
+
+        let _ = app.update(Event::CancelRefresh, &mut model);
+        let mut loaded = app.update(
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Subscriptions(vec![
+                sub_refreshed("old", Some(24 * HOUR)),
+            ]))),
+            &mut model,
+        );
+
+        assert!(!model.auto_refresh_pending);
+        assert!(
+            http_ops(&mut loaded).is_empty(),
+            "cancelled before it could run"
+        );
+    }
+
+    #[test]
+    fn cancel_refresh_when_idle_is_harmless_and_a_later_refresh_still_works() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![sub_refreshed("a", Some(24 * HOUR))]);
+
+        let mut cmd = app.update(Event::CancelRefresh, &mut model);
+        assert!(http_ops(&mut cmd).is_empty());
+
+        let mut next = app.update(Event::RefreshStale, &mut model);
+        assert_eq!(http_ops(&mut next).len(), 1, "cancel isn't sticky");
+    }
+
+    #[test]
+    fn an_unreachable_device_records_the_error_without_backing_the_feed_off() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![sub_refreshed("a", Some(24 * HOUR))]);
+        let _ = app.update(Event::RefreshStale, &mut model);
+
+        let mut cmd = app.update(
+            fetched("a", HttpResult::Unreachable("offline".to_string())),
+            &mut model,
+        );
+
+        let sub = &model.subscriptions[0];
+        assert_eq!(sub.last_refresh_error.as_deref(), Some("offline"));
+        assert!(
+            sub.retry_after_until.is_none(),
+            "no backoff for a device-level failure"
+        );
+        assert!(storage_ops(&mut cmd).iter().any(|o| matches!(
+            o,
+            StorageOperation::UpdateRefreshState {
+                last_refresh_error: Some(_),
+                retry_after_until: None,
+                ..
+            }
+        )));
+    }
+
+    #[test]
+    fn feeds_refresh_again_as_soon_as_connectivity_returns() {
+        // The scenario behind the finding: open the app offline, every feed fails,
+        // reconnect and foreground again. Nothing should be sitting in a backoff.
+        let app = Pollux;
+        let mut model = loaded_model(vec![
+            sub_refreshed("a", Some(24 * HOUR)),
+            sub_refreshed("b", Some(24 * HOUR)),
+        ]);
+        let _ = app.update(Event::RefreshStale, &mut model);
+        let _ = app.update(
+            fetched("a", HttpResult::Unreachable("offline".to_string())),
+            &mut model,
+        );
+        let _ = ack(&app, &mut model, "a");
+        let _ = app.update(
+            fetched("b", HttpResult::Unreachable("offline".to_string())),
+            &mut model,
+        );
+        let _ = ack(&app, &mut model, "b");
+        assert!(model.refreshing.is_none());
+
+        let mut back_online = app.update(Event::RefreshStale, &mut model);
+
+        assert_eq!(http_ops(&mut back_online).len(), 1, "feeds are due again");
+        assert_eq!(model.refreshing.as_deref(), Some("a"));
+        assert_eq!(model.refresh_queue, vec!["b".to_string()]);
+    }
+
+    #[test]
+    fn an_unreachable_device_keeps_a_backoff_the_host_earned() {
+        // A live backoff from a real host failure (e.g. a 429) is not the device's
+        // doing, so an offline attempt must not clear or shorten it.
+        let app = Pollux;
+        let until = now_unix() + 600;
+        let mut limited = sub_refreshed("a", Some(24 * HOUR));
+        limited.retry_after_until = Some(until);
+        let mut model = loaded_model(vec![limited]);
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let _ = app.update(
+            fetched("a", HttpResult::Unreachable("offline".to_string())),
+            &mut model,
+        );
+
+        assert_eq!(model.subscriptions[0].retry_after_until, Some(until));
+    }
+
+    #[test]
+    fn the_subscribe_flow_treats_an_unreachable_device_like_any_fetch_error() {
+        let app = Pollux;
+        let mut model = Model {
+            loading: true,
+            ..Model::default()
+        };
+
+        let mut cmd = app.update(
+            Event::FeedFetched {
+                url: "https://example.com/feed.rss".to_string(),
+                result: Box::new(HttpResult::Unreachable("offline".to_string())),
+            },
+            &mut model,
+        );
+
+        assert!(!model.loading);
+        assert_eq!(model.error.as_deref(), Some("offline"));
+        cmd.expect_one_effect().expect_render();
+    }
+
+    #[test]
+    fn a_successful_refresh_clears_the_backoff() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![sub_refreshed("a", Some(24 * HOUR))]);
+        model.subscriptions[0].retry_after_until = Some(now_unix() - 1);
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let _ = app.update(fetched("a", response(304, vec![])), &mut model);
+
+        assert!(model.subscriptions[0].retry_after_until.is_none());
     }
 }

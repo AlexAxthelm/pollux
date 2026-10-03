@@ -17,8 +17,12 @@ enum DatabaseManagerError: Error, LocalizedError {
 
 actor DatabaseManager {
     private let db: DatabasePool
+    /// Wall clock, injectable so tests can move time (the removed-from-feed rule is
+    /// time-based).
+    private let now: @Sendable () -> Date
 
     init() throws {
+        now = { Date() }
         guard let support = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask,
         ).first else {
@@ -30,51 +34,10 @@ actor DatabaseManager {
     }
 
     /// Accepts an explicit path — use this in tests to point at a temp file.
-    init(path: String) throws {
+    init(path: String, now: @escaping @Sendable () -> Date = { Date() }) throws {
+        self.now = now
         db = try DatabasePool(path: path)
         try Self.runMigrations(db)
-    }
-
-    // MARK: - Migrations
-
-    private static func runMigrations(_ db: DatabasePool) throws {
-        var migrator = DatabaseMigrator()
-        migrator.registerMigration("v1_initial") { db in
-            try db.create(table: "subscriptions") { t in
-                t.column("id", .text).primaryKey()
-                t.column("feed_url", .text).notNull().unique()
-                t.column("title", .text).notNull()
-                t.column("artwork_url", .text)
-                t.column("description", .text)
-                t.column("last_refreshed", .integer)
-                t.column("created_at", .integer).notNull()
-            }
-            try db.create(table: "episodes") { t in
-                t.column("id", .text).primaryKey()
-                t.column("feed_guid", .text).notNull()
-                t.column("subscription_id", .text).notNull()
-                    .references("subscriptions", column: "id", onDelete: .cascade)
-                t.column("title", .text).notNull()
-                t.column("description", .text)
-                t.column("pub_date", .integer)
-                t.column("duration_secs", .integer).check(sql: "duration_secs >= 0")
-                t.column("enclosure_url", .text).notNull()
-                t.column("artwork_url", .text)
-                t.column("playback_status", .text).notNull().defaults(to: "Unplayed")
-                t.column("playback_position_secs", .integer).check(sql: "playback_position_secs >= 0")
-                t.column("download_status", .text).notNull().defaults(to: "NotDownloaded")
-                t.column("is_flagged", .boolean).notNull().defaults(to: false)
-                t.column("file_size_bytes", .integer).check(sql: "file_size_bytes >= 0")
-                t.column("local_path", .text)
-                t.uniqueKey(["subscription_id", "feed_guid"])
-            }
-            try db.create(
-                index: "episodes_subscription_id",
-                on: "episodes",
-                columns: ["subscription_id"],
-            )
-        }
-        try migrator.migrate(db)
     }
 
     // MARK: - Execute
@@ -95,6 +58,11 @@ actor DatabaseManager {
             try await deleteSubscription(id: id)
         case let .upsertFeedWithEpisodes(subscription, episodes):
             try await upsertFeedWithEpisodes(subscription: subscription, episodes: episodes)
+        case let .updateRefreshState(subscriptionId, lastRefreshed, lastRefreshError, retryAfterUntil):
+            try await updateRefreshState(
+                subscriptionId: subscriptionId, lastRefreshed: lastRefreshed,
+                lastRefreshError: lastRefreshError, retryAfterUntil: retryAfterUntil,
+            )
         default:
             try await executeEpisode(operation)
         }
@@ -152,7 +120,8 @@ actor DatabaseManager {
     }
 
     private func upsertFeedWithEpisodes(subscription: Subscription, episodes: [Episode]) async throws -> StorageResult {
-        try await db.write { db -> StorageResult in
+        let nowSecs = Int64(now().timeIntervalSince1970)
+        return try await db.write { db -> StorageResult in
             try Self.upsertSubscriptionRow(subscription, db: db)
             guard let subRow = try Row.fetchOne(
                 db,
@@ -168,11 +137,35 @@ actor DatabaseManager {
                 )
             }
             let canonical = Self.subscription(from: subRow)
-            for episode in episodes {
-                try Self.upsertEpisodeRow(episode, subscriptionId: canonical.id, db: db)
-            }
+            try Self.upsertFeedEpisodes(episodes, subscriptionId: canonical.id, now: nowSecs, db: db)
             return .subscription(canonical)
         }
+    }
+
+    /// Persists the outcome of a refresh that produced no new body (304, rate limit,
+    /// or failure). `last_refreshed` is only moved when provided; the error and
+    /// retry-after columns are written verbatim so a success clears them.
+    ///
+    /// A 304 (`lastRefreshed` provided) is also a successful confirmation that the stored
+    /// episodes still match the server, so it finishes what an earlier body started:
+    /// episodes whose absence clock has run the grace period are flagged. It never starts
+    /// a clock (that needs a body to compare against), so an unchanged feed can't flag
+    /// anything that wasn't already missing. Returns how many episodes were flagged.
+    private func updateRefreshState(
+        subscriptionId: String, lastRefreshed: Int64?, lastRefreshError: String?,
+        retryAfterUntil: Int64?,
+    ) async throws -> StorageResult {
+        let nowSecs = Int64(now().timeIntervalSince1970)
+        let flagged = try await db.write { db -> Int in
+            try Self.updateRefreshStateRow(
+                subscriptionId: subscriptionId, lastRefreshed: lastRefreshed,
+                lastRefreshError: lastRefreshError, retryAfterUntil: retryAfterUntil, db: db,
+            )
+            guard lastRefreshed != nil else { return 0 }
+            try Self.flagEpisodesRemovedFromFeed(subscriptionId: subscriptionId, now: nowSecs, db: db)
+            return db.changesCount
+        }
+        return .episodesRemoved(UInt64(flagged))
     }
 
     private func deleteSubscription(id: String) async throws -> StorageResult {
