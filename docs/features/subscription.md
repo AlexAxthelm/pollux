@@ -186,13 +186,24 @@ When an episode is no longer present in a feed's RSS/Atom/JSONFeed:
 - If the episode audio file is still on device, it remains playable
 - Episode is marked with "Removed from feed" status (see `episode.md`)
 
-As built, a refresh marks an episode `RemovedFromFeed` only when it is
-`NotDownloaded` or `Failed`. A downloaded, queued, or in-flight episode keeps
-its state so its file stays playable and its download is not orphaned. If a
-marked episode reappears in the feed it returns to `NotDownloaded`. A refresh
-that returns an **empty** feed marks nothing, since that is far more likely a
-broken response than every episode being deleted. The episode list does not yet
-hide removed episodes or offer the "Show unavailable episodes" toggle.
+As built, an episode is marked `RemovedFromFeed` only after it has been absent
+from **two consecutive successful refreshes**. A single absence is not enough: a
+truncated or stale response (a CDN glitch, a feed briefly serving only its newest
+items) would otherwise mark most of a feed removed, and removed episodes cannot
+be downloaded until they reappear. Two misses in a row shrug off a one-off glitch
+but still catch a feed that genuinely dropped an episode, including a
+"latest episode only" feed, where every older episode goes after two refreshes.
+The count must be consecutive: missing, present, missing is two separate single
+misses.
+
+Only `NotDownloaded` or `Failed` episodes are flagged. A downloaded, queued, or
+in-flight episode keeps its state so its file stays playable and its download is
+not orphaned; its miss count keeps running, so if the file is later deleted the
+next refresh flags it. If a marked episode reappears in the feed it returns to
+`NotDownloaded`. A refresh that returns an **empty** feed marks nothing and does
+not count as a miss, since that is far more likely a broken response than every
+episode being deleted. The episode list does not yet hide removed episodes or
+offer the "Show unavailable episodes" toggle.
 
 Permanent metadata retention is intentional — it supports the library model
 and keeps the archive complete even as publishers rotate content.

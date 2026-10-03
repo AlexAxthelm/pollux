@@ -84,6 +84,15 @@ actor DatabaseManager {
                 t.add(column: "retry_after_until", .integer)
             }
         }
+        // How many consecutive successful refreshes an episode has been absent from its
+        // feed. Flagging on a single absence would let one truncated response mark
+        // most of a feed removed, so an episode is only flagged once this reaches
+        // `refreshesBeforeRemoval`. Storage-only: the core never sees it.
+        migrator.registerMigration("v3_missing_refreshes") { db in
+            try db.alter(table: "episodes") { t in
+                t.add(column: "missing_refreshes", .integer).notNull().defaults(to: 0)
+            }
+        }
         try migrator.migrate(db)
     }
 
@@ -183,12 +192,7 @@ actor DatabaseManager {
                 )
             }
             let canonical = Self.subscription(from: subRow)
-            for episode in episodes {
-                try Self.upsertEpisodeRow(episode, subscriptionId: canonical.id, db: db)
-            }
-            try Self.markRemovedFromFeed(
-                subscriptionId: canonical.id, keeping: Set(episodes.map(\.feedGuid)), db: db,
-            )
+            try Self.upsertFeedEpisodes(episodes, subscriptionId: canonical.id, db: db)
             return .subscription(canonical)
         }
     }

@@ -69,8 +69,15 @@ need care:
   feed's value is the freshest available and is written.
 - `download_status` — an episode flagged `RemovedFromFeed` that reappears in the
   feed returns to `NotDownloaded`. Episodes that drop out of the feed are flagged
-  only if they are `NotDownloaded` or `Failed`; see
-  `features/subscription.md`, "De-listed Episodes".
+  only after two consecutive refreshes without them, and only if they are
+  `NotDownloaded` or `Failed`; see `features/subscription.md`, "De-listed
+  Episodes".
+- `missing_refreshes` — storage-only counter (the `v3_missing_refreshes`
+  migration; the core never sees it) of consecutive successful refreshes an
+  episode has been absent from. Every refresh with a non-empty feed bumps it for
+  all of the subscription's episodes, capped at the threshold, and the upsert
+  resets it to 0 for the ones still present, so only absent episodes keep the
+  increment.
 
 #### Identity across refreshes
 
