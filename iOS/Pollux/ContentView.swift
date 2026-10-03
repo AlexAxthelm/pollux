@@ -14,9 +14,7 @@ struct ContentView: View {
     /// the core reports the queue has drained.
     private func refreshAll() async {
         core.update(.refreshAll)
-        while core.view.library.refreshing, !Task.isCancelled {
-            try? await Task.sleep(for: .milliseconds(100))
-        }
+        await Polling.waitWhileBusy { core.view.library.refreshing }
     }
 
     var body: some View {

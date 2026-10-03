@@ -42,9 +42,7 @@ struct SubscriptionDetailScreen: View {
     /// serial queue ordering), so this only observes it.
     private func refresh() async {
         core.update(.refreshSubscription(subscription.id))
-        while detail.refreshing, !Task.isCancelled {
-            try? await Task.sleep(for: .milliseconds(100))
-        }
+        await Polling.waitWhileBusy { detail.refreshing }
     }
 
     /// The live library row for this feed. `subscription` is a snapshot from when the

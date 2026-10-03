@@ -64,9 +64,7 @@ class Core: ObservableObject {
     func refreshStaleAndWait() async {
         update(.refreshStale)
         await withTaskCancellationHandler {
-            while view.library.loading || view.library.refreshing, !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(200))
-            }
+            await Polling.waitWhileBusy { view.library.loading || view.library.refreshing }
         } onCancel: {
             Task { @MainActor in self.update(.cancelRefresh) }
         }
