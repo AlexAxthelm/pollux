@@ -3445,7 +3445,11 @@ mod tests {
 
     #[test]
     fn retry_after_accepts_all_three_http_date_formats() {
-        for (name, date) in [("IMF-fixdate", IMF), ("RFC 850", RFC_850), ("asctime", ASCTIME)] {
+        for (name, date) in [
+            ("IMF-fixdate", IMF),
+            ("RFC 850", RFC_850),
+            ("asctime", ASCTIME),
+        ] {
             assert_eq!(parse_retry_after(date, AT - 60), Some(60), "{name}");
         }
     }
@@ -3457,7 +3461,14 @@ mod tests {
 
     #[test]
     fn an_unreadable_retry_after_is_none() {
-        for junk in ["soon", "", "   ", "-5", "1.5", "Sun, 99 Nov 1994 08:49:37 GMT"] {
+        for junk in [
+            "soon",
+            "",
+            "   ",
+            "-5",
+            "1.5",
+            "Sun, 99 Nov 1994 08:49:37 GMT",
+        ] {
             assert_eq!(parse_retry_after(junk, AT), None, "{junk:?}");
         }
     }
