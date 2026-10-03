@@ -25,9 +25,10 @@ pub enum HttpResult {
         etag: Option<String>,
         /// `Last-Modified` response header, verbatim.
         last_modified: Option<String>,
-        /// `Retry-After` normalized by the shell to whole seconds from now (it accepts
-        /// both the delay-seconds and HTTP-date forms), so the core needs no date parser.
-        retry_after_secs: Option<u64>,
+        /// `Retry-After` response header, verbatim. It is either a delay in seconds or an
+        /// HTTP-date; the core interprets it (see `parse_retry_after`), so every shell
+        /// shares one parser.
+        retry_after: Option<String>,
     },
     /// The request failed for a reason on the host's side or in the response (refused
     /// connection, TLS failure, timeout, invalid URL, ...).

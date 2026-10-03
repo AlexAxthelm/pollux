@@ -189,24 +189,3 @@ struct RefreshStorageTests {
         #expect(sub.retryAfterUntil == nil)
     }
 }
-
-@Suite("Retry-After parsing")
-struct RetryAfterTests {
-    @Test func parsesDelaySeconds() {
-        #expect(FeedFetcher.retryAfterSeconds("120") == 120)
-        #expect(FeedFetcher.retryAfterSeconds(" 7 ") == 7)
-    }
-
-    @Test func parsesHttpDateRelativeToNow() {
-        let now = Date(timeIntervalSince1970: 784_111_777) // Sun, 06 Nov 1994 08:49:37 GMT
-        #expect(FeedFetcher.retryAfterSeconds("Sun, 06 Nov 1994 08:50:37 GMT", now: now) == 60)
-    }
-
-    @Test func pastDateClampsToZeroAndGarbageIsNil() {
-        let now = Date(timeIntervalSince1970: 784_111_777)
-        #expect(FeedFetcher.retryAfterSeconds("Sun, 06 Nov 1994 08:00:00 GMT", now: now) == 0)
-        #expect(FeedFetcher.retryAfterSeconds("soon") == nil)
-        #expect(FeedFetcher.retryAfterSeconds(nil) == nil)
-        #expect(FeedFetcher.retryAfterSeconds("") == nil)
-    }
-}
