@@ -63,8 +63,8 @@ extension DatabaseManager {
                     WHEN episodes.download_status = 'RemovedFromFeed' THEN 'NotDownloaded'
                     ELSE episodes.download_status
                 END,
-                -- Present in this feed, so it has not been missed (see countMissedRefresh).
-                missing_refreshes = 0
+                -- Present in this feed, so it is no longer missing (see startMissClock).
+                missing_since = NULL
             """,
             arguments: [
                 episode.id, episode.feedGuid, subscriptionId,
@@ -96,62 +96,74 @@ extension DatabaseManager {
         )
     }
 
-    /// Consecutive successful refreshes an episode must be absent from before it is
-    /// flagged `RemovedFromFeed`. One absence is not enough: a truncated or stale
-    /// response (a CDN glitch, a feed briefly serving only its newest items) would
-    /// otherwise flag most of a feed removed, leaving those episodes un-downloadable
-    /// until they reappear. Requiring a second consecutive miss shrugs off a one-off
-    /// glitch while still catching a feed that genuinely dropped an episode.
-    static let refreshesBeforeRemoval = 2
+    /// How long an episode must have been continuously absent from its feed, in wall time,
+    /// before it is flagged `RemovedFromFeed`. Flagging on a single absence would let one
+    /// truncated or stale response (a CDN glitch, a feed briefly serving only its newest
+    /// items) mark most of a feed removed, leaving those episodes un-downloadable until
+    /// they reappear. Counting refreshes isn't enough either: a few quick manual refreshes
+    /// during the same incident would all see the same bad response. Elapsed time is:
+    /// an episode is only flagged if a refresh at least this long after it was first
+    /// missed still doesn't see it. A feed that really dropped an episode is flagged by
+    /// the first refresh after the window (a latest-only feed included).
+    static let removalGraceSeconds: Int64 = 48 * 3600
 
-    /// Writes a feed's episodes and reconciles the ones it no longer lists: count a miss
-    /// against every stored episode, upsert (which resets the miss count of each episode
-    /// still in the feed, leaving only the absent ones incremented), then flag those that
-    /// have now been absent long enough. An empty list is far more likely a broken
-    /// response than every episode being deleted, so it neither counts as a miss nor
+    /// Writes a feed's episodes and reconciles the ones it no longer lists: start a miss
+    /// clock for every stored episode that doesn't have one, upsert (which clears the clock
+    /// of each episode still in the feed, leaving only the absent ones running), then flag
+    /// those whose clock has run for the grace period. An empty list is far more likely a
+    /// broken response than every episode being deleted, so it neither starts a clock nor
     /// flags anything.
-    static func upsertFeedEpisodes(_ episodes: [Episode], subscriptionId: String, db: Database) throws {
+    static func upsertFeedEpisodes(
+        _ episodes: [Episode], subscriptionId: String, now: Int64, db: Database,
+    ) throws {
         let reconcile = !episodes.isEmpty
         if reconcile {
-            try countMissedRefresh(subscriptionId: subscriptionId, db: db)
+            try startMissClock(subscriptionId: subscriptionId, now: now, db: db)
         }
         for episode in episodes {
             try upsertEpisodeRow(episode, subscriptionId: subscriptionId, db: db)
         }
         if reconcile {
-            try flagEpisodesRemovedFromFeed(subscriptionId: subscriptionId, db: db)
+            try flagEpisodesRemovedFromFeed(subscriptionId: subscriptionId, now: now, db: db)
         }
     }
 
-    /// Step one of reconciling a refresh: count a miss against every episode of the
-    /// feed. The episode upsert that follows resets the counter of each one still in
-    /// the feed, so only the absent episodes end up incremented. The count is capped at
-    /// the threshold so it can't grow without bound on a long-removed episode.
-    static func countMissedRefresh(subscriptionId: String, db: Database) throws {
+    /// Step one of reconciling a refresh: record `now` as the time each of the feed's
+    /// episodes was first missed, unless a clock is already running. The episode upsert
+    /// that follows clears it for each one still in the feed, so only the absent episodes
+    /// keep it. A clock in the future (the wall clock was ahead and has since been
+    /// corrected) is restarted at `now`; left alone it could hold an episode back, or
+    /// release it early, by as much as the clock error.
+    static func startMissClock(subscriptionId: String, now: Int64, db: Database) throws {
         try db.execute(
             sql: """
             UPDATE episodes
-            SET missing_refreshes = MIN(missing_refreshes + 1, ?)
+            SET missing_since = CASE
+                WHEN missing_since IS NULL OR missing_since > ? THEN ?
+                ELSE missing_since
+            END
             WHERE subscription_id = ?
             """,
-            arguments: [refreshesBeforeRemoval, subscriptionId],
+            arguments: [now, now, subscriptionId],
         )
     }
 
-    /// Step two: flag episodes that have now been absent for `refreshesBeforeRemoval`
-    /// consecutive refreshes. Only rows with nothing to lose are flagged
-    /// (`NotDownloaded`/`Failed`): a downloaded, queued, or in-flight episode keeps its
-    /// state so its file stays playable and its download isn't orphaned.
-    static func flagEpisodesRemovedFromFeed(subscriptionId: String, db: Database) throws {
+    /// Step two: flag episodes that have been missing for at least the grace period. Only
+    /// rows with nothing to lose are flagged (`NotDownloaded`/`Failed`): a downloaded,
+    /// queued, or in-flight episode keeps its state so its file stays playable and its
+    /// download isn't orphaned. Its clock keeps running, so if the file is deleted later
+    /// the next refresh flags it.
+    static func flagEpisodesRemovedFromFeed(subscriptionId: String, now: Int64, db: Database) throws {
         try db.execute(
             sql: """
             UPDATE episodes
             SET download_status = 'RemovedFromFeed'
             WHERE subscription_id = ?
-              AND missing_refreshes >= ?
+              AND missing_since IS NOT NULL
+              AND missing_since <= ?
               AND download_status IN ('NotDownloaded', 'Failed')
             """,
-            arguments: [subscriptionId, refreshesBeforeRemoval],
+            arguments: [subscriptionId, now - removalGraceSeconds],
         )
     }
 

@@ -69,15 +69,17 @@ need care:
   feed's value is the freshest available and is written.
 - `download_status` — an episode flagged `RemovedFromFeed` that reappears in the
   feed returns to `NotDownloaded`. Episodes that drop out of the feed are flagged
-  only after two consecutive refreshes without them, and only if they are
-  `NotDownloaded` or `Failed`; see `features/subscription.md`, "De-listed
-  Episodes".
-- `missing_refreshes` — storage-only counter (the `v3_missing_refreshes`
-  migration; the core never sees it) of consecutive successful refreshes an
-  episode has been absent from. Every refresh with a non-empty feed bumps it for
-  all of the subscription's episodes, capped at the threshold, and the upsert
-  resets it to 0 for the ones still present, so only absent episodes keep the
-  increment.
+  only after being absent for 48 hours, and only if they are `NotDownloaded` or
+  `Failed`; see `features/subscription.md`, "De-listed Episodes".
+- `missing_since` — storage-only (the `v4_missing_since` migration; the core
+  never sees it): the unix time an episode was first missed by a refresh, or NULL
+  while it is present. Every refresh with a non-empty feed starts a clock for each
+  of the subscription's episodes that doesn't have one, and the upsert clears it
+  for the ones still present, so only absent episodes keep it. An episode is
+  flagged once its clock is at least `removalGraceSeconds` (48 hours) old. It
+  replaced the v3 `missing_refreshes` counter, which counted refreshes instead of
+  time; v3 stays in the migration history because databases may already have run
+  it.
 
 #### Identity across refreshes
 

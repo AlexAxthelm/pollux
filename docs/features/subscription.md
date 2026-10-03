@@ -230,22 +230,30 @@ When an episode is no longer present in a feed's RSS/Atom/JSONFeed:
 - If the episode audio file is still on device, it remains playable
 - Episode is marked with "Removed from feed" status (see `episode.md`)
 
-As built, an episode is marked `RemovedFromFeed` only after it has been absent
-from **two consecutive successful refreshes**. A single absence is not enough: a
-truncated or stale response (a CDN glitch, a feed briefly serving only its newest
-items) would otherwise mark most of a feed removed, and removed episodes cannot
-be downloaded until they reappear. Two misses in a row shrug off a one-off glitch
-but still catch a feed that genuinely dropped an episode, including a
-"latest episode only" feed, where every older episode goes after two refreshes.
-The count must be consecutive: missing, present, missing is two separate single
-misses.
+As built, an episode is marked `RemovedFromFeed` only once it has been
+**continuously absent for 48 hours of wall time**: the first refresh that doesn't
+see it starts a clock, and an episode is flagged only if a refresh at least 48
+hours later still doesn't see it. A single absence is not enough: a truncated or
+stale response (a CDN glitch, a feed briefly serving only its newest items) would
+otherwise mark most of a feed removed, and removed episodes cannot be downloaded
+until they reappear. The window is time rather than a count of refreshes because
+a count is reached in minutes: during one stale-cache incident a user pulling to
+refresh a few times would see the same bad response each time. A feed that
+genuinely dropped an episode is flagged by the first refresh after the window,
+including a "latest episode only" feed, where every older episode goes after 48
+hours.
+
+The clock restarts whenever the episode reappears: missing, present, missing is
+two separate absences, not one long one. A clock recorded in the future (the wall
+clock was ahead and has since been corrected) is restarted at the true time rather
+than trusted.
 
 Only `NotDownloaded` or `Failed` episodes are flagged. A downloaded, queued, or
 in-flight episode keeps its state so its file stays playable and its download is
-not orphaned; its miss count keeps running, so if the file is later deleted the
-next refresh flags it. If a marked episode reappears in the feed it returns to
+not orphaned; its clock keeps running, so if the file is later deleted the next
+refresh flags it. If a marked episode reappears in the feed it returns to
 `NotDownloaded`. A refresh that returns an **empty** feed marks nothing and does
-not count as a miss, since that is far more likely a broken response than every
+not start a clock, since that is far more likely a broken response than every
 episode being deleted. The episode list does not yet hide removed episodes or
 offer the "Show unavailable episodes" toggle.
 

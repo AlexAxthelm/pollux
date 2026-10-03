@@ -17,8 +17,12 @@ enum DatabaseManagerError: Error, LocalizedError {
 
 actor DatabaseManager {
     private let db: DatabasePool
+    /// Wall clock, injectable so tests can move time (the removed-from-feed rule is
+    /// time-based).
+    private let now: @Sendable () -> Date
 
     init() throws {
+        now = Date.init
         guard let support = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask,
         ).first else {
@@ -30,70 +34,10 @@ actor DatabaseManager {
     }
 
     /// Accepts an explicit path — use this in tests to point at a temp file.
-    init(path: String) throws {
+    init(path: String, now: @escaping @Sendable () -> Date = Date.init) throws {
+        self.now = now
         db = try DatabasePool(path: path)
         try Self.runMigrations(db)
-    }
-
-    // MARK: - Migrations
-
-    private static func runMigrations(_ db: DatabasePool) throws {
-        var migrator = DatabaseMigrator()
-        migrator.registerMigration("v1_initial") { db in
-            try db.create(table: "subscriptions") { t in
-                t.column("id", .text).primaryKey()
-                t.column("feed_url", .text).notNull().unique()
-                t.column("title", .text).notNull()
-                t.column("artwork_url", .text)
-                t.column("description", .text)
-                t.column("last_refreshed", .integer)
-                t.column("created_at", .integer).notNull()
-            }
-            try db.create(table: "episodes") { t in
-                t.column("id", .text).primaryKey()
-                t.column("feed_guid", .text).notNull()
-                t.column("subscription_id", .text).notNull()
-                    .references("subscriptions", column: "id", onDelete: .cascade)
-                t.column("title", .text).notNull()
-                t.column("description", .text)
-                t.column("pub_date", .integer)
-                t.column("duration_secs", .integer).check(sql: "duration_secs >= 0")
-                t.column("enclosure_url", .text).notNull()
-                t.column("artwork_url", .text)
-                t.column("playback_status", .text).notNull().defaults(to: "Unplayed")
-                t.column("playback_position_secs", .integer).check(sql: "playback_position_secs >= 0")
-                t.column("download_status", .text).notNull().defaults(to: "NotDownloaded")
-                t.column("is_flagged", .boolean).notNull().defaults(to: false)
-                t.column("file_size_bytes", .integer).check(sql: "file_size_bytes >= 0")
-                t.column("local_path", .text)
-                t.uniqueKey(["subscription_id", "feed_guid"])
-            }
-            try db.create(
-                index: "episodes_subscription_id",
-                on: "episodes",
-                columns: ["subscription_id"],
-            )
-        }
-        // Refresh bookkeeping: conditional-GET validators, the last refresh failure, and
-        // the time before which a rate-limited host asked not to be hit again.
-        migrator.registerMigration("v2_refresh") { db in
-            try db.alter(table: "subscriptions") { t in
-                t.add(column: "etag", .text)
-                t.add(column: "last_modified", .text)
-                t.add(column: "last_refresh_error", .text)
-                t.add(column: "retry_after_until", .integer)
-            }
-        }
-        // How many consecutive successful refreshes an episode has been absent from its
-        // feed. Flagging on a single absence would let one truncated response mark
-        // most of a feed removed, so an episode is only flagged once this reaches
-        // `refreshesBeforeRemoval`. Storage-only: the core never sees it.
-        migrator.registerMigration("v3_missing_refreshes") { db in
-            try db.alter(table: "episodes") { t in
-                t.add(column: "missing_refreshes", .integer).notNull().defaults(to: 0)
-            }
-        }
-        try migrator.migrate(db)
     }
 
     // MARK: - Execute
@@ -176,7 +120,8 @@ actor DatabaseManager {
     }
 
     private func upsertFeedWithEpisodes(subscription: Subscription, episodes: [Episode]) async throws -> StorageResult {
-        try await db.write { db -> StorageResult in
+        let nowSecs = Int64(now().timeIntervalSince1970)
+        return try await db.write { db -> StorageResult in
             try Self.upsertSubscriptionRow(subscription, db: db)
             guard let subRow = try Row.fetchOne(
                 db,
@@ -192,7 +137,7 @@ actor DatabaseManager {
                 )
             }
             let canonical = Self.subscription(from: subRow)
-            try Self.upsertFeedEpisodes(episodes, subscriptionId: canonical.id, db: db)
+            try Self.upsertFeedEpisodes(episodes, subscriptionId: canonical.id, now: nowSecs, db: db)
             return .subscription(canonical)
         }
     }
