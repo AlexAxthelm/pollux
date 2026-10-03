@@ -928,18 +928,35 @@ fn enqueue_in_library_order(model: &mut Model, include: impl Fn(&Subscription) -
     }
 }
 
-/// Queues every feed that is due for an automatic refresh: not refreshed within the
-/// interval (or never) and not inside a `retry_after_until` backoff.
+/// Queues every feed that is due for an automatic refresh (see `is_due_for_auto_refresh`).
 fn enqueue_due_refreshes(model: &mut Model) {
     let now = now_unix();
+    enqueue_in_library_order(model, |s| is_due_for_auto_refresh(s, now));
+}
+
+/// Whether `sub` is due for an *automatic* refresh at `now`: never refreshed or last
+/// refreshed at least `REFRESH_INTERVAL_HOURS` ago, and not inside a backoff.
+///
+/// Both timestamps are wall-clock values written earlier, so they can be wrong in a way
+/// that would otherwise keep a feed out of auto-refresh for as long as the error is large:
+///
+/// - A `last_refreshed` in the future means the clock was ahead (or has since stepped
+///   back) when it was written. A bare `now - last_refreshed >= interval` would stay
+///   false until real time reached it, so a feed stamped a year ahead would never refresh.
+///   It is treated as stale; a conditional GET makes the redundant fetch cheap, and the
+///   result stamps a correct time.
+/// - A `retry_after_until` is never written more than `MAX_RETRY_AFTER_SECS` ahead of the
+///   clock at the time, and the clock only moves forward in normal use, so one further
+///   out than that can only be skew. It is ignored rather than honoured for a year.
+fn is_due_for_auto_refresh(sub: &Subscription, now: i64) -> bool {
     let interval = i64::from(REFRESH_INTERVAL_HOURS) * 3600;
-    enqueue_in_library_order(model, |s| {
-        let stale = s
-            .last_refreshed
-            .is_none_or(|t| now.saturating_sub(t) >= interval);
-        let backing_off = s.retry_after_until.is_some_and(|t| t > now);
-        stale && !backing_off
-    });
+    let stale = sub
+        .last_refreshed
+        .is_none_or(|t| t > now || now.saturating_sub(t) >= interval);
+    let backing_off = sub
+        .retry_after_until
+        .is_some_and(|t| t > now && t.saturating_sub(now) <= MAX_RETRY_AFTER_SECS);
+    stale && !backing_off
 }
 
 /// How long to leave a feed alone after a 429: the host's `Retry-After` when it sent one,
@@ -3262,6 +3279,106 @@ mod tests {
         pending.extend(model.refreshing.clone());
         pending.sort();
         assert_eq!(pending, vec!["never".to_string(), "old".to_string()]);
+    }
+
+    fn due_sub(last_refreshed: Option<i64>, retry_after_until: Option<i64>) -> Subscription {
+        let mut s = make_subscription("a", "a");
+        s.last_refreshed = last_refreshed;
+        s.retry_after_until = retry_after_until;
+        s
+    }
+
+    // Fixed "now" so these don't depend on the real clock.
+    const NOW: i64 = 1_800_000_000;
+
+    #[test]
+    fn a_last_refreshed_in_the_future_counts_as_stale() {
+        // Stamped while the clock was ahead, then the clock was corrected: without this
+        // the feed would stay not-due until real time reached the stored value.
+        assert!(is_due_for_auto_refresh(
+            &due_sub(Some(NOW + 365 * 24 * 3600), None),
+            NOW
+        ));
+        assert!(is_due_for_auto_refresh(&due_sub(Some(NOW + 1), None), NOW));
+    }
+
+    #[test]
+    fn a_recent_last_refreshed_is_still_not_due() {
+        assert!(!is_due_for_auto_refresh(&due_sub(Some(NOW), None), NOW));
+        assert!(!is_due_for_auto_refresh(
+            &due_sub(Some(NOW - HOUR), None),
+            NOW
+        ));
+        assert!(!is_due_for_auto_refresh(
+            &due_sub(Some(NOW - 12 * HOUR + 1), None),
+            NOW
+        ));
+        assert!(is_due_for_auto_refresh(
+            &due_sub(Some(NOW - 12 * HOUR), None),
+            NOW
+        ));
+        assert!(is_due_for_auto_refresh(&due_sub(None, None), NOW));
+    }
+
+    #[test]
+    fn a_retry_after_further_out_than_the_cap_is_ignored_as_skew() {
+        let stale = Some(NOW - 24 * HOUR);
+        // Wrote a year of backoff under a fast clock; now `now` is correct.
+        assert!(is_due_for_auto_refresh(
+            &due_sub(stale, Some(NOW + 365 * 24 * 3600)),
+            NOW
+        ));
+        assert!(is_due_for_auto_refresh(
+            &due_sub(stale, Some(NOW + MAX_RETRY_AFTER_SECS + 1)),
+            NOW
+        ));
+    }
+
+    #[test]
+    fn a_legitimate_backoff_is_still_honoured_up_to_the_cap() {
+        let stale = Some(NOW - 24 * HOUR);
+        assert!(!is_due_for_auto_refresh(
+            &due_sub(stale, Some(NOW + 600)),
+            NOW
+        ));
+        assert!(
+            !is_due_for_auto_refresh(&due_sub(stale, Some(NOW + MAX_RETRY_AFTER_SECS)), NOW),
+            "exactly the cap is the longest value we ever write"
+        );
+        // Expired or exactly now: no longer backing off.
+        assert!(is_due_for_auto_refresh(&due_sub(stale, Some(NOW)), NOW));
+        assert!(is_due_for_auto_refresh(&due_sub(stale, Some(NOW - 1)), NOW));
+    }
+
+    #[test]
+    fn extreme_timestamps_do_not_overflow() {
+        assert!(is_due_for_auto_refresh(&due_sub(Some(i64::MIN), None), NOW));
+        assert!(is_due_for_auto_refresh(&due_sub(Some(i64::MAX), None), NOW));
+        assert!(is_due_for_auto_refresh(
+            &due_sub(Some(NOW - 24 * HOUR), Some(i64::MAX)),
+            NOW
+        ));
+    }
+
+    #[test]
+    fn auto_refresh_recovers_a_feed_stamped_in_the_future() {
+        let app = Pollux;
+        let mut skewed = sub_refreshed("a", None);
+        skewed.last_refreshed = Some(now_unix() + 365 * 24 * 3600);
+        skewed.retry_after_until = Some(now_unix() + 365 * 24 * 3600);
+        let mut model = loaded_model(vec![skewed]);
+
+        let mut cmd = app.update(Event::RefreshStale, &mut model);
+
+        assert_eq!(http_ops(&mut cmd).len(), 1, "the skewed feed is refreshed");
+
+        // A 304 stamps a correct time, so it isn't stuck again afterwards.
+        let _ = app.update(fetched("a", response(304, vec![])), &mut model);
+        let sub = &model.subscriptions[0];
+        assert!(sub.last_refreshed <= Some(now_unix()));
+        assert!(sub.retry_after_until.is_none());
+        let mut again = app.update(Event::RefreshStale, &mut model);
+        assert!(http_ops(&mut again).is_empty(), "now properly fresh");
     }
 
     #[test]

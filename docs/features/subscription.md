@@ -114,6 +114,15 @@ or `last_refreshed` is 12 or more hours ago (`REFRESH_INTERVAL_HOURS`), **and**
 its `retry_after_until` has passed. Manual refresh (details page, Refresh all)
 ignores the backoff: an explicit request wins.
 
+Both timestamps are wall-clock values written earlier, so the check tolerates
+them being wrong. A `last_refreshed` **in the future** (the clock was ahead, or
+has since been corrected) counts as stale, since otherwise the feed would stay
+not-due until real time reached it; the redundant fetch is a cheap conditional
+GET and stamps a correct time. A `retry_after_until` **further ahead than the
+24 hour cap** can only be skew (nothing is ever written that far out) and is
+ignored rather than honoured. A small clock step back therefore costs at most one
+extra conditional GET.
+
 If `RefreshStale` arrives before the library has loaded (cold launch), the core
 holds the request and honours it when the subscriptions arrive. If that load
 failed (a storage error at launch), nothing else would ever retry it, so the next
