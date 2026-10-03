@@ -140,11 +140,23 @@ same limit.
 
 | Result | Effect |
 |---|---|
-| 200 | Parse, upsert (see `DATA_MODEL.md`), store new validators, clear the error and backoff, reload the open feed's episodes |
+| 200 | Parse, carry over any title, artwork or description the response lacks (below), upsert (see `DATA_MODEL.md`), store new validators, clear the error and backoff, reload the open feed's episodes |
 | 304 | Only `last_refreshed` moves; error and backoff cleared; episodes untouched |
 | 429 | `retry_after_until` = now + `Retry-After` (seconds or HTTP-date, normalized to seconds by the shell), or 1 hour (`RATE_LIMIT_BACKOFF_SECS`) if absent. Capped at 24 hours (`MAX_RETRY_AFTER_SECS`), so a host asking for a year (or a typo) can't silence auto-refresh for that feed indefinitely; a value too large to represent clamps to the cap rather than falling back to the 1 hour default |
 | Device can't reach the network (`HttpResult::Unreachable`: offline, cellular data off, roaming off, on a call, connection lost mid-request) | `last_refresh_error` recorded; **no backoff** and any existing one is left as it was. Nothing is wrong with the feed, and backing it off would keep auto-refresh away for 15 minutes after connectivity returns, for every feed at once |
 | Other status, host-side network error (refused, TLS, timeout, DNS), unparseable body, failed save | `last_refresh_error` recorded; `retry_after_until` = now + 15 minutes (`FAILURE_BACKOFF_SECS`) so a broken feed isn't retried on every foreground |
+
+**Metadata survives a degraded response.** The upsert writes the parsed title,
+artwork and description as-is, and `parse_feed` yields "no value" for a feed
+without them (the title falls back to the feed URL; artwork and description are
+empty). Left alone, a trimmed or half-edited response would rename a feed to its
+URL (reordering the library) and drop its artwork until the next refresh. So
+`Subscription::inherit_missing_metadata` fills each of those three from the stored
+subscription when the response lacks it, field by field, on both the refresh and
+re-subscribe paths. A value the response does provide always wins, so a publisher
+changing its title or artwork is still picked up. The trade-off is that a
+publisher *removing* its artwork or description is not noticed; a stale image or
+blurb is harmless and a lost one is not.
 
 The shell decides which `URLError` codes count as the device being offline
 (`FeedFetcher.deviceConnectivityCodes`). Timeouts, DNS failures and refused

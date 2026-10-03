@@ -139,6 +139,13 @@ impl App for Pollux {
                     ..
                 } => match parse_feed(&url, body) {
                     Ok((mut subscription, episodes)) => {
+                        // Re-adding a feed we already have goes through the same upsert
+                        // as a refresh, so it gets the same protection.
+                        if let Some(existing) =
+                            model.subscriptions.iter().find(|s| s.feed_url == url)
+                        {
+                            subscription.inherit_missing_metadata(existing);
+                        }
                         // Keep the validators so the first refresh can be conditional.
                         subscription.etag = etag;
                         subscription.last_modified = last_modified;
@@ -261,6 +268,9 @@ impl App for Pollux {
                         ..
                     } => match parse_feed(&sub.feed_url, body) {
                         Ok((mut fresh, episodes)) => {
+                            // A partial response must not wipe the title, artwork or
+                            // description we already have (storage writes these as-is).
+                            fresh.inherit_missing_metadata(&sub);
                             fresh.etag = etag;
                             fresh.last_modified = last_modified;
                             Command::request_from_shell(StorageOperation::UpsertFeedWithEpisodes {
@@ -2933,6 +2943,129 @@ mod tests {
         )));
         // Still in flight until the save resolves.
         assert_eq!(model.refreshing.as_deref(), Some("a"));
+    }
+
+    /// A feed that parses fine but carries no channel title, description or image, like a
+    /// degraded or partial response.
+    const BARE_RSS: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+  <link>https://example.com</link>
+  <item>
+    <title>Episode 1</title>
+    <guid>episode-1-guid</guid>
+    <enclosure url="https://example.com/ep1.mp3" type="audio/mpeg" length="1"/>
+  </item>
+</channel>
+</rss>"#;
+
+    fn known_subscription(id: &str) -> Subscription {
+        let mut s = make_subscription(id, "Real Title");
+        s.artwork_url = Some("https://example.com/art.png".to_string());
+        s.description = Some("About the show".to_string());
+        s
+    }
+
+    /// The subscription carried by the `UpsertFeedWithEpisodes` a command emitted.
+    fn upserted_subscription(cmd: &mut Command<Effect, Event>) -> Subscription {
+        storage_ops(cmd)
+            .into_iter()
+            .find_map(|o| match o {
+                StorageOperation::UpsertFeedWithEpisodes { subscription, .. } => Some(subscription),
+                _ => None,
+            })
+            .expect("expected an UpsertFeedWithEpisodes effect")
+    }
+
+    #[test]
+    fn a_refresh_response_without_metadata_keeps_the_stored_title_artwork_and_description() {
+        let app = Pollux;
+        let mut model = model_with_subs(&[]);
+        model.subscriptions.push(known_subscription("a"));
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let mut cmd = app.update(
+            fetched("a", response(200, BARE_RSS.as_bytes().to_vec())),
+            &mut model,
+        );
+
+        let saved = upserted_subscription(&mut cmd);
+        assert_eq!(saved.title, "Real Title", "not renamed to the feed URL");
+        assert_eq!(
+            saved.artwork_url.as_deref(),
+            Some("https://example.com/art.png")
+        );
+        assert_eq!(saved.description.as_deref(), Some("About the show"));
+    }
+
+    #[test]
+    fn a_refresh_response_with_new_metadata_replaces_it_field_by_field() {
+        let app = Pollux;
+        let mut model = model_with_subs(&[]);
+        model.subscriptions.push(known_subscription("a"));
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        // MINIMAL_RSS has a title and description but no image.
+        let mut cmd = app.update(
+            fetched("a", response(200, MINIMAL_RSS.as_bytes().to_vec())),
+            &mut model,
+        );
+
+        let saved = upserted_subscription(&mut cmd);
+        assert_eq!(
+            saved.title, "Test Podcast",
+            "the publisher's new title wins"
+        );
+        assert_eq!(saved.description.as_deref(), Some("A test feed"));
+        assert_eq!(
+            saved.artwork_url.as_deref(),
+            Some("https://example.com/art.png"),
+            "no image in the response, so the known one stays"
+        );
+    }
+
+    #[test]
+    fn re_adding_an_existing_feed_keeps_its_metadata_too() {
+        let app = Pollux;
+        let mut model = model_with_subs(&[]);
+        model.subscriptions.push(known_subscription("a"));
+        model.loading = true;
+
+        let mut cmd = app.update(
+            Event::FeedFetched {
+                url: "https://example.com/a.rss".to_string(),
+                result: Box::new(response(200, BARE_RSS.as_bytes().to_vec())),
+            },
+            &mut model,
+        );
+
+        let saved = upserted_subscription(&mut cmd);
+        assert_eq!(saved.title, "Real Title");
+        assert_eq!(
+            saved.artwork_url.as_deref(),
+            Some("https://example.com/art.png")
+        );
+    }
+
+    #[test]
+    fn a_brand_new_feed_without_a_title_still_falls_back_to_its_url() {
+        let app = Pollux;
+        let mut model = Model {
+            loading: true,
+            ..Model::default()
+        };
+
+        let mut cmd = app.update(
+            Event::FeedFetched {
+                url: "https://example.com/new.rss".to_string(),
+                result: Box::new(response(200, BARE_RSS.as_bytes().to_vec())),
+            },
+            &mut model,
+        );
+
+        let saved = upserted_subscription(&mut cmd);
+        assert_eq!(saved.title, "https://example.com/new.rss");
+        assert!(saved.artwork_url.is_none());
     }
 
     #[test]
