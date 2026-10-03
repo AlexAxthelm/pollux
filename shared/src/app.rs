@@ -3140,7 +3140,10 @@ mod tests {
         let mut done = app.update(fetched("a", response(304, vec![])), &mut model);
         assert!(http_ops(&mut done).is_empty(), "no next feed after cancel");
         assert!(model.refreshing.is_none());
-        assert!(model.subscriptions[0].last_refreshed.unwrap() > now_unix() - 5);
+        assert!(
+            model.subscriptions[0].last_refreshed > Some(now_unix() - 5),
+            "the in-flight fetch's 304 still records its timestamp"
+        );
         assert!(!app.view(&model).library.refreshing);
         assert!(
             model.subscriptions[1].last_refreshed < Some(now_unix() - 23 * HOUR),
