@@ -290,14 +290,18 @@ impl App for Pollux {
                             Some(failure_backoff_until()),
                         ),
                     },
-                    // Unchanged since the validators we sent: only the timestamp moves.
-                    HttpResult::Response { status: 304, .. } => record_refresh_outcome(
-                        model,
-                        &subscription_id,
-                        Some(now_unix()),
-                        None,
-                        None,
-                    ),
+                    // Unchanged since the validators we sent: only the timestamp moves,
+                    // unless the open feed's list is stale from a failed reload.
+                    HttpResult::Response { status: 304, .. } => {
+                        let outcome = record_refresh_outcome(
+                            model,
+                            &subscription_id,
+                            Some(now_unix()),
+                            None,
+                            None,
+                        );
+                        outcome.and(reload_if_open_list_is_stale(model, &subscription_id))
+                    }
                     HttpResult::Response {
                         status: 429,
                         retry_after_secs,
@@ -337,16 +341,7 @@ impl App for Pollux {
                         // the open feed's episodes explicitly. No `detail_loading`: the
                         // existing list stays on screen while the new rows load.
                         model.selected_subscription = Some(saved);
-                        let id = subscription_id.clone();
-                        cmd = Command::request_from_shell(
-                            StorageOperation::ListEpisodesBySubscription {
-                                subscription_id: id.clone(),
-                            },
-                        )
-                        .then_send(move |r| Event::EpisodesLoaded {
-                            subscription_id: id.clone(),
-                            result: Box::new(r),
-                        });
+                        cmd = load_episodes(&subscription_id);
                     }
                     cmd.and(maybe_start_next_refresh(model)).and(render())
                 }
@@ -382,12 +377,18 @@ impl App for Pollux {
                 // episodes changed since the last load. A feed refresh therefore
                 // reloads the open feed's episodes explicitly (see `RefreshSaved`)
                 // rather than relying on re-selection. See docs/features/subscription.md.
-                let already_showing = model
+                let same_feed = model
                     .selected_subscription
                     .as_ref()
-                    .is_some_and(|s| s.id == id)
-                    && model.detail_error.is_none();
-                if already_showing {
+                    .is_some_and(|s| s.id == id);
+                let already_showing = same_feed && model.detail_error.is_none();
+                if already_showing && model.list_notice.is_some() {
+                    // The list on screen is stale because a post-refresh reload failed,
+                    // and the banner says so. Re-entering the feed is the user's retry:
+                    // reload in place, keeping the rows visible (no spinner, no cleared
+                    // list). Success clears the notice; failure leaves it.
+                    load_episodes(&id).and(render())
+                } else if already_showing {
                     render()
                 } else {
                     // Remember the chosen feed (for the details header) from the
@@ -400,14 +401,7 @@ impl App for Pollux {
                     // A notice from the previous feed doesn't apply to this one.
                     model.download_notice = None;
                     model.list_notice = None;
-                    Command::request_from_shell(StorageOperation::ListEpisodesBySubscription {
-                        subscription_id: id.clone(),
-                    })
-                    .then_send(move |r| Event::EpisodesLoaded {
-                        subscription_id: id,
-                        result: Box::new(r),
-                    })
-                    .and(render())
+                    load_episodes(&id).and(render())
                 }
             }
             Event::EpisodesLoaded {
@@ -899,6 +893,36 @@ fn maybe_start_next(model: &mut Model) -> Command<Effect, Event> {
         result: Box::new(r),
     });
     persist.and(download)
+}
+
+/// Asks storage for a feed's episodes; the result comes back as `EpisodesLoaded`, which
+/// ignores it if that feed is no longer the one on screen.
+fn load_episodes(subscription_id: &str) -> Command<Effect, Event> {
+    let id = subscription_id.to_string();
+    Command::request_from_shell(StorageOperation::ListEpisodesBySubscription {
+        subscription_id: id.clone(),
+    })
+    .then_send(move |r| Event::EpisodesLoaded {
+        subscription_id: id.clone(),
+        result: Box::new(r),
+    })
+}
+
+/// A refresh that found nothing new (a 304) normally leaves the episode list alone. But
+/// if the open feed's list is flagged stale because an earlier reload failed, the 304
+/// is the chance to fix it: the stored episodes are newer than what's on screen, so
+/// reload them now. Any other feed, or a list not flagged stale, needs nothing.
+fn reload_if_open_list_is_stale(model: &Model, refreshed_id: &str) -> Command<Effect, Event> {
+    let open_and_stale = model.list_notice.is_some()
+        && model
+            .selected_subscription
+            .as_ref()
+            .is_some_and(|s| s.id == refreshed_id);
+    if open_and_stale {
+        load_episodes(refreshed_id)
+    } else {
+        Command::done()
+    }
 }
 
 /// Records that loading the open feed's episodes failed. With nothing on screen yet (the
@@ -1986,6 +2010,201 @@ mod tests {
             view.library.subscriptions[0].refresh_error.is_none(),
             "the refresh succeeded; only the display reload failed"
         );
+    }
+
+    fn model_with_a_stale_list() -> Model {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Error("db busy".to_string()),
+        );
+        assert!(model.list_notice.is_some());
+        model
+    }
+
+    fn lists_episodes(ops: &[StorageOperation]) -> bool {
+        ops.iter()
+            .any(|o| matches!(o, StorageOperation::ListEpisodesBySubscription { .. }))
+    }
+
+    #[test]
+    fn re_entering_a_feed_with_a_stale_list_retries_the_load_in_place() {
+        let app = Pollux;
+        let mut model = model_with_a_stale_list();
+
+        let mut cmd = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+
+        assert!(
+            lists_episodes(&storage_ops(&mut cmd)),
+            "the reload is retried"
+        );
+        assert_eq!(model.episodes.len(), 2, "the rows stay on screen meanwhile");
+        assert!(!model.detail_loading, "no spinner: this isn't a first load");
+        assert!(model.detail_error.is_none());
+    }
+
+    #[test]
+    fn a_successful_retry_clears_the_banner_and_updates_the_list() {
+        let app = Pollux;
+        let mut model = model_with_a_stale_list();
+        let _ = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Episodes(vec![
+                make_episode("e1", "First", Some(3_000)),
+                make_episode("e2", "Second", Some(2_000)),
+                make_episode("e3", "Newly arrived", Some(1_000)),
+            ]),
+        );
+
+        assert!(model.list_notice.is_none());
+        assert_eq!(
+            model.episodes.len(),
+            3,
+            "the episodes the failed reload missed"
+        );
+    }
+
+    #[test]
+    fn a_failing_retry_keeps_the_rows_and_the_banner() {
+        let app = Pollux;
+        let mut model = model_with_a_stale_list();
+        let _ = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Error("still busy".to_string()),
+        );
+
+        assert_eq!(model.episodes.len(), 2);
+        assert!(
+            model.detail_error.is_none(),
+            "never an error screen over a list"
+        );
+        assert!(model
+            .list_notice
+            .as_deref()
+            .is_some_and(|n| n.contains("still busy")));
+    }
+
+    #[test]
+    fn re_entering_a_feed_without_a_banner_is_still_a_no_op() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+
+        let mut cmd = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+
+        assert!(
+            storage_ops(&mut cmd).is_empty(),
+            "no reload, no flash of a spinner"
+        );
+        assert_eq!(model.episodes.len(), 2);
+    }
+
+    #[test]
+    fn a_304_refresh_of_the_open_feed_reloads_a_stale_list() {
+        let app = Pollux;
+        let mut model = model_with_a_stale_list();
+        let _ = app.update(Event::RefreshSubscription("sub-id".to_string()), &mut model);
+
+        let mut cmd = app.update(fetched("sub-id", response(304, vec![])), &mut model);
+
+        assert!(
+            lists_episodes(&storage_ops(&mut cmd)),
+            "the 304 is the chance to fix the stale list"
+        );
+        assert!(
+            model.refreshing.is_none(),
+            "the refresh itself finished normally"
+        );
+    }
+
+    #[test]
+    fn a_304_refresh_leaves_a_list_that_is_not_stale_alone() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+        let _ = app.update(Event::RefreshSubscription("sub-id".to_string()), &mut model);
+
+        let mut cmd = app.update(fetched("sub-id", response(304, vec![])), &mut model);
+
+        assert!(
+            !lists_episodes(&storage_ops(&mut cmd)),
+            "nothing new, nothing to reload"
+        );
+    }
+
+    #[test]
+    fn a_304_refresh_of_another_feed_does_not_reload_the_open_list() {
+        let app = Pollux;
+        let mut model = model_with_a_stale_list();
+        model
+            .subscriptions
+            .push(make_subscription("other", "Other"));
+        let _ = app.update(Event::RefreshSubscription("other".to_string()), &mut model);
+
+        let mut cmd = app.update(fetched("other", response(304, vec![])), &mut model);
+
+        assert!(!lists_episodes(&storage_ops(&mut cmd)));
+        assert!(
+            model.list_notice.is_some(),
+            "the open feed's banner is untouched"
+        );
+    }
+
+    #[test]
+    fn a_failed_refresh_does_not_reload_the_stale_list() {
+        // Only a successful refresh says the stored episodes are current.
+        let app = Pollux;
+        let mut model = model_with_a_stale_list();
+        let _ = app.update(Event::RefreshSubscription("sub-id".to_string()), &mut model);
+
+        let mut cmd = app.update(
+            fetched("sub-id", HttpResult::Error("refused".to_string())),
+            &mut model,
+        );
+
+        assert!(!lists_episodes(&storage_ops(&mut cmd)));
+    }
+
+    #[test]
+    fn the_stuck_banner_scenario_from_the_review_now_recovers() {
+        // A 200 saves new episodes but the reload fails; the next pull-to-refresh answers
+        // 304 (nothing changed on the server). Previously nothing could clear the banner.
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+        let _ = app.update(Event::RefreshSubscription("sub-id".to_string()), &mut model);
+        let _ = app.update(
+            Event::RefreshSaved {
+                subscription_id: "sub-id".to_string(),
+                result: Box::new(StorageResult::Subscription(make_subscription(
+                    "sub-id", "Feed",
+                ))),
+            },
+            &mut model,
+        );
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Error("db busy".to_string()),
+        );
+        assert!(model.list_notice.is_some());
+
+        let _ = app.update(Event::RefreshSubscription("sub-id".to_string()), &mut model);
+        let mut cmd = app.update(fetched("sub-id", response(304, vec![])), &mut model);
+        assert!(lists_episodes(&storage_ops(&mut cmd)));
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Episodes(vec![make_episode("e9", "New", Some(9_000))]),
+        );
+
+        assert!(model.list_notice.is_none());
+        assert_eq!(model.episodes.len(), 1);
     }
 
     #[test]

@@ -184,9 +184,16 @@ feed's episode list (see the implementation note above) can itself fail. The
 refresh did succeed, so that is not recorded as a refresh error. If a list is
 already showing, the core keeps it and shows a non-blocking "Couldn't update the
 episode list" banner (`SubscriptionDetailView::list_notice`) instead of replacing
-the list with an error screen; the banner clears on the next successful load or
-when switching feeds. Only when nothing is on screen yet (the initial load) does a
-failed load become the blocking error.
+the list with an error screen. Only when nothing is on screen yet (the initial
+load) does a failed load become the blocking error.
+
+The banner means the rows on screen are older than what is stored, so something has
+to retry the reload, and two things do, both in place (the rows stay visible, no
+spinner): **re-entering the feed**, and **the next successful refresh of it**, even a
+304, which would otherwise leave the list alone because "nothing changed" on the
+server says nothing about what the screen is showing. A failed refresh doesn't
+retry, since it says nothing about whether the stored episodes are current. The
+banner clears when a reload succeeds, and on switching to another feed.
 
 **Background refresh.** `BGAppRefreshTask` is best-effort: iOS decides when, and
 whether, it runs, and the request time is only a lower bound. It is requested for
