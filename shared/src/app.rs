@@ -236,7 +236,7 @@ impl App for Pollux {
                             &subscription_id,
                             None,
                             Some(e),
-                            sub.retry_after_until,
+                            Some(failure_backoff_until()),
                         ),
                     },
                     // Unchanged since the validators we sent: only the timestamp moves.
@@ -268,7 +268,7 @@ impl App for Pollux {
                         &subscription_id,
                         None,
                         Some(format!("feed fetch failed: HTTP {status}")),
-                        sub.retry_after_until,
+                        Some(failure_backoff_until()),
                     ),
                 }
             }
@@ -3032,6 +3032,67 @@ mod tests {
             http_ops(&mut next).is_empty(),
             "a broken feed isn't retried on every foreground"
         );
+    }
+
+    #[test]
+    fn every_kind_of_refresh_failure_backs_off_auto_refresh() {
+        // Each failure path must set the backoff itself; carrying forward a missing or
+        // expired `retry_after_until` would leave the feed due on every foreground.
+        let failures: Vec<(&str, Event)> = vec![
+            (
+                "network error",
+                fetched("a", HttpResult::Error("offline".to_string())),
+            ),
+            (
+                "malformed 200",
+                fetched("a", response(200, b"this is not xml".to_vec())),
+            ),
+            ("HTTP 404", fetched("a", response(404, vec![]))),
+            ("HTTP 500", fetched("a", response(500, vec![]))),
+            (
+                "save error",
+                Event::RefreshSaved {
+                    subscription_id: "a".to_string(),
+                    result: Box::new(StorageResult::Error("disk full".to_string())),
+                },
+            ),
+            (
+                "unexpected save result",
+                Event::RefreshSaved {
+                    subscription_id: "a".to_string(),
+                    result: Box::new(StorageResult::Success),
+                },
+            ),
+        ];
+
+        for (name, failure) in failures {
+            let app = Pollux;
+            // A feed whose backoff already expired: the failure case that used to slip
+            // through by preserving the old (expired) value.
+            let mut stale = sub_refreshed("a", Some(24 * HOUR));
+            stale.retry_after_until = Some(now_unix() - 600);
+            let mut model = loaded_model(vec![stale]);
+            let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+            let _ = app.update(failure, &mut model);
+
+            let sub = &model.subscriptions[0];
+            assert!(sub.last_refresh_error.is_some(), "{name}: error recorded");
+            let until = sub
+                .retry_after_until
+                .unwrap_or_else(|| panic!("{name}: backoff not set"));
+            assert!(
+                until >= now_unix() + FAILURE_BACKOFF_SECS - 5,
+                "{name}: backoff should be about {FAILURE_BACKOFF_SECS}s out"
+            );
+            assert!(model.refreshing.is_none(), "{name}: refresh finished");
+
+            let mut next = app.update(Event::RefreshStale, &mut model);
+            assert!(
+                http_ops(&mut next).is_empty(),
+                "{name}: auto-refresh must skip the feed while it backs off"
+            );
+        }
     }
 
     #[test]
