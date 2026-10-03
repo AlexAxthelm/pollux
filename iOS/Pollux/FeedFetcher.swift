@@ -41,7 +41,7 @@ enum FeedFetcher {
                 body: Array(data),
                 etag: http?.value(forHTTPHeaderField: "ETag"),
                 lastModified: http?.value(forHTTPHeaderField: "Last-Modified"),
-                retryAfterSecs: retryAfterSeconds(http?.value(forHTTPHeaderField: "Retry-After")),
+                retryAfter: http?.value(forHTTPHeaderField: "Retry-After"),
             )
         } catch let error as URLError where deviceConnectivityCodes.contains(error.code) {
             return .unreachable(error.localizedDescription)
@@ -66,21 +66,4 @@ enum FeedFetcher {
         .internationalRoamingOff,
         .callIsActive,
     ]
-
-    /// Normalizes a `Retry-After` header (delay-seconds or HTTP-date) to whole seconds
-    /// from now, so the core needs no date parsing. Nil when absent or unparseable.
-    static func retryAfterSeconds(_ value: String?, now: Date = Date()) -> UInt64? {
-        guard let value = value?.trimmingCharacters(in: .whitespaces), !value.isEmpty else {
-            return nil
-        }
-        if let seconds = UInt64(value) {
-            return seconds
-        }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "GMT")
-        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
-        guard let date = formatter.date(from: value) else { return nil }
-        return UInt64(max(0, date.timeIntervalSince(now).rounded(.up)))
-    }
 }

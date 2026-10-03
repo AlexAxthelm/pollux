@@ -75,7 +75,7 @@ private struct Fetched {
     var body: [UInt8]
     var etag: String?
     var lastModified: String?
-    var retryAfterSecs: UInt64?
+    var retryAfter: String?
 }
 
 /// Runs a fetch and unpacks a `.response`, recording an issue for any other result.
@@ -83,12 +83,12 @@ private func fetch(etag: String? = nil, lastModified: String? = nil) async -> Fe
     let result = await FeedFetcher.fetch(
         url: feedURL, etag: etag, lastModified: lastModified, session: makeSession(),
     )
-    guard case let .response(status, body, etag, lastModified, retryAfterSecs) = result else {
+    guard case let .response(status, body, etag, lastModified, retryAfter) = result else {
         Issue.record("Expected .response, got \(result)")
         return nil
     }
     return Fetched(
-        status: status, body: body, etag: etag, lastModified: lastModified, retryAfterSecs: retryAfterSecs,
+        status: status, body: body, etag: etag, lastModified: lastModified, retryAfter: retryAfter,
     )
 }
 
@@ -170,7 +170,7 @@ struct FeedFetcherTests {
         #expect(fetched?.body == Array("<rss/>".utf8))
         #expect(fetched?.etag == "\"v2\"")
         #expect(fetched?.lastModified == "Thu, 02 Oct 2026 00:00:00 GMT")
-        #expect(fetched?.retryAfterSecs == nil)
+        #expect(fetched?.retryAfter == nil)
     }
 
     @Test func passesThroughA304WithNoBody() async {
@@ -183,13 +183,17 @@ struct FeedFetcherTests {
         #expect(fetched?.etag == "\"v1\"")
     }
 
-    @Test func normalizesRetryAfterOnA429() async {
-        FeedStubProtocol.configure(.init(statusCode: 429, headers: ["Retry-After": "120"]))
+    @Test func forwardsRetryAfterVerbatimOnA429() async {
+        // Interpreting the header (seconds or any of the three HTTP-date forms) is the core's
+        // job, so the shell must hand it over untouched.
+        for value in ["120", "Sun, 06 Nov 1994 08:49:37 GMT", "Sunday, 06-Nov-94 08:49:37 GMT"] {
+            FeedStubProtocol.configure(.init(statusCode: 429, headers: ["Retry-After": value]))
 
-        let fetched = await fetch()
+            let fetched = await fetch()
 
-        #expect(fetched?.status == 429)
-        #expect(fetched?.retryAfterSecs == 120)
+            #expect(fetched?.status == 429)
+            #expect(fetched?.retryAfter == value)
+        }
     }
 
     @Test func missingHeadersComeBackNil() async {
@@ -199,7 +203,7 @@ struct FeedFetcherTests {
 
         #expect(fetched?.etag == nil)
         #expect(fetched?.lastModified == nil)
-        #expect(fetched?.retryAfterSecs == nil)
+        #expect(fetched?.retryAfter == nil)
     }
 
     @Test(arguments: [

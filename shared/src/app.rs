@@ -306,15 +306,21 @@ impl App for Pollux {
                     }
                     HttpResult::Response {
                         status: 429,
-                        retry_after_secs,
+                        retry_after,
                         ..
-                    } => record_refresh_outcome(
-                        model,
-                        &subscription_id,
-                        None,
-                        Some("The host asked us to slow down (HTTP 429)".to_string()),
-                        Some(now_unix().saturating_add(rate_limit_wait_secs(retry_after_secs))),
-                    ),
+                    } => {
+                        let now = now_unix();
+                        let asked = retry_after
+                            .as_deref()
+                            .and_then(|value| parse_retry_after(value, now));
+                        record_refresh_outcome(
+                            model,
+                            &subscription_id,
+                            None,
+                            Some("The host asked us to slow down (HTTP 429)".to_string()),
+                            Some(now.saturating_add(rate_limit_wait_secs(asked))),
+                        )
+                    }
                     HttpResult::Response { status, .. } => record_refresh_outcome(
                         model,
                         &subscription_id,
@@ -1038,6 +1044,24 @@ fn is_due_for_auto_refresh(sub: &Subscription, now: i64) -> bool {
     stale && !backing_off
 }
 
+/// Reads a `Retry-After` header as whole seconds from `now`. The header is either a
+/// delay in seconds or an HTTP-date, and the date has three accepted spellings (RFC 9110:
+/// IMF-fixdate, plus the obsolete RFC 850 and asctime forms), which `httpdate` handles.
+/// A date already in the past is a delay of zero. Anything else is `None`, so the caller
+/// falls back to its default rather than guessing.
+fn parse_retry_after(value: &str, now: i64) -> Option<u64> {
+    let value = value.trim();
+    if let Ok(secs) = value.parse::<u64>() {
+        return Some(secs);
+    }
+    let at = httpdate::parse_http_date(value).ok()?;
+    let Ok(since_epoch) = at.duration_since(std::time::UNIX_EPOCH) else {
+        return Some(0);
+    };
+    let at_secs = i64::try_from(since_epoch.as_secs()).unwrap_or(i64::MAX);
+    Some(u64::try_from(at_secs.saturating_sub(now)).unwrap_or(0))
+}
+
 /// How long to leave a feed alone after a 429: the host's `Retry-After` when it sent one,
 /// otherwise the default, but never more than `MAX_RETRY_AFTER_SECS`. A value too large
 /// for an `i64` clamps to the cap rather than falling back to the (much shorter) default.
@@ -1255,7 +1279,7 @@ mod tests {
             body,
             etag: None,
             last_modified: None,
-            retry_after_secs: None,
+            retry_after: None,
         }
     }
 
@@ -3373,7 +3397,7 @@ mod tests {
                     body: vec![],
                     etag: None,
                     last_modified: None,
-                    retry_after_secs: Some(600),
+                    retry_after: Some("600".to_string()),
                 },
             ),
             &mut model,
@@ -3403,6 +3427,73 @@ mod tests {
 
         let until = model.subscriptions[0].retry_after_until.expect("retry set");
         assert!(until >= before + RATE_LIMIT_BACKOFF_SECS);
+    }
+
+    // A fixed point in time, 1994-11-06 08:49:37 GMT, spelled in each of the three HTTP-date
+    // formats a recipient must accept.
+    const IMF: &str = "Sun, 06 Nov 1994 08:49:37 GMT";
+    const RFC_850: &str = "Sunday, 06-Nov-94 08:49:37 GMT";
+    const ASCTIME: &str = "Sun Nov  6 08:49:37 1994";
+    const AT: i64 = 784_111_777;
+
+    #[test]
+    fn retry_after_accepts_a_delay_in_seconds() {
+        assert_eq!(parse_retry_after("120", AT), Some(120));
+        assert_eq!(parse_retry_after(" 7 ", AT), Some(7));
+        assert_eq!(parse_retry_after("0", AT), Some(0));
+    }
+
+    #[test]
+    fn retry_after_accepts_all_three_http_date_formats() {
+        for (name, date) in [("IMF-fixdate", IMF), ("RFC 850", RFC_850), ("asctime", ASCTIME)] {
+            assert_eq!(parse_retry_after(date, AT - 60), Some(60), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_retry_after_date_in_the_past_is_no_wait() {
+        assert_eq!(parse_retry_after(IMF, AT + 3600), Some(0));
+    }
+
+    #[test]
+    fn an_unreadable_retry_after_is_none() {
+        for junk in ["soon", "", "   ", "-5", "1.5", "Sun, 99 Nov 1994 08:49:37 GMT"] {
+            assert_eq!(parse_retry_after(junk, AT), None, "{junk:?}");
+        }
+    }
+
+    #[test]
+    fn a_retry_after_date_is_measured_from_the_cores_clock() {
+        // The date is parsed and compared inside the core, so a 429 carrying one yields a
+        // backoff of (date - now), not a default.
+        let app = Pollux;
+        let mut model = model_with_subs(&["a"]);
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+        let target = now_unix() + 1800;
+        let header = httpdate::fmt_http_date(
+            std::time::UNIX_EPOCH
+                + std::time::Duration::from_secs(u64::try_from(target).unwrap_or(0)),
+        );
+
+        let _ = app.update(
+            fetched(
+                "a",
+                HttpResult::Response {
+                    status: 429,
+                    body: vec![],
+                    etag: None,
+                    last_modified: None,
+                    retry_after: Some(header),
+                },
+            ),
+            &mut model,
+        );
+
+        let until = model.subscriptions[0].retry_after_until.expect("retry set");
+        assert!(
+            (until - target).abs() <= 2,
+            "backoff should end at the host's date, got {until} vs {target}"
+        );
     }
 
     #[test]
@@ -3444,7 +3535,7 @@ mod tests {
                     body: vec![],
                     etag: None,
                     last_modified: None,
-                    retry_after_secs: Some(365 * 24 * 3600),
+                    retry_after: Some((365 * 24 * 3600).to_string()),
                 },
             ),
             &mut model,
@@ -3498,7 +3589,7 @@ mod tests {
                     body: MINIMAL_RSS.as_bytes().to_vec(),
                     etag: Some("\"v2\"".to_string()),
                     last_modified: Some("Thu, 02 Oct 2026 00:00:00 GMT".to_string()),
-                    retry_after_secs: None,
+                    retry_after: None,
                 },
             ),
             &mut model,
