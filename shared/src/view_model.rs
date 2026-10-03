@@ -53,6 +53,10 @@ pub struct SubscriptionDetailView {
     pub download_notice: Option<DownloadNotice>,
     /// The open feed is queued for or being refreshed.
     pub refreshing: bool,
+    /// A non-blocking warning that the list below may be out of date, because reloading
+    /// it after a refresh failed. Shown as a banner above the list, which stays in place
+    /// (unlike `error`, which replaces it).
+    pub list_notice: Option<String>,
 }
 
 /// A failed-download-operation notice, paired with the episode it's about. Transient

@@ -399,6 +399,7 @@ impl App for Pollux {
                     model.detail_error = None;
                     // A notice from the previous feed doesn't apply to this one.
                     model.download_notice = None;
+                    model.list_notice = None;
                     Command::request_from_shell(StorageOperation::ListEpisodesBySubscription {
                         subscription_id: id.clone(),
                     })
@@ -427,12 +428,13 @@ impl App for Pollux {
                         StorageResult::Episodes(rows) => {
                             model.episodes = rows;
                             model.detail_error = None;
+                            model.list_notice = None;
                         }
-                        StorageResult::Error(e) => model.detail_error = Some(e),
-                        unexpected => {
-                            model.detail_error =
-                                Some(format!("unexpected storage result: {unexpected:?}"))
-                        }
+                        StorageResult::Error(e) => episodes_load_failed(model, e),
+                        unexpected => episodes_load_failed(
+                            model,
+                            format!("unexpected storage result: {unexpected:?}"),
+                        ),
                     }
                 }
                 render()
@@ -733,6 +735,7 @@ fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
         loading: model.detail_loading,
         error: model.detail_error.clone(),
         download_notice: model.download_notice.clone(),
+        list_notice: model.list_notice.clone(),
         refreshing: model
             .selected_subscription
             .as_ref()
@@ -896,6 +899,19 @@ fn maybe_start_next(model: &mut Model) -> Command<Effect, Event> {
         result: Box::new(r),
     });
     persist.and(download)
+}
+
+/// Records that loading the open feed's episodes failed. With nothing on screen yet (the
+/// initial load, which starts from a cleared list) that is a blocking error, as before.
+/// With a list already showing (a reload after a refresh) it must not replace that list
+/// with an error screen: the rows are still valid, just possibly out of date, so it
+/// becomes a non-blocking notice and the list stays.
+fn episodes_load_failed(model: &mut Model, reason: String) {
+    if model.episodes.is_empty() {
+        model.detail_error = Some(reason);
+    } else {
+        model.list_notice = Some(format!("Couldn't update the episode list: {reason}"));
+    }
 }
 
 /// True while `id` is being fetched or waiting its turn in the refresh queue.
@@ -1820,6 +1836,156 @@ mod tests {
 
         assert!(!model.detail_loading);
         assert_eq!(model.detail_error.as_deref(), Some("db gone"));
+    }
+
+    fn model_showing_a_list() -> Model {
+        let mut model = Model::default();
+        model.subscriptions = vec![make_subscription("sub-id", "Feed")];
+        model.selected_subscription = Some(model.subscriptions[0].clone());
+        model.episodes = vec![
+            make_episode("e1", "First", Some(2_000)),
+            make_episode("e2", "Second", Some(1_000)),
+        ];
+        model
+    }
+
+    fn reload_failed(app: &Pollux, model: &mut Model, result: StorageResult) {
+        let _ = app.update(
+            Event::EpisodesLoaded {
+                subscription_id: "sub-id".to_string(),
+                result: Box::new(result),
+            },
+            model,
+        );
+    }
+
+    #[test]
+    fn a_failed_reload_keeps_the_list_and_shows_a_non_blocking_notice() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Error("db busy".to_string()),
+        );
+
+        assert!(
+            model.detail_error.is_none(),
+            "the list must not become an error screen"
+        );
+        assert_eq!(model.episodes.len(), 2, "the rows already on screen stay");
+        let detail = app.view(&model).subscription_detail;
+        assert!(detail.error.is_none());
+        assert_eq!(detail.episodes.len(), 2);
+        let notice = detail.list_notice.expect("a notice");
+        assert!(notice.contains("db busy"), "the reason is shown: {notice}");
+    }
+
+    #[test]
+    fn an_unexpected_result_on_reload_is_handled_the_same_way() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+
+        reload_failed(&app, &mut model, StorageResult::Success);
+
+        assert!(model.detail_error.is_none());
+        assert_eq!(model.episodes.len(), 2);
+        assert!(model.list_notice.is_some());
+    }
+
+    #[test]
+    fn the_initial_load_failing_is_still_a_blocking_error() {
+        // Nothing is on screen yet (SelectSubscription starts from a cleared list), so
+        // there is no list to keep.
+        let app = Pollux;
+        let mut model = Model::default();
+        model.subscriptions = vec![make_subscription("sub-id", "Feed")];
+        let _ = app.update(Event::SelectSubscription("sub-id".to_string()), &mut model);
+
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Error("db gone".to_string()),
+        );
+
+        assert_eq!(model.detail_error.as_deref(), Some("db gone"));
+        assert!(model.list_notice.is_none());
+    }
+
+    #[test]
+    fn a_successful_reload_clears_the_notice() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Error("db busy".to_string()),
+        );
+        assert!(model.list_notice.is_some());
+
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Episodes(vec![make_episode("e3", "Fresh", Some(3_000))]),
+        );
+
+        assert!(model.list_notice.is_none());
+        assert_eq!(model.episodes.len(), 1);
+    }
+
+    #[test]
+    fn switching_feeds_clears_the_notice() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+        model
+            .subscriptions
+            .push(make_subscription("other", "Other"));
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Error("db busy".to_string()),
+        );
+
+        let _ = app.update(Event::SelectSubscription("other".to_string()), &mut model);
+
+        assert!(
+            model.list_notice.is_none(),
+            "a notice about the old feed doesn't apply"
+        );
+    }
+
+    #[test]
+    fn a_refresh_whose_reload_fails_leaves_the_open_list_visible() {
+        // End to end: refresh the open feed, the save succeeds, the follow-up episode
+        // reload fails. The refresh itself still succeeded.
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+        let _ = app.update(Event::RefreshSubscription("sub-id".to_string()), &mut model);
+        let _ = app.update(
+            Event::RefreshSaved {
+                subscription_id: "sub-id".to_string(),
+                result: Box::new(StorageResult::Subscription(make_subscription(
+                    "sub-id", "Feed",
+                ))),
+            },
+            &mut model,
+        );
+
+        reload_failed(
+            &app,
+            &mut model,
+            StorageResult::Error("db busy".to_string()),
+        );
+
+        let view = app.view(&model);
+        assert!(view.subscription_detail.error.is_none());
+        assert_eq!(view.subscription_detail.episodes.len(), 2);
+        assert!(view.subscription_detail.list_notice.is_some());
+        assert!(
+            view.library.subscriptions[0].refresh_error.is_none(),
+            "the refresh succeeded; only the display reload failed"
+        );
     }
 
     #[test]

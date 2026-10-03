@@ -179,6 +179,15 @@ validators.
 the library row (the reason is read out by VoiceOver) and as a line under the
 title on the details page. The next success clears it.
 
+A separate failure can follow a successful refresh: the explicit reload of the open
+feed's episode list (see the implementation note above) can itself fail. The
+refresh did succeed, so that is not recorded as a refresh error. If a list is
+already showing, the core keeps it and shows a non-blocking "Couldn't update the
+episode list" banner (`SubscriptionDetailView::list_notice`) instead of replacing
+the list with an error screen; the banner clears on the next successful load or
+when switching feeds. Only when nothing is on screen yet (the initial load) does a
+failed load become the blocking error.
+
 **Background refresh.** `BGAppRefreshTask` is best-effort: iOS decides when, and
 whether, it runs, and the request time is only a lower bound. It is requested for
 **3 hours** out each time the app backgrounds and at the start of every run (so

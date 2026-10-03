@@ -17,6 +17,11 @@ pub struct Model {
     pub episode_sort: EpisodeSortOrder,
     pub detail_loading: bool,
     pub detail_error: Option<String>,
+    // A non-blocking warning that the episode list on screen may be out of date: a
+    // reload (after a refresh) failed while a list was already showing. Unlike
+    // `detail_error`, which replaces the whole list, this leaves the list in place and
+    // is shown as a banner. Cleared by the next successful load or a feed switch.
+    pub list_notice: Option<String>,
 
     // Download manager. Serial for MVP: at most one episode downloads at a time
     // (`downloading` holds its id), the rest wait in `download_queue` (front = next
