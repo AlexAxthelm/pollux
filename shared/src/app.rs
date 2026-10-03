@@ -185,10 +185,25 @@ impl App for Pollux {
             Event::RefreshStale => {
                 if model.subscriptions_loaded {
                     enqueue_due_refreshes(model);
+                    maybe_start_next_refresh(model).and(render())
                 } else {
+                    // Nothing to judge staleness against yet: hold the request until the
+                    // library arrives (see `SubscriptionsLoaded`).
                     model.auto_refresh_pending = true;
+                    if model.loading {
+                        // The launch load is still in flight and will honour it.
+                        render()
+                    } else {
+                        // Not loaded and nothing loading means the last load failed.
+                        // Nothing else retries it, so without this the held request
+                        // (and the library itself) would stay stuck until the app is
+                        // relaunched. Retry on each activation; success honours it.
+                        model.loading = true;
+                        Command::request_from_shell(StorageOperation::ListSubscriptions)
+                            .then_send(|r| Event::SubscriptionsLoaded(Box::new(r)))
+                            .and(render())
+                    }
                 }
-                maybe_start_next_refresh(model).and(render())
             }
             Event::RefreshAll => {
                 // Library order (as displayed), so the feeds the user sees first
@@ -3133,9 +3148,16 @@ mod tests {
     fn refresh_stale_before_the_library_loads_is_held_then_honoured() {
         let app = Pollux;
         let mut model = Model::default();
+        let _ = app.update(Event::Started, &mut model);
 
         let mut early = app.update(Event::RefreshStale, &mut model);
         assert!(http_ops(&mut early).is_empty());
+        assert!(
+            !storage_ops(&mut early)
+                .iter()
+                .any(|o| matches!(o, StorageOperation::ListSubscriptions)),
+            "the launch load is still in flight, so it must not be requested twice"
+        );
         assert!(model.auto_refresh_pending);
 
         let mut loaded = app.update(
@@ -3148,6 +3170,117 @@ mod tests {
         assert!(!model.auto_refresh_pending);
         assert_eq!(http_ops(&mut loaded).len(), 1);
         assert_eq!(model.refreshing.as_deref(), Some("old"));
+    }
+
+    fn started_with_a_failed_library_load() -> Model {
+        let app = Pollux;
+        let mut model = Model::default();
+        let _ = app.update(Event::Started, &mut model);
+        let _ = app.update(
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Error("db locked".to_string()))),
+            &mut model,
+        );
+        assert!(!model.subscriptions_loaded);
+        assert!(!model.loading);
+        model
+    }
+
+    #[test]
+    fn a_failed_library_load_is_retried_on_the_next_activation_and_then_auto_refreshes() {
+        let app = Pollux;
+        let mut model = started_with_a_failed_library_load();
+
+        let mut activated = app.update(Event::RefreshStale, &mut model);
+
+        assert!(model.loading, "retrying shows the library as loading again");
+        assert!(
+            model.auto_refresh_pending,
+            "the request is held for the retry"
+        );
+        assert!(
+            storage_ops(&mut activated)
+                .iter()
+                .any(|o| matches!(o, StorageOperation::ListSubscriptions)),
+            "the failed load must be retried, or nothing ever recovers it"
+        );
+
+        let mut loaded = app.update(
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Subscriptions(vec![
+                sub_refreshed("old", Some(24 * HOUR)),
+            ]))),
+            &mut model,
+        );
+
+        assert!(model.subscriptions_loaded);
+        assert!(model.error.is_none(), "the earlier load error is cleared");
+        assert!(!model.auto_refresh_pending);
+        assert_eq!(
+            http_ops(&mut loaded).len(),
+            1,
+            "the held auto-refresh now runs"
+        );
+    }
+
+    #[test]
+    fn a_library_load_that_keeps_failing_is_retried_every_activation_not_stuck() {
+        let app = Pollux;
+        let mut model = started_with_a_failed_library_load();
+
+        for _ in 0..3 {
+            let mut activated = app.update(Event::RefreshStale, &mut model);
+            assert!(
+                storage_ops(&mut activated)
+                    .iter()
+                    .any(|o| matches!(o, StorageOperation::ListSubscriptions)),
+                "each activation retries the load"
+            );
+            let _ = app.update(
+                Event::SubscriptionsLoaded(Box::new(StorageResult::Error(
+                    "still locked".to_string(),
+                ))),
+                &mut model,
+            );
+            assert!(!model.loading);
+            assert!(
+                model.error.is_some(),
+                "the error stays visible between retries"
+            );
+        }
+    }
+
+    #[test]
+    fn a_retry_in_flight_is_not_requested_again_by_another_activation() {
+        let app = Pollux;
+        let mut model = started_with_a_failed_library_load();
+        let _ = app.update(Event::RefreshStale, &mut model);
+
+        let mut again = app.update(Event::RefreshStale, &mut model);
+
+        assert!(storage_ops(&mut again).is_empty(), "one load at a time");
+    }
+
+    #[test]
+    fn cancelling_before_a_retried_library_load_lands_drops_the_held_auto_refresh() {
+        let app = Pollux;
+        let mut model = started_with_a_failed_library_load();
+        let _ = app.update(Event::RefreshStale, &mut model);
+        let _ = app.update(Event::CancelRefresh, &mut model);
+
+        let mut loaded = app.update(
+            Event::SubscriptionsLoaded(Box::new(StorageResult::Subscriptions(vec![
+                sub_refreshed("old", Some(24 * HOUR)),
+            ]))),
+            &mut model,
+        );
+
+        assert!(
+            model.subscriptions_loaded,
+            "the library itself still recovers"
+        );
+        assert!(
+            http_ops(&mut loaded).is_empty(),
+            "but the cancelled refresh doesn't run"
+        );
     }
 
     #[test]

@@ -115,7 +115,12 @@ its `retry_after_until` has passed. Manual refresh (details page, Refresh all)
 ignores the backoff: an explicit request wins.
 
 If `RefreshStale` arrives before the library has loaded (cold launch), the core
-holds the request and honours it when the subscriptions arrive.
+holds the request and honours it when the subscriptions arrive. If that load
+failed (a storage error at launch), nothing else would ever retry it, so the next
+`RefreshStale` retries the library load itself (one at a time, on every
+activation until it succeeds), and the held request runs once it does. A
+background run that finds the load failed simply does nothing; the retry happens
+on the next foreground activation.
 
 **Conditional GET.** The last successful response's `ETag` and `Last-Modified`
 are stored on the subscription and replayed as `If-None-Match` /
