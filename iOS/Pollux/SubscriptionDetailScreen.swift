@@ -96,11 +96,11 @@ struct SubscriptionDetailScreen: View {
                 // The list may be out of date because reloading it after a refresh failed.
                 // A banner, not an error screen: the rows are still valid.
                 if let listNotice = detail.listNotice {
-                    DownloadNoticeBanner(message: listNotice)
+                    NoticeBanner(message: listNotice)
                 }
                 // The list spans every episode, so show a notice for any of them.
                 if let notice = detail.downloadNotice {
-                    DownloadNoticeBanner(message: notice.message)
+                    NoticeBanner(message: notice.message)
                 }
                 List(detail.episodes, id: \.id) { episode in
                     NavigationLink(value: episode) {
