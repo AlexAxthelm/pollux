@@ -1,19 +1,28 @@
 import Foundation
 import GRDB
 
-/// The schema history. Split out of `DatabaseManager` to keep the actor under the
-/// type-length limit; migrations are append-only, so a database created at any earlier
-/// version upgrades step by step. A migration that has shipped (or merely run on someone's
-/// device) is never edited, only followed by a new one.
+/// The schema. Split out of `DatabaseManager` to keep the actor under the type-length limit.
+///
+/// **Until the first release the database is disposable, so the schema is a single baseline
+/// that is edited in place** rather than grown by appending migrations. In debug builds the
+/// migrator erases and recreates the database whenever that definition changes, so an
+/// existing simulator database never needs wiping by hand.
+///
+/// Before the first release, remove the erase-on-change below and freeze `v1_initial`. From
+/// then on a schema change is a *new* append-only migration, and each one that alters a
+/// table that can already hold rows should be tested against a database that has some (the
+/// migrator can stop at an earlier version with `migrate(_:upTo:)`).
 extension DatabaseManager {
     static func runMigrations(_ db: DatabasePool) throws {
         var migrator = DatabaseMigrator()
-        registerInitialSchema(&migrator)
-        registerRefreshSchema(&migrator)
+        #if DEBUG
+            migrator.eraseDatabaseOnSchemaChange = true
+        #endif
+        registerBaselineSchema(&migrator)
         try migrator.migrate(db)
     }
 
-    private static func registerInitialSchema(_ migrator: inout DatabaseMigrator) {
+    private static func registerBaselineSchema(_ migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v1_initial") { db in
             try db.create(table: "subscriptions") { t in
                 t.column("id", .text).primaryKey()
@@ -23,6 +32,13 @@ extension DatabaseManager {
                 t.column("description", .text)
                 t.column("last_refreshed", .integer)
                 t.column("created_at", .integer).notNull()
+                // Feed refresh: the conditional-GET validators from the last successful
+                // fetch, why the last refresh failed, and the time before which automatic
+                // refresh leaves the feed alone (a rate-limited host, or a failure backoff).
+                t.column("etag", .text)
+                t.column("last_modified", .text)
+                t.column("last_refresh_error", .text)
+                t.column("retry_after_until", .integer)
             }
             try db.create(table: "episodes") { t in
                 t.column("id", .text).primaryKey()
@@ -41,6 +57,10 @@ extension DatabaseManager {
                 t.column("is_flagged", .boolean).notNull().defaults(to: false)
                 t.column("file_size_bytes", .integer).check(sql: "file_size_bytes >= 0")
                 t.column("local_path", .text)
+                // Unix time a refresh first failed to find this episode in its feed, or NULL
+                // while it is present. Storage-only (the core never sees it): the
+                // removed-from-feed rule flags an episode once this is old enough.
+                t.column("missing_since", .integer)
                 t.uniqueKey(["subscription_id", "feed_guid"])
             }
             try db.create(
@@ -48,41 +68,6 @@ extension DatabaseManager {
                 on: "episodes",
                 columns: ["subscription_id"],
             )
-        }
-    }
-
-    /// Everything feed refresh needed: validators and failure state on subscriptions, and
-    /// the removed-from-feed bookkeeping on episodes.
-    private static func registerRefreshSchema(_ migrator: inout DatabaseMigrator) {
-        // Refresh bookkeeping: conditional-GET validators, the last refresh failure, and
-        // the time before which a rate-limited host asked not to be hit again.
-        migrator.registerMigration("v2_refresh") { db in
-            try db.alter(table: "subscriptions") { t in
-                t.add(column: "etag", .text)
-                t.add(column: "last_modified", .text)
-                t.add(column: "last_refresh_error", .text)
-                t.add(column: "retry_after_until", .integer)
-            }
-        }
-        // A counter of consecutive refreshes an episode was missing from its feed. Superseded
-        // by v4, but stays registered because databases may already have run it.
-        migrator.registerMigration("v3_missing_refreshes") { db in
-            try db.alter(table: "episodes") { t in
-                t.add(column: "missing_refreshes", .integer).notNull().defaults(to: 0)
-            }
-        }
-        // Replaces the v3 counter with the time an episode was first missed, so the
-        // removed-from-feed rule can be about elapsed wall time rather than a number of
-        // refreshes (several quick refreshes during one stale-cache incident must not be
-        // enough). Any in-progress counts are simply restarted. Storage-only: the core
-        // never sees it.
-        migrator.registerMigration("v4_missing_since") { db in
-            try db.alter(table: "episodes") { t in
-                t.add(column: "missing_since", .integer)
-            }
-            try db.alter(table: "episodes") { t in
-                t.drop(column: "missing_refreshes")
-            }
         }
     }
 }

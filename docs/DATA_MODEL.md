@@ -45,9 +45,9 @@ feed refresh needs (see `features/subscription.md`, "Refresh as built"):
   feed alone. Set from `Retry-After` on a 429, or to a short backoff after any
   other failure. Manual refresh ignores it.
 
-Added in the `v2_refresh` migration. Refresh outcomes that produce no new body
-(304, 429, failures) are written by `UpdateRefreshState`; a 200 goes through the
-normal feed upsert, which overwrites all of the above from the fresh parse.
+Refresh outcomes that produce no new body (304, 429, failures) are written by
+`UpdateRefreshState`; a 200 goes through the normal feed upsert, which overwrites
+all of the above from the fresh parse.
 
 ### Episode *(Identified)*
 
@@ -71,15 +71,23 @@ need care:
   feed returns to `NotDownloaded`. Episodes that drop out of the feed are flagged
   only after being absent for 48 hours, and only if they are `NotDownloaded` or
   `Failed`; see `features/subscription.md`, "De-listed Episodes".
-- `missing_since` — storage-only (the `v4_missing_since` migration; the core
-  never sees it): the unix time an episode was first missed by a refresh, or NULL
-  while it is present. Every refresh with a non-empty feed starts a clock for each
-  of the subscription's episodes that doesn't have one, and the upsert clears it
-  for the ones still present, so only absent episodes keep it. An episode is
-  flagged once its clock is at least `removalGraceSeconds` (48 hours) old. It
-  replaced the v3 `missing_refreshes` counter, which counted refreshes instead of
-  time; v3 stays in the migration history because databases may already have run
-  it.
+- `missing_since` — storage-only (the core never sees it): the unix time an
+  episode was first missed by a refresh, or NULL while it is present. Every
+  refresh with a non-empty feed starts a clock for each of the subscription's
+  episodes that doesn't have one, and the upsert clears it for the ones still
+  present, so only absent episodes keep it. An episode is flagged once its clock
+  is at least `removalGraceSeconds` (48 hours) old.
+
+#### Schema baseline
+
+Until the first release the database is disposable, so the schema is a single
+baseline (`v1_initial`, in `iOS/Pollux/DatabaseMigrations.swift`) that is edited in
+place rather than grown by appending migrations. In debug builds the migrator
+erases and recreates the database whenever that definition changes, so an existing
+simulator database never needs wiping by hand. Before the first release, remove
+that erase-on-change and freeze the baseline; after that every schema change is a
+new append-only migration, and each one that alters a table that can already hold
+rows should be tested against a database that has some.
 
 #### Identity across refreshes
 
