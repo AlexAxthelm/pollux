@@ -155,6 +155,14 @@ same limit.
 | Device can't reach the network (`HttpResult::Unreachable`: offline, cellular data off, roaming off, on a call, connection lost mid-request) | `last_refresh_error` recorded; **no backoff** and any existing one is left as it was. Nothing is wrong with the feed, and backing it off would keep auto-refresh away for 15 minutes after connectivity returns, for every feed at once |
 | Other status, host-side network error (refused, TLS, timeout, DNS), unparseable body, failed save | `last_refresh_error` recorded; `retry_after_until` = now + 15 minutes (`FAILURE_BACKOFF_SECS`) so a broken feed isn't retried on every foreground |
 
+The shell decides which `URLError` codes count as the device being offline
+(`FeedFetcher.deviceConnectivityCodes`). Timeouts, DNS failures and refused
+connections are deliberately **not** in that set, since they can't be told apart
+from a dead host.
+
+A failed refresh never moves `last_refreshed` and never discards the stored
+validators.
+
 **Metadata survives a degraded response.** The upsert writes the parsed title,
 artwork and description as-is, and `parse_feed` yields "no value" for a feed
 without them (the title falls back to the feed URL; artwork and description are
@@ -163,22 +171,16 @@ hands `<title></title>`, `<description>   </description>` or a whitespace-only
 image URL through as empty strings, so `parse_feed` trims every value and treats a
 blank one as missing. That is the single place "absent" is decided, and it also
 means a brand-new feed with an empty `<title>` is listed under its URL instead of
-as a blank row. Left alone, a trimmed or half-edited response would rename a feed to its
-URL (reordering the library) and drop its artwork until the next refresh. So
+as a blank row.
+
+Left alone, a trimmed or half-edited response would rename a feed to its URL
+(reordering the library) and drop its artwork until the next refresh. So
 `Subscription::inherit_missing_metadata` fills each of those three from the stored
 subscription when the response lacks it, field by field, on both the refresh and
 re-subscribe paths. A value the response does provide always wins, so a publisher
 changing its title or artwork is still picked up. The trade-off is that a
 publisher *removing* its artwork or description is not noticed; a stale image or
 blurb is harmless and a lost one is not.
-
-The shell decides which `URLError` codes count as the device being offline
-(`FeedFetcher.deviceConnectivityCodes`). Timeouts, DNS failures and refused
-connections are deliberately **not** in that set, since they can't be told apart
-from a dead host.
-
-A failed refresh never moves `last_refreshed` and never discards the stored
-validators.
 
 **Failure surfacing.** The last error is persisted, shown as a warning marker on
 the library row (the reason is read out by VoiceOver) and as a line under the
