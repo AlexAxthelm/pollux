@@ -29,7 +29,13 @@ pub enum HttpResult {
         /// both the delay-seconds and HTTP-date forms), so the core needs no date parser.
         retry_after_secs: Option<u64>,
     },
+    /// The request failed for a reason on the host's side or in the response (refused
+    /// connection, TLS failure, timeout, invalid URL, ...).
     Error(String),
+    /// The request never reached the host because the *device* can't reach the network
+    /// (offline, cellular data off, roaming off, on a call, or the connection dropped
+    /// mid-request). Nothing is wrong with the feed, so refresh doesn't back it off.
+    Unreachable(String),
 }
 
 impl Operation for HttpOperation {

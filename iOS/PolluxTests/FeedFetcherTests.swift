@@ -180,15 +180,38 @@ struct FeedFetcherTests {
         #expect(fetched?.retryAfterSecs == nil)
     }
 
-    @Test func reportsATransportFailureAsAnError() async {
-        FeedStubProtocol.configure(.init(failure: URLError(.notConnectedToInternet)))
+    @Test(arguments: [
+        URLError.Code.notConnectedToInternet, .networkConnectionLost, .dataNotAllowed,
+        .internationalRoamingOff, .callIsActive,
+    ])
+    func reportsADeviceConnectivityFailureAsUnreachable(code: URLError.Code) async {
+        FeedStubProtocol.configure(.init(failure: URLError(code)))
+
+        let result = await FeedFetcher.fetch(
+            url: feedURL, etag: nil, lastModified: nil, session: makeSession(),
+        )
+
+        guard case .unreachable = result else {
+            Issue.record("Expected .unreachable for \(code), got \(result)")
+            return
+        }
+    }
+
+    @Test(arguments: [
+        URLError.Code.cannotConnectToHost, .cannotFindHost, .timedOut, .secureConnectionFailed,
+        .badServerResponse,
+    ])
+    func reportsAHostSideTransportFailureAsAnError(code: URLError.Code) async {
+        // These can't be told apart from a dead or refusing host, so they stay plain
+        // errors and the core backs the feed off.
+        FeedStubProtocol.configure(.init(failure: URLError(code)))
 
         let result = await FeedFetcher.fetch(
             url: feedURL, etag: nil, lastModified: nil, session: makeSession(),
         )
 
         guard case .error = result else {
-            Issue.record("Expected .error, got \(result)")
+            Issue.record("Expected .error for \(code), got \(result)")
             return
         }
     }

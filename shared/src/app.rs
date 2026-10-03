@@ -124,7 +124,7 @@ impl App for Pollux {
                 .and(render())
             }
             Event::FeedFetched { url, result } => match *result {
-                HttpResult::Error(e) => {
+                HttpResult::Error(e) | HttpResult::Unreachable(e) => {
                     model.loading = false;
                     model.error = Some(e);
                     render()
@@ -227,6 +227,18 @@ impl App for Pollux {
                     return maybe_start_next_refresh(model).and(render());
                 };
                 match *result {
+                    // The device is offline (or similar): nothing is wrong with this
+                    // feed. Record why it didn't refresh so the user sees it, but leave
+                    // `retry_after_until` alone. Backing the feed off would keep
+                    // auto-refresh away for 15 minutes after connectivity returns, and
+                    // would do it to every feed at once.
+                    HttpResult::Unreachable(e) => record_refresh_outcome(
+                        model,
+                        &subscription_id,
+                        None,
+                        Some(e),
+                        sub.retry_after_until,
+                    ),
                     HttpResult::Error(e) => record_refresh_outcome(
                         model,
                         &subscription_id,
@@ -3258,6 +3270,100 @@ mod tests {
 
         let mut next = app.update(Event::RefreshStale, &mut model);
         assert_eq!(http_ops(&mut next).len(), 1, "cancel isn't sticky");
+    }
+
+    #[test]
+    fn an_unreachable_device_records_the_error_without_backing_the_feed_off() {
+        let app = Pollux;
+        let mut model = loaded_model(vec![sub_refreshed("a", Some(24 * HOUR))]);
+        let _ = app.update(Event::RefreshStale, &mut model);
+
+        let mut cmd = app.update(
+            fetched("a", HttpResult::Unreachable("offline".to_string())),
+            &mut model,
+        );
+
+        let sub = &model.subscriptions[0];
+        assert_eq!(sub.last_refresh_error.as_deref(), Some("offline"));
+        assert!(
+            sub.retry_after_until.is_none(),
+            "no backoff for a device-level failure"
+        );
+        assert!(storage_ops(&mut cmd).iter().any(|o| matches!(
+            o,
+            StorageOperation::UpdateRefreshState {
+                last_refresh_error: Some(_),
+                retry_after_until: None,
+                ..
+            }
+        )));
+    }
+
+    #[test]
+    fn feeds_refresh_again_as_soon_as_connectivity_returns() {
+        // The scenario behind the finding: open the app offline, every feed fails,
+        // reconnect and foreground again. Nothing should be sitting in a backoff.
+        let app = Pollux;
+        let mut model = loaded_model(vec![
+            sub_refreshed("a", Some(24 * HOUR)),
+            sub_refreshed("b", Some(24 * HOUR)),
+        ]);
+        let _ = app.update(Event::RefreshStale, &mut model);
+        let _ = app.update(
+            fetched("a", HttpResult::Unreachable("offline".to_string())),
+            &mut model,
+        );
+        let _ = app.update(
+            fetched("b", HttpResult::Unreachable("offline".to_string())),
+            &mut model,
+        );
+        assert!(model.refreshing.is_none());
+
+        let mut back_online = app.update(Event::RefreshStale, &mut model);
+
+        assert_eq!(http_ops(&mut back_online).len(), 1, "feeds are due again");
+        assert_eq!(model.refreshing.as_deref(), Some("a"));
+        assert_eq!(model.refresh_queue, vec!["b".to_string()]);
+    }
+
+    #[test]
+    fn an_unreachable_device_keeps_a_backoff_the_host_earned() {
+        // A live backoff from a real host failure (e.g. a 429) is not the device's
+        // doing, so an offline attempt must not clear or shorten it.
+        let app = Pollux;
+        let until = now_unix() + 600;
+        let mut limited = sub_refreshed("a", Some(24 * HOUR));
+        limited.retry_after_until = Some(until);
+        let mut model = loaded_model(vec![limited]);
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let _ = app.update(
+            fetched("a", HttpResult::Unreachable("offline".to_string())),
+            &mut model,
+        );
+
+        assert_eq!(model.subscriptions[0].retry_after_until, Some(until));
+    }
+
+    #[test]
+    fn the_subscribe_flow_treats_an_unreachable_device_like_any_fetch_error() {
+        let app = Pollux;
+        let mut model = Model {
+            loading: true,
+            ..Model::default()
+        };
+
+        let mut cmd = app.update(
+            Event::FeedFetched {
+                url: "https://example.com/feed.rss".to_string(),
+                result: Box::new(HttpResult::Unreachable("offline".to_string())),
+            },
+            &mut model,
+        );
+
+        assert!(!model.loading);
+        assert_eq!(model.error.as_deref(), Some("offline"));
+        cmd.expect_one_effect().expect_render();
     }
 
     #[test]

@@ -32,10 +32,29 @@ enum FeedFetcher {
                 lastModified: http?.value(forHTTPHeaderField: "Last-Modified"),
                 retryAfterSecs: retryAfterSeconds(http?.value(forHTTPHeaderField: "Retry-After")),
             )
+        } catch let error as URLError where deviceConnectivityCodes.contains(error.code) {
+            return .unreachable(error.localizedDescription)
         } catch {
             return .error(error.localizedDescription)
         }
     }
+
+    /// `URLError` codes meaning the *device* couldn't get to the network, as opposed to a
+    /// problem with the host. The core doesn't back a feed off for these (see
+    /// `HttpResult.unreachable`), so going offline doesn't mute every feed for a while
+    /// after connectivity returns.
+    ///
+    /// `networkConnectionLost` is included on purpose: it is what an in-flight request
+    /// reports when the app is suspended or the radio drops mid-fetch, which is not the
+    /// host's fault either. Deliberately excluded: `timedOut`, `cannotFindHost` and
+    /// `cannotConnectToHost`, which can't be told apart from a dead or refusing host.
+    static let deviceConnectivityCodes: Set<URLError.Code> = [
+        .notConnectedToInternet,
+        .networkConnectionLost,
+        .dataNotAllowed,
+        .internationalRoamingOff,
+        .callIsActive,
+    ]
 
     /// Normalizes a `Retry-After` header (delay-seconds or HTTP-date) to whole seconds
     /// from now, so the core needs no date parsing. Nil when absent or unparseable.

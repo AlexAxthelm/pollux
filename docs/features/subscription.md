@@ -129,7 +129,13 @@ otherwise a locally cached 200 could hide the 304.
 | 200 | Parse, upsert (see `DATA_MODEL.md`), store new validators, clear the error and backoff, reload the open feed's episodes |
 | 304 | Only `last_refreshed` moves; error and backoff cleared; episodes untouched |
 | 429 | `retry_after_until` = now + `Retry-After` (seconds or HTTP-date, normalized to seconds by the shell), or 1 hour (`RATE_LIMIT_BACKOFF_SECS`) if absent |
-| Other status, network error, unparseable body, failed save | `last_refresh_error` recorded; `retry_after_until` = now + 15 minutes (`FAILURE_BACKOFF_SECS`) so a broken feed isn't retried on every foreground |
+| Device can't reach the network (`HttpResult::Unreachable`: offline, cellular data off, roaming off, on a call, connection lost mid-request) | `last_refresh_error` recorded; **no backoff** and any existing one is left as it was. Nothing is wrong with the feed, and backing it off would keep auto-refresh away for 15 minutes after connectivity returns, for every feed at once |
+| Other status, host-side network error (refused, TLS, timeout, DNS), unparseable body, failed save | `last_refresh_error` recorded; `retry_after_until` = now + 15 minutes (`FAILURE_BACKOFF_SECS`) so a broken feed isn't retried on every foreground |
+
+The shell decides which `URLError` codes count as the device being offline
+(`FeedFetcher.deviceConnectivityCodes`). Timeouts, DNS failures and refused
+connections are deliberately **not** in that set, since they can't be told apart
+from a dead host.
 
 A failed refresh never moves `last_refreshed` and never discards the stored
 validators.
