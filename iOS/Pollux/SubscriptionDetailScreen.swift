@@ -22,7 +22,7 @@ struct SubscriptionDetailScreen: View {
             content
         }
         .background(themeColors.background)
-        .navigationTitle(subscription.title)
+        .navigationTitle(liveSummary.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -30,7 +30,7 @@ struct SubscriptionDetailScreen: View {
             }
         }
         .navigationDestination(for: EpisodeSummary.self) { episode in
-            EpisodeDetailView(core: core, episode: episode, feedTitle: subscription.title)
+            EpisodeDetailView(core: core, episode: episode, feedTitle: liveSummary.title)
         }
         .task(id: subscription.id) {
             core.update(.selectSubscription(subscription.id))
@@ -48,16 +48,17 @@ struct SubscriptionDetailScreen: View {
     }
 
     /// The live library row for this feed. `subscription` is a snapshot from when the
-    /// screen was pushed, so refresh outcomes are read from here instead.
+    /// screen was pushed (only its id is stable), so everything a refresh can change —
+    /// title, artwork, the failure line — is read from here instead.
     private var liveSummary: SubscriptionSummary {
         core.view.library.subscriptions.first { $0.id == subscription.id } ?? subscription
     }
 
     private var header: some View {
         HStack(spacing: 12) {
-            ArtworkView(urlString: subscription.artworkUrl, size: 72)
+            ArtworkView(urlString: liveSummary.artworkUrl, size: 72)
             VStack(alignment: .leading, spacing: 4) {
-                Text(subscription.title)
+                Text(liveSummary.title)
                     .font(.headline)
                     .foregroundStyle(themeColors.text)
                     .lineLimit(2)
