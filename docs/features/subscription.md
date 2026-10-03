@@ -158,7 +158,12 @@ same limit.
 **Metadata survives a degraded response.** The upsert writes the parsed title,
 artwork and description as-is, and `parse_feed` yields "no value" for a feed
 without them (the title falls back to the feed URL; artwork and description are
-empty). Left alone, a trimmed or half-edited response would rename a feed to its
+empty). "Without them" includes elements that are present but **blank**: `feed-rs`
+hands `<title></title>`, `<description>   </description>` or a whitespace-only
+image URL through as empty strings, so `parse_feed` trims every value and treats a
+blank one as missing. That is the single place "absent" is decided, and it also
+means a brand-new feed with an empty `<title>` is listed under its URL instead of
+as a blank row. Left alone, a trimmed or half-edited response would rename a feed to its
 URL (reordering the library) and drop its artwork until the next refresh. So
 `Subscription::inherit_missing_metadata` fills each of those three from the stored
 subscription when the response lacks it, field by field, on both the refresh and

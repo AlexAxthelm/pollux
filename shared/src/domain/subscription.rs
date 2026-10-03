@@ -25,9 +25,13 @@ impl Subscription {
     /// can't wipe good data. Storage upserts write the parsed values unconditionally, and
     /// `parse_feed` produces "no value" in two ways that would otherwise clobber:
     ///
-    /// - `title` falls back to the feed URL when the response has no `<title>`. That
+    /// - `title` falls back to the feed URL when the response has no usable `<title>`. That
     ///   fallback is treated as "absent", not as a rename.
-    /// - `artwork_url` and `description` are `None` when the response omits them.
+    /// - `artwork_url` and `description` are `None` when the response has none.
+    ///
+    /// What counts as "absent" is decided once, in `parse_feed`, which also treats a blank
+    /// (empty or whitespace-only) value as absent; this method relies on that rather than
+    /// re-checking, so it only needs to look for `None` and the URL fallback.
     ///
     /// A value the response does provide always wins, so a publisher changing its title,
     /// artwork or description is still picked up. The cost is that a publisher *removing*

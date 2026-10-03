@@ -3420,6 +3420,68 @@ mod tests {
         assert_eq!(saved.description.as_deref(), Some("About the show"));
     }
 
+    /// Like `BARE_RSS`, but the channel metadata elements are present and *blank*, which
+    /// feed-rs passes through as empty strings rather than as missing.
+    const BLANK_METADATA_RSS: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+  <title></title>
+  <description>   </description>
+  <image><url>  </url></image>
+  <link>https://example.com</link>
+  <item>
+    <title>Episode 1</title>
+    <guid>episode-1-guid</guid>
+    <enclosure url="https://example.com/ep1.mp3" type="audio/mpeg" length="1"/>
+  </item>
+</channel>
+</rss>"#;
+
+    #[test]
+    fn a_refresh_response_with_blank_metadata_keeps_the_stored_values() {
+        // An empty `<title></title>` is not the same as a missing one to the parser, so a
+        // degraded response used to blank the stored title, description and artwork.
+        let app = Pollux;
+        let mut model = model_with_subs(&[]);
+        model.subscriptions.push(known_subscription("a"));
+        let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
+
+        let mut cmd = app.update(
+            fetched("a", response(200, BLANK_METADATA_RSS.as_bytes().to_vec())),
+            &mut model,
+        );
+
+        let saved = upserted_subscription(&mut cmd);
+        assert_eq!(saved.title, "Real Title", "not blanked");
+        assert_eq!(
+            saved.artwork_url.as_deref(),
+            Some("https://example.com/art.png")
+        );
+        assert_eq!(saved.description.as_deref(), Some("About the show"));
+    }
+
+    #[test]
+    fn a_new_feed_with_a_blank_title_gets_its_url_not_an_empty_row() {
+        let app = Pollux;
+        let mut model = Model {
+            loading: true,
+            ..Model::default()
+        };
+
+        let mut cmd = app.update(
+            Event::FeedFetched {
+                url: "https://example.com/blank.rss".to_string(),
+                result: Box::new(response(200, BLANK_METADATA_RSS.as_bytes().to_vec())),
+            },
+            &mut model,
+        );
+
+        let saved = upserted_subscription(&mut cmd);
+        assert_eq!(saved.title, "https://example.com/blank.rss");
+        assert!(saved.description.is_none());
+        assert!(saved.artwork_url.is_none());
+    }
+
     #[test]
     fn a_refresh_response_with_new_metadata_replaces_it_field_by_field() {
         let app = Pollux;
