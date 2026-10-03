@@ -200,7 +200,7 @@ composed by `rust.yml`, `swift.yml`, and `admin.yml`.
 
 The MVP foundation is in place: RSS feed parsing and subscribing, a library and
 per-feed episode list, and an offline **download manager** (serial queue, live
-progress, resume-on-launch, cancel). A base16 **theming** system is wired
+progress, resume on first foreground, cancel). A base16 **theming** system is wired
 through the `ViewModel`. State lives in the Rust core; the iOS shell handles
 SQLite (GRDB), HTTP, downloads (URLSession), and rendering.
 

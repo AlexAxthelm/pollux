@@ -44,6 +44,11 @@ private struct RootView: View {
                 switch phase {
                 case .active:
                     core.update(.refreshStale)
+                    // Resume interrupted downloads only once the app is actually in the
+                    // foreground. A background launch (the refresh task) never reaches
+                    // `.active`, so it can't start a download inside its short window.
+                    // The core ignores every activation after the first.
+                    core.update(.resumePendingDownloads)
                 case .background:
                     // Queue the next best-effort background wake-up.
                     BackgroundRefresh.schedule()

@@ -30,14 +30,26 @@ impl App for Pollux {
         match event {
             Event::Started => {
                 model.loading = true;
-                let subscriptions =
-                    Command::request_from_shell(StorageOperation::ListSubscriptions)
-                        .then_send(|r| Event::SubscriptionsLoaded(Box::new(r)));
+                // Interrupted downloads are deliberately NOT resumed here: the core is
+                // also created when iOS launches the app in the background (for a
+                // refresh task), and that launch must stay metadata-only. They resume
+                // on the first foreground activation instead (`ResumePendingDownloads`).
+                Command::request_from_shell(StorageOperation::ListSubscriptions)
+                    .then_send(|r| Event::SubscriptionsLoaded(Box::new(r)))
+                    .and(render())
+            }
+            Event::ResumePendingDownloads => {
+                // Once per process: the shell sends this on every activation, but the
+                // queue only needs rebuilding from the DB the first time. Later
+                // activations would re-list episodes already in the in-memory queue.
+                if model.pending_downloads_requested {
+                    return Command::done();
+                }
+                model.pending_downloads_requested = true;
                 // Rebuild the download queue for anything a previous session left
                 // mid-download, and resume it.
-                let pending = Command::request_from_shell(StorageOperation::ListPendingDownloads)
-                    .then_send(|r| Event::PendingDownloadsLoaded(Box::new(r)));
-                subscriptions.and(pending).and(render())
+                Command::request_from_shell(StorageOperation::ListPendingDownloads)
+                    .then_send(|r| Event::PendingDownloadsLoaded(Box::new(r)))
             }
             Event::SubscriptionsLoaded(result) => {
                 model.loading = false;
@@ -981,8 +993,13 @@ fn record_refresh_outcome(
 pub enum Event {
     Started,
     SubscriptionsLoaded(Box<StorageResult>),
-    /// Episodes left `Downloading`/`Queued` by a previous session, loaded at launch
-    /// so their downloads can be re-enqueued and resumed.
+    /// Rebuild the download queue from episodes a previous session left
+    /// `Downloading`/`Queued`, and resume them. Sent when the app first becomes
+    /// active, never at launch, so a background launch (e.g. for feed refresh) can't
+    /// start a download. Idempotent: only the first one per process does anything.
+    ResumePendingDownloads,
+    /// Episodes left `Downloading`/`Queued` by a previous session, so their downloads
+    /// can be re-enqueued and resumed (see `ResumePendingDownloads`).
     PendingDownloadsLoaded(Box<StorageResult>),
     FetchFeed(String),
     FeedFetched {
@@ -1177,24 +1194,82 @@ mod tests {
         assert!(model.loading);
 
         let effects: Vec<Effect> = cmd.effects().collect();
-        // ListSubscriptions + ListPendingDownloads + render.
-        assert_eq!(effects.len(), 3);
+        // ListSubscriptions + render.
+        assert_eq!(effects.len(), 2);
 
         let has_storage = effects
             .iter()
             .any(|e| matches!(e, Effect::Storage(r) if matches!(r.operation, StorageOperation::ListSubscriptions)));
         assert!(has_storage, "expected a ListSubscriptions storage effect");
 
-        let has_pending = effects
-            .iter()
-            .any(|e| matches!(e, Effect::Storage(r) if matches!(r.operation, StorageOperation::ListPendingDownloads)));
-        assert!(
-            has_pending,
-            "expected a ListPendingDownloads storage effect to resume interrupted downloads"
-        );
-
         let has_render = effects.iter().any(|e| matches!(e, Effect::Render(_)));
         assert!(has_render, "expected a render effect");
+    }
+
+    #[test]
+    fn started_does_not_touch_downloads_so_a_background_launch_stays_metadata_only() {
+        // The core is also built when iOS launches the app in the background for a
+        // refresh task, and that launch must never start a download.
+        let app = Pollux;
+        let mut model = Model::default();
+
+        let mut cmd = app.update(Event::Started, &mut model);
+
+        assert!(
+            !storage_ops(&mut cmd)
+                .iter()
+                .any(|o| matches!(o, StorageOperation::ListPendingDownloads)),
+            "Started must not load interrupted downloads"
+        );
+        assert!(model.download_queue.is_empty());
+        assert!(model.downloading.is_none());
+        assert!(!model.pending_downloads_requested);
+    }
+
+    #[test]
+    fn resume_pending_downloads_requests_the_interrupted_downloads() {
+        let app = Pollux;
+        let mut model = Model::default();
+
+        let mut cmd = app.update(Event::ResumePendingDownloads, &mut model);
+
+        assert!(model.pending_downloads_requested);
+        assert!(
+            storage_ops(&mut cmd)
+                .iter()
+                .any(|o| matches!(o, StorageOperation::ListPendingDownloads)),
+            "expected a ListPendingDownloads storage effect"
+        );
+    }
+
+    #[test]
+    fn resume_pending_downloads_only_acts_once_per_process() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let _ = app.update(Event::ResumePendingDownloads, &mut model);
+
+        // The shell sends this on every activation; later ones must not re-list
+        // episodes that are already in the in-memory queue.
+        let mut again = app.update(Event::ResumePendingDownloads, &mut model);
+
+        assert!(storage_ops(&mut again).is_empty());
+    }
+
+    #[test]
+    fn resumed_downloads_start_after_the_pending_list_loads() {
+        let app = Pollux;
+        let mut model = Model::default();
+        let _ = app.update(Event::ResumePendingDownloads, &mut model);
+        let mut episode = make_episode("e1", "Interrupted", Some(1));
+        episode.download_status = DownloadStatus::Downloading;
+
+        let mut cmd = app.update(
+            Event::PendingDownloadsLoaded(Box::new(StorageResult::Episodes(vec![episode]))),
+            &mut model,
+        );
+
+        assert_eq!(model.downloading.as_deref(), Some("e1"));
+        assert!(cmd.effects().any(|e| matches!(e, Effect::Download(_))));
     }
 
     #[test]

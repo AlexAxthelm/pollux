@@ -148,7 +148,10 @@ request would push the system's real run well past the interval. A run gets abou
 foreground or wake-up. When the system expires the task, the shell sends
 `CancelRefresh`: the feeds still waiting are dropped (and any auto-refresh held
 for the library load), while the fetch already in flight is left to finish and
-have its outcome recorded, so nothing further starts. It does not download. It will not run if Background App
+have its outcome recorded, so nothing further starts. It does not download, and
+a background launch does not resume interrupted downloads either: the core only
+loads those on `ResumePendingDownloads`, which the shell sends the first time
+the app becomes active, never from `Started`. It will not run if Background App
 Refresh is off, in Low Power Mode, or after the user force-quits the app, so
 foreground refresh is the reliable path. Declared in `iOS/project.yml`
 (`UIBackgroundModes: fetch`, `BGTaskSchedulerPermittedIdentifiers`); the

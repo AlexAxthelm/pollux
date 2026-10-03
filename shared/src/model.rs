@@ -26,6 +26,9 @@ pub struct Model {
     // the queue itself is rebuilt from the DB at launch.
     pub download_queue: Vec<QueuedDownload>,
     pub downloading: Option<String>,
+    // Set once the first foreground activation has asked storage for downloads a
+    // previous session left in flight, so later activations don't repeat the request.
+    pub pending_downloads_requested: bool,
 
     // Live progress of the in-flight download (the one in `downloading`). Transient
     // and never persisted: a partial download can't resume across a restart, so a
