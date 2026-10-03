@@ -240,23 +240,22 @@ struct RefreshStorageTests {
 }
 
 @Suite("Retry-After parsing")
-@MainActor
 struct RetryAfterTests {
     @Test func parsesDelaySeconds() {
-        #expect(Core.retryAfterSeconds("120") == 120)
-        #expect(Core.retryAfterSeconds(" 7 ") == 7)
+        #expect(FeedFetcher.retryAfterSeconds("120") == 120)
+        #expect(FeedFetcher.retryAfterSeconds(" 7 ") == 7)
     }
 
     @Test func parsesHttpDateRelativeToNow() {
         let now = Date(timeIntervalSince1970: 784_111_777) // Sun, 06 Nov 1994 08:49:37 GMT
-        #expect(Core.retryAfterSeconds("Sun, 06 Nov 1994 08:50:37 GMT", now: now) == 60)
+        #expect(FeedFetcher.retryAfterSeconds("Sun, 06 Nov 1994 08:50:37 GMT", now: now) == 60)
     }
 
     @Test func pastDateClampsToZeroAndGarbageIsNil() {
         let now = Date(timeIntervalSince1970: 784_111_777)
-        #expect(Core.retryAfterSeconds("Sun, 06 Nov 1994 08:00:00 GMT", now: now) == 0)
-        #expect(Core.retryAfterSeconds("soon") == nil)
-        #expect(Core.retryAfterSeconds(nil) == nil)
-        #expect(Core.retryAfterSeconds("") == nil)
+        #expect(FeedFetcher.retryAfterSeconds("Sun, 06 Nov 1994 08:00:00 GMT", now: now) == 0)
+        #expect(FeedFetcher.retryAfterSeconds("soon") == nil)
+        #expect(FeedFetcher.retryAfterSeconds(nil) == nil)
+        #expect(FeedFetcher.retryAfterSeconds("") == nil)
     }
 }
