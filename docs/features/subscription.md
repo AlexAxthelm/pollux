@@ -150,7 +150,7 @@ same limit.
 | Result | Effect |
 |---|---|
 | 200 | Parse, carry over any title, artwork or description the response lacks (below), upsert (see `DATA_MODEL.md`), store new validators, clear the error and backoff, reload the open feed's episodes |
-| 304 | Only `last_refreshed` moves; error and backoff cleared; episodes untouched |
+| 304 | `last_refreshed` moves; error and backoff cleared; no episode is rewritten. It also finishes pending removals: episodes already absent for 48 hours are flagged (see De-listed Episodes), and the open list reloads if any were |
 | 429 | `retry_after_until` = now + `Retry-After` (seconds or HTTP-date, normalized to seconds by the shell), or 1 hour (`RATE_LIMIT_BACKOFF_SECS`) if absent. Capped at 24 hours (`MAX_RETRY_AFTER_SECS`), so a host asking for a year (or a typo) can't silence auto-refresh for that feed indefinitely; a value too large to represent clamps to the cap rather than falling back to the 1 hour default |
 | Device can't reach the network (`HttpResult::Unreachable`: offline, cellular data off, roaming off, on a call, connection lost mid-request) | `last_refresh_error` recorded; **no backoff** and any existing one is left as it was. Nothing is wrong with the feed, and backing it off would keep auto-refresh away for 15 minutes after connectivity returns, for every feed at once |
 | Other status, host-side network error (refused, TLS, timeout, DNS), unparseable body, failed save | `last_refresh_error` recorded; `retry_after_until` = now + 15 minutes (`FAILURE_BACKOFF_SECS`) so a broken feed isn't retried on every foreground |
@@ -256,6 +256,13 @@ refresh a few times would see the same bad response each time. A feed that
 genuinely dropped an episode is flagged by the first refresh after the window,
 including a "latest episode only" feed, where every older episode goes after 48
 hours.
+
+"Refresh" here includes a 304. A feed that stops changing answers every later
+refresh with one, and without help the episode a body first omitted would never be
+flagged. So a 304 flags the episodes whose clock has already run 48 hours. It never
+starts a clock (no body was compared, so nothing is known to be missing), and a
+failed or rate-limited refresh doesn't flag anything, because neither says the
+stored list still matches the server.
 
 The clock restarts whenever the episode reappears: missing, present, missing is
 two separate absences, not one long one. A clock recorded in the future (the wall

@@ -362,11 +362,24 @@ impl App for Pollux {
                     Some(failure_backoff_until()),
                 ),
             },
-            Event::RefreshStatePersisted(_result) => {
-                // Required sink for the `UpdateRefreshState` request. The in-memory
-                // subscription already reflects the outcome, and a failed write only
-                // costs durability across a restart, so there is nothing to surface.
-                Command::done()
+            Event::RefreshStatePersisted {
+                subscription_id,
+                result,
+            } => {
+                // The in-memory subscription already reflects the outcome, and a failed
+                // write only costs durability across a restart, so there is nothing to
+                // surface. The one thing worth acting on: a 304 flagged episodes as
+                // removed, so the open feed's list on screen is out of date.
+                let flagged = matches!(*result, StorageResult::EpisodesRemoved(n) if n > 0);
+                let open = model
+                    .selected_subscription
+                    .as_ref()
+                    .is_some_and(|s| s.id == subscription_id);
+                if flagged && open {
+                    load_episodes(&subscription_id)
+                } else {
+                    Command::done()
+                }
             }
             Event::SelectSubscription(id) => {
                 // Re-selecting the feed already on screen (e.g. returning from an
@@ -1102,7 +1115,13 @@ fn record_refresh_outcome(
             last_refresh_error: error,
             retry_after_until,
         })
-        .then_send(|r| Event::RefreshStatePersisted(Box::new(r)));
+        .then_send({
+            let id = id.to_string();
+            move |r| Event::RefreshStatePersisted {
+                subscription_id: id.clone(),
+                result: Box::new(r),
+            }
+        });
     }
     persist.and(maybe_start_next_refresh(model)).and(render())
 }
@@ -1150,8 +1169,12 @@ pub enum Event {
         subscription_id: String,
         result: Box<StorageResult>,
     },
-    /// Sink for the `UpdateRefreshState` request; carries no state change.
-    RefreshStatePersisted(Box<StorageResult>),
+    /// Answer to the `UpdateRefreshState` request. Only a 304 can change episodes
+    /// (flagging ones that stayed missing past the grace period).
+    RefreshStatePersisted {
+        subscription_id: String,
+        result: Box<StorageResult>,
+    },
     SelectSubscription(String),
     EpisodesLoaded {
         subscription_id: String,
@@ -2156,6 +2179,66 @@ mod tests {
             !lists_episodes(&storage_ops(&mut cmd)),
             "nothing new, nothing to reload"
         );
+    }
+
+    fn persisted(id: &str, result: StorageResult) -> Event {
+        Event::RefreshStatePersisted {
+            subscription_id: id.to_string(),
+            result: Box::new(result),
+        }
+    }
+
+    #[test]
+    fn a_304_that_flags_episodes_reloads_the_open_list() {
+        // The open list still shows the episodes the 304 just flagged as removed.
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+
+        let mut cmd = app.update(
+            persisted("sub-id", StorageResult::EpisodesRemoved(2)),
+            &mut model,
+        );
+
+        assert!(lists_episodes(&storage_ops(&mut cmd)));
+    }
+
+    #[test]
+    fn a_304_that_flags_nothing_leaves_the_open_list_alone() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+
+        let mut cmd = app.update(
+            persisted("sub-id", StorageResult::EpisodesRemoved(0)),
+            &mut model,
+        );
+
+        assert!(!lists_episodes(&storage_ops(&mut cmd)));
+    }
+
+    #[test]
+    fn flagged_episodes_of_a_feed_that_is_not_open_need_no_reload() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+
+        let mut cmd = app.update(
+            persisted("other", StorageResult::EpisodesRemoved(3)),
+            &mut model,
+        );
+
+        assert!(!lists_episodes(&storage_ops(&mut cmd)));
+    }
+
+    #[test]
+    fn a_failed_refresh_state_write_reloads_nothing() {
+        let app = Pollux;
+        let mut model = model_showing_a_list();
+
+        let mut cmd = app.update(
+            persisted("sub-id", StorageResult::Error("db busy".to_string())),
+            &mut model,
+        );
+
+        assert!(!lists_episodes(&storage_ops(&mut cmd)));
     }
 
     #[test]

@@ -47,7 +47,8 @@ feed refresh needs (see `features/subscription.md`, "Refresh as built"):
 
 Refresh outcomes that produce no new body (304, 429, failures) are written by
 `UpdateRefreshState`; a 200 goes through the normal feed upsert, which overwrites
-all of the above from the fresh parse.
+all of the above from the fresh parse. A 304's write also flags episodes whose
+`missing_since` clock has run the grace period, and reports how many.
 
 ### Episode *(Identified)*
 

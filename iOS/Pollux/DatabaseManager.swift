@@ -145,17 +145,27 @@ actor DatabaseManager {
     /// Persists the outcome of a refresh that produced no new body (304, rate limit,
     /// or failure). `last_refreshed` is only moved when provided; the error and
     /// retry-after columns are written verbatim so a success clears them.
+    ///
+    /// A 304 (`lastRefreshed` provided) is also a successful confirmation that the stored
+    /// episodes still match the server, so it finishes what an earlier body started:
+    /// episodes whose absence clock has run the grace period are flagged. It never starts
+    /// a clock (that needs a body to compare against), so an unchanged feed can't flag
+    /// anything that wasn't already missing. Returns how many episodes were flagged.
     private func updateRefreshState(
         subscriptionId: String, lastRefreshed: Int64?, lastRefreshError: String?,
         retryAfterUntil: Int64?,
     ) async throws -> StorageResult {
-        try await db.write { db in
+        let nowSecs = Int64(now().timeIntervalSince1970)
+        let flagged = try await db.write { db -> Int in
             try Self.updateRefreshStateRow(
                 subscriptionId: subscriptionId, lastRefreshed: lastRefreshed,
                 lastRefreshError: lastRefreshError, retryAfterUntil: retryAfterUntil, db: db,
             )
+            guard lastRefreshed != nil else { return 0 }
+            try Self.flagEpisodesRemovedFromFeed(subscriptionId: subscriptionId, now: nowSecs, db: db)
+            return db.changesCount
         }
-        return .success
+        return .episodesRemoved(UInt64(flagged))
     }
 
     private func deleteSubscription(id: String) async throws -> StorageResult {

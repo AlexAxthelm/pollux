@@ -79,6 +79,20 @@ private func statuses(_ db: DatabaseManager, subscriptionId: String = "sub-1") a
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.feedGuid, $0.downloadStatus) })
 }
 
+/// A 304: nothing new from the server, only the outcome recorded. Returns how many
+/// episodes that write flagged.
+@discardableResult
+private func unchangedRefresh(_ db: DatabaseManager, now: Int64) async throws -> UInt64? {
+    let result = try await db.execute(.updateRefreshState(
+        subscriptionId: "sub-1", lastRefreshed: now, lastRefreshError: nil, retryAfterUntil: nil,
+    ))
+    guard case let .episodesRemoved(count) = result else {
+        Issue.record("Expected .episodesRemoved, got \(result)")
+        return nil
+    }
+    return count
+}
+
 /// A manager with `sub-1` and episodes `keep` and `gone` stored, on a fresh clock.
 private func seeded(_ guids: [String] = ["keep", "gone"]) async throws -> (DatabaseManager, TestClock) {
     let clock = TestClock()
@@ -130,6 +144,66 @@ struct RemovedFromFeedTests {
         #expect(rows["gone"] == .removedFromFeed)
         #expect(rows["keep"] == .notDownloaded)
         #expect(rows.count == 2, "rows are kept, only flagged")
+    }
+
+    @Test func anUnchangedFeedFlagsAnAbsenceThatOutlastedTheGracePeriod() async throws {
+        // A body omits `gone` once, then the feed stops changing and every refresh is a
+        // 304. Nothing but the 304 can ever finish the job.
+        let (db, clock) = try await seeded()
+        try await refresh(db, feedGuids: ["keep"])
+
+        clock.advance(hours: grace)
+        let flagged = try await unchangedRefresh(db, now: 2_000)
+
+        #expect(flagged == 1)
+        let rows = try await statuses(db)
+        #expect(rows["gone"] == .removedFromFeed)
+        #expect(rows["keep"] == .notDownloaded)
+    }
+
+    @Test func anUnchangedFeedInsideTheGraceWindowFlagsNothing() async throws {
+        let (db, clock) = try await seeded()
+        try await refresh(db, feedGuids: ["keep"])
+
+        clock.advance(hours: grace - 1)
+        let flagged = try await unchangedRefresh(db, now: 2_000)
+
+        #expect(flagged == 0)
+        #expect(try await statuses(db)["gone"] == .notDownloaded)
+    }
+
+    @Test func anUnchangedFeedNeverStartsAClock() async throws {
+        // No body was compared, so no episode is known to be missing. Had the 304 started
+        // clocks, the second one (a full grace period later) would flag everything.
+        let (db, clock) = try await seeded()
+
+        try await unchangedRefresh(db, now: 2_000)
+        clock.advance(hours: grace)
+        let flagged = try await unchangedRefresh(db, now: 3_000)
+
+        #expect(flagged == 0)
+        let rows = try await statuses(db)
+        #expect(rows["keep"] == .notDownloaded)
+        #expect(rows["gone"] == .notDownloaded)
+    }
+
+    @Test func aFailedRefreshDoesNotConfirmAbsences() async throws {
+        // Only a 304 says the stored list still matches the server. A 500 or a 429 says
+        // nothing, so it must not flag even if the grace period has passed.
+        let (db, clock) = try await seeded()
+        try await refresh(db, feedGuids: ["keep"])
+
+        clock.advance(hours: grace)
+        let result = try await db.execute(.updateRefreshState(
+            subscriptionId: "sub-1", lastRefreshed: nil, lastRefreshError: "HTTP 500", retryAfterUntil: 9_999,
+        ))
+
+        guard case let .episodesRemoved(count) = result else {
+            Issue.record("Expected .episodesRemoved, got \(result)")
+            return
+        }
+        #expect(count == 0)
+        #expect(try await statuses(db)["gone"] == .notDownloaded)
     }
 
     @Test func theBoundaryIsExactlyTheGracePeriod() async throws {
