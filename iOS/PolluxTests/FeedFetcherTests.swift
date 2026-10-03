@@ -135,6 +135,28 @@ struct FeedFetcherTests {
         #expect(request.cachePolicy == .reloadIgnoringLocalCacheData)
     }
 
+    @Test func usesAShortIdleTimeoutSoAHungHostCannotStallTheQueue() async throws {
+        FeedStubProtocol.configure(.init())
+
+        _ = await fetch()
+
+        let request = try #require(FeedStubProtocol.received)
+        #expect(request.timeoutInterval == FeedFetcher.requestTimeout)
+        #expect(
+            request.timeoutInterval < 30,
+            "must fit inside a background refresh's ~30s budget, not URLSession's 60s default",
+        )
+    }
+
+    @Test func appliesTheTimeoutToConditionalRequestsToo() async throws {
+        FeedStubProtocol.configure(.init(statusCode: 304))
+
+        _ = await fetch(etag: "\"v1\"", lastModified: "Wed, 01 Oct 2026 00:00:00 GMT")
+
+        let request = try #require(FeedStubProtocol.received)
+        #expect(request.timeoutInterval == FeedFetcher.requestTimeout)
+    }
+
     @Test func forwardsStatusBodyAndValidatorHeaders() async {
         FeedStubProtocol.configure(.init(
             statusCode: 200,

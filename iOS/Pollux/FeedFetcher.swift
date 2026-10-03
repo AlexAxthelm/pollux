@@ -5,6 +5,15 @@ import Foundation
 /// so the session is injectable: tests drive it with a stub `URLProtocol` and check the
 /// conditional-request headers it sends and the validator headers it hands back.
 enum FeedFetcher {
+    /// How long a feed request may sit with no data before it fails. URLSession's default
+    /// is 60s, which is too long here: the core refreshes feeds one at a time, so a host
+    /// that accepts the connection and then never answers would stall every feed behind
+    /// it, and a background refresh only gets about 30s in total, so one hung host could
+    /// use the whole run. This is an idle timeout (it resets whenever data arrives), so a
+    /// slow but steady download of a large feed is unaffected. A timeout comes back as a
+    /// plain error, which the core backs the feed off for.
+    static let requestTimeout: TimeInterval = 20
+
     /// Fetches a feed, replaying the stored validators as a conditional GET so an
     /// unchanged feed answers 304 with no body. The cache policy ignores URLSession's
     /// own cache: with our validators attached, a locally cached 200 would otherwise be
@@ -15,7 +24,9 @@ enum FeedFetcher {
         guard let parsedURL = URL(string: url) else {
             return .error("invalid URL: \(url)")
         }
-        var request = URLRequest(url: parsedURL, cachePolicy: .reloadIgnoringLocalCacheData)
+        var request = URLRequest(
+            url: parsedURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: requestTimeout,
+        )
         if let etag {
             request.setValue(etag, forHTTPHeaderField: "If-None-Match")
         }
