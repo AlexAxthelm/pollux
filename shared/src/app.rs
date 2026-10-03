@@ -3288,7 +3288,10 @@ mod tests {
         let _ = app.update(Event::RefreshSubscription("a".to_string()), &mut model);
 
         let _ = app.update(fetched("a", response(304, vec![])), &mut model);
-        assert!(app.view(&model).library.refreshing, "write not acknowledged");
+        assert!(
+            app.view(&model).library.refreshing,
+            "write not acknowledged"
+        );
 
         let _ = ack(&app, &mut model, "a");
         assert!(!app.view(&model).library.refreshing);
