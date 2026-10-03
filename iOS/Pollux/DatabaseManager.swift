@@ -22,7 +22,7 @@ actor DatabaseManager {
     private let now: @Sendable () -> Date
 
     init() throws {
-        now = Date.init
+        now = { Date() }
         guard let support = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask,
         ).first else {
@@ -34,7 +34,7 @@ actor DatabaseManager {
     }
 
     /// Accepts an explicit path — use this in tests to point at a temp file.
-    init(path: String, now: @escaping @Sendable () -> Date = Date.init) throws {
+    init(path: String, now: @escaping @Sendable () -> Date = { Date() }) throws {
         self.now = now
         db = try DatabasePool(path: path)
         try Self.runMigrations(db)
