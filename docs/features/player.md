@@ -32,6 +32,13 @@ indicators). MVP pages:
 
 *(Future)* Additional pages: chapter list, visualizer (see `visualizer.md`)
 
+The artwork fills the width of the player (as large a square as fits). A
+user-configurable player layout is a possible later feature; the default layout
+below is the only one for now.
+
+Primary controls (play/pause, skip) are drawn in the theme's accent color; the
+secondary row (hide, output routing, options) uses the text color.
+
 Note: for large screens, MVP will remain paged, but multiple pages may be shown
 simultaneously if space allows.
 

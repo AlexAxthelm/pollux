@@ -44,7 +44,7 @@ struct PlayerScreen: View {
     private var pages: some View {
         VStack(spacing: 8) {
             TabView(selection: $page) {
-                ArtworkView(urlString: player.artworkUrl, size: 300)
+                ArtworkView(urlString: player.artworkUrl, size: nil)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .tag(0)
                 if let description = player.description {
@@ -170,7 +170,8 @@ struct PlayerScreen: View {
             .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
             skipButton(forward: true)
         }
-        .foregroundStyle(themeColors.text)
+        // Primary controls take the accent; the secondary row below stays in text color.
+        .foregroundStyle(themeColors.accent)
     }
 
     private func skipButton(forward: Bool) -> some View {

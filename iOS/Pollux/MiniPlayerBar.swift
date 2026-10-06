@@ -46,7 +46,7 @@ struct MiniPlayerBar: View {
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(themeColors.text)
+                .foregroundStyle(themeColors.accent)
                 .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
             }
             .padding(.horizontal)

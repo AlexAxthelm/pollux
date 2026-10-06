@@ -2,19 +2,36 @@ import SwiftUI
 
 /// Square podcast/episode artwork loaded from a URL, with a neutral placeholder
 /// while loading or when the URL is missing or fails.
+///
+/// With a `size` it is a fixed square. With `size: nil` it fills the width it is
+/// offered, as large a square as fits (the full player's artwork).
 struct ArtworkView: View {
     @Environment(\.themeColors) private var themeColors
     let urlString: String?
-    var size: CGFloat = 56
+    var size: CGFloat? = 56
+
+    private var cornerRadius: CGFloat {
+        size == nil ? 12 : 8
+    }
 
     var body: some View {
-        artwork
-            .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+        square
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: cornerRadius)
                     .strokeBorder(themeColors.secondaryBackground, lineWidth: 0.5),
             )
+    }
+
+    @ViewBuilder private var square: some View {
+        if let size {
+            artwork.frame(width: size, height: size)
+        } else {
+            // Clear square sets the bounds (largest that fits); the image fills it.
+            Color.clear
+                .aspectRatio(1, contentMode: .fit)
+                .overlay { artwork }
+        }
     }
 
     @ViewBuilder private var artwork: some View {
