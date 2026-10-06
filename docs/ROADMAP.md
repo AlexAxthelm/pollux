@@ -68,7 +68,7 @@ The core listening experience.
   indicators, three-dots menu, swipe gestures
 - **Audio playback engine**: OS media integration, position tracking, resume
   with rewind
-- **Player UI**: artwork carousel (art page only, show notes placeholder),
+- **Player UI**: artwork carousel (art page and show notes page),
   scrubber, skip buttons (30s/15s defaults), play/pause, source context,
   player options menu stub
 - **Mini-player**: visible when active, play/pause + tap to expand, progress
@@ -133,7 +133,8 @@ Milestone: MVP complete. App is usable end-to-end for its core purpose.
 
 The archive binge feature is the reason this app exists. Once MVP is solid:
 
-- **Show notes**: player carousel page, timestamp detection → synthetic chapters
+- **Show notes**: timestamp detection → synthetic chapters (the player's show-notes
+  page itself is built)
 - **Archive binge playlist**: composite playlist template, surfaced in create
   playlist flow, one-tap setup
 - **OPML import/export**: standard import for migrating from other apps

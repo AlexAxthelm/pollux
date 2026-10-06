@@ -476,3 +476,35 @@ fn a_restored_episode_keeps_the_source_it_was_started_from() {
     );
     assert_eq!(view.source_title, "Feed");
 }
+
+#[test]
+fn the_player_view_carries_the_show_notes_with_a_plain_text_fallback() {
+    let mut e = episode("e1");
+    e.description = Some("<p>Hello <b>world</b></p>".into());
+    let mut model = model_with(vec![e]);
+    send(&mut model, Event::PlayEpisode("e1".into()));
+
+    let view = view_player(&model);
+
+    assert_eq!(
+        view.description.as_deref(),
+        Some("<p>Hello <b>world</b></p>")
+    );
+    assert_eq!(view.description_text.as_deref(), Some("Hello world"));
+}
+
+#[test]
+fn an_episode_without_show_notes_has_none_to_show() {
+    // Missing and blank descriptions both mean the show-notes page is left out.
+    for description in [None, Some("   \n ".to_string())] {
+        let mut e = episode("e1");
+        e.description = description;
+        let mut model = model_with(vec![e]);
+        send(&mut model, Event::PlayEpisode("e1".into()));
+
+        let view = view_player(&model);
+
+        assert!(view.description.is_none());
+        assert!(view.description_text.is_none());
+    }
+}

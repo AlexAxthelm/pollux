@@ -29,7 +29,7 @@
 
 use crux_core::{render::render, Command};
 
-use crate::app::{enqueue_download, reset_to_not_downloaded, Event};
+use crate::app::{enqueue_download, reset_to_not_downloaded, Event, DESCRIPTION_PREVIEW_CHARS};
 use crate::capabilities::player::{MediaSource, PlayerOperation, PlayerResult};
 use crate::capabilities::storage::{StorageOperation, StorageResult};
 use crate::defaults::{
@@ -38,6 +38,7 @@ use crate::defaults::{
 };
 use crate::domain::{DownloadStatus, Episode, EpisodeSource, PlaybackStatus};
 use crate::effect::Effect;
+use crate::html::strip_html_preview;
 use crate::model::{ActivePlayback, Model};
 use crate::view_model::PlayerView;
 
@@ -574,6 +575,16 @@ pub(crate) fn player_view(model: &Model) -> Option<PlayerView> {
             .map(|s| s.title.clone())
             .unwrap_or_default(),
     };
+    // A blank description is no show notes at all, so the page can be left out.
+    let description = active
+        .episode
+        .description
+        .clone()
+        .filter(|d| !d.trim().is_empty());
+    let description_text = description
+        .as_deref()
+        .map(|d| strip_html_preview(d, DESCRIPTION_PREVIEW_CHARS))
+        .filter(|t| !t.is_empty());
     Some(PlayerView {
         episode_id: active.episode.id.clone(),
         episode_title: active.episode.title.clone(),
@@ -591,6 +602,8 @@ pub(crate) fn player_view(model: &Model) -> Option<PlayerView> {
         is_streaming: matches!(active.media, MediaSource::Stream { .. }),
         skip_forward_secs: SKIP_FORWARD_SECS,
         skip_back_secs: SKIP_BACKWARD_SECS,
+        description,
+        description_text,
         error: active.error.clone(),
     })
 }

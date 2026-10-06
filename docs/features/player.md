@@ -24,8 +24,11 @@ indicators). MVP pages:
 
 1. **Artwork**: episode image → feed image → placeholder. Chapter art shown
    if available and episode is in a chapter (see `episode-chapters.md`).
-2. **Show notes**: placeholder page for MVP ("Show notes coming soon").
-   See `player-show-notes.md` for full implementation.
+2. **Show notes**: the episode's show notes, rendered as rich text (the same
+   renderer as the episode detail page) and scrollable. The page, and the dot
+   indicators, are left out when the episode has no show notes. Timestamp
+   detection and tappable timestamps are not built yet; see
+   `player-show-notes.md`.
 
 *(Future)* Additional pages: chapter list, visualizer (see `visualizer.md`)
 
@@ -87,7 +90,7 @@ the player without leaving the view.
 
 ```
 NavBar
-[ Paged content area: Art | (Show notes placeholder) ]
+[ Paged content area: Art | Show notes (if any) ]
 [ Dot indicators ]
 Position / scrubber
 (Chapter Back) | Title & Chapter, From Source | (Chapter Next)   ← if chapters present

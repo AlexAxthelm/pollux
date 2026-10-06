@@ -37,6 +37,11 @@ pub struct PlayerView {
     pub is_streaming: bool,
     pub skip_forward_secs: u32,
     pub skip_back_secs: u32,
+    /// The episode's show notes (raw HTML from the feed) for the player's show-notes
+    /// page, or `None` when it has none (the page is then not shown). Plain-text
+    /// `description_text` is the fallback shown until the shell has rendered the HTML.
+    pub description: Option<String>,
+    pub description_text: Option<String>,
     /// Why playback failed, shown as a transient banner; playback stays paused.
     pub error: Option<String>,
 }

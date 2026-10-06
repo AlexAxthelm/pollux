@@ -768,7 +768,7 @@ fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
 /// Number of characters of stripped description shipped for the row preview. A row
 /// shows a single line, so this is well above what can be displayed; the rest is
 /// never processed (see `strip_html_preview`).
-const DESCRIPTION_PREVIEW_CHARS: usize = 200;
+pub(crate) const DESCRIPTION_PREVIEW_CHARS: usize = 200;
 
 /// Projects a stored `Episode` into its display `EpisodeSummary`, stripping a short
 /// plain-text preview of the description for the row while keeping the raw HTML for

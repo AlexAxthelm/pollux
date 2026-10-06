@@ -35,28 +35,56 @@ struct PlayerScreen: View {
 
     // MARK: - Paged content
 
+    /// The show-notes page exists only when the episode has show notes; with one page
+    /// there is nothing to swipe to, so no dots either.
+    private var pageCount: Int {
+        player.description == nil ? 1 : 2
+    }
+
     private var pages: some View {
         VStack(spacing: 8) {
             TabView(selection: $page) {
                 ArtworkView(urlString: player.artworkUrl, size: 300)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .tag(0)
-                Text("Show notes coming soon")
-                    .foregroundStyle(themeColors.secondaryText)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .tag(1)
+                if let description = player.description {
+                    showNotesPage(html: description)
+                        .tag(1)
+                }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             // The system dots are fixed light-on-light; draw our own in theme colors.
-            HStack(spacing: 8) {
-                ForEach(0 ..< 2, id: \.self) { index in
-                    Circle()
-                        .fill(index == page ? themeColors.text : themeColors.secondaryText.opacity(0.4))
-                        .frame(width: 8, height: 8)
+            if pageCount > 1 {
+                HStack(spacing: 8) {
+                    ForEach(0 ..< pageCount, id: \.self) { index in
+                        Circle()
+                            .fill(index == page ? themeColors.text : themeColors.secondaryText.opacity(0.4))
+                            .frame(width: 8, height: 8)
+                    }
                 }
+                .accessibilityHidden(true)
             }
-            .accessibilityHidden(true)
         }
+        // The next episode may have no show notes while the old page was selected.
+        .onChange(of: pageCount) { _, count in
+            if page >= count {
+                page = 0
+            }
+        }
+    }
+
+    private func showNotesPage(html: String) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Show notes")
+                    .font(.headline)
+                    .foregroundStyle(themeColors.text)
+                ShowNotesText(html: html, fallback: player.descriptionText)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 4)
+        }
+        .accessibilityLabel("Show notes")
     }
 
     // MARK: - Scrubber
