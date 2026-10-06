@@ -76,7 +76,9 @@ the library view (refresh all).
 > a spinner). Consequently, when a refresh (or any path) writes new/updated
 > episodes for the feed currently on screen, it must trigger an **explicit**
 > reload of the details page's episode list; the page will not pick up storage
-> changes on its own. See `SelectSubscription` / `EpisodesLoaded` in
+> changes on its own. Refresh does this in `RefreshSaved`, reloading without
+> setting `detail_loading` so the existing list stays on screen. See
+> `SelectSubscription` / `EpisodesLoaded` / `RefreshSaved` in
 > `shared/src/app.rs`.
 
 Feed refresh interval: 12 is the default, managed by settings (cascading)
@@ -89,7 +91,154 @@ polling/refresh/update/downloads
 should happen in background. If not, then there should be a signal to user
 (panel somewhere?) that the app only updates when it's foregrounded.
 
+### Refresh as built
+
+*Status: implemented, except where listed under "Not yet".*
+
+**Triggers**
+
+| Trigger | Entry point | Scope |
+|---|---|---|
+| Pull-to-refresh on the details page | `RefreshSubscription(id)` | that feed |
+| "Refresh all" toolbar button, or pull-to-refresh on the library list | `RefreshAll` | every feed, in library (title) order |
+| App becomes active, including cold launch | `RefreshStale` | feeds that are due |
+| Background wake-up (`BGAppRefreshTask`) | `RefreshStale` | feeds that are due |
+
+All triggers feed one **serial** queue in the core (one feed fetched at a time,
+mirroring the download queue). A feed already queued or in flight is not queued
+again. Refresh state is deliberately separate from the library's
+`loading`/`error`, which the subscribe flow reads to detect success.
+
+**When a feed is "due"** (automatic triggers only): it has never been refreshed,
+or `last_refreshed` is 12 or more hours ago (`REFRESH_INTERVAL_HOURS`), **and**
+its `retry_after_until` has passed. Manual refresh (details page, Refresh all)
+ignores the backoff: an explicit request wins.
+
+Both timestamps are wall-clock values written earlier, so the check tolerates
+them being wrong. A `last_refreshed` **in the future** (the clock was ahead, or
+has since been corrected) counts as stale, since otherwise the feed would stay
+not-due until real time reached it; the redundant fetch is a cheap conditional
+GET and stamps a correct time. A `retry_after_until` **further ahead than the
+24 hour cap** can only be skew (nothing is ever written that far out) and is
+ignored rather than honoured. A small clock step back therefore costs at most one
+extra conditional GET.
+
+If `RefreshStale` arrives before the library has loaded (cold launch), the core
+holds the request and honours it when the subscriptions arrive. If that load
+failed (a storage error at launch), nothing else would ever retry it, so the next
+`RefreshStale` retries the library load itself (one at a time, on every
+activation until it succeeds), and the held request runs once it does. A
+background run that finds the load failed simply does nothing; the retry happens
+on the next foreground activation.
+
+**Conditional GET.** The last successful response's `ETag` and `Last-Modified`
+are stored on the subscription and replayed as `If-None-Match` /
+`If-Modified-Since`. The shell bypasses URLSession's own cache for feed fetches,
+otherwise a locally cached 200 could hide the 304.
+
+**Timeout.** A feed request fails after 20 seconds with no data
+(`FeedFetcher.requestTimeout`). URLSession's 60 second default would let one hung
+host stall every feed behind it in the serial queue, and use up a background
+run's whole ~30 second budget. It is an idle timeout (it resets whenever data
+arrives), so a slow but steady download of a large feed is unaffected; a host
+that trickles bytes forever is not bounded by it. A timeout is a host-side error,
+so the feed backs off. The subscribe flow uses the same fetch, so it gets the
+same limit.
+
+**Outcomes**
+
+| Result | Effect |
+|---|---|
+| 200 | Parse, carry over any title, artwork or description the response lacks (below), upsert (see `DATA_MODEL.md`), store new validators, clear the error and backoff, reload the open feed's episodes |
+| 304 | `last_refreshed` moves; error and backoff cleared; no episode is rewritten. It also finishes pending removals: episodes already absent for 48 hours are flagged (see De-listed Episodes), and the open list reloads if any were |
+| 429 | `retry_after_until` = now + `Retry-After` (a delay in seconds or an HTTP-date in any of the three formats RFC 9110 requires; the shell forwards the header verbatim and the core parses it, so every platform shares one parser), or 1 hour (`RATE_LIMIT_BACKOFF_SECS`) if absent. Capped at 24 hours (`MAX_RETRY_AFTER_SECS`), so a host asking for a year (or a typo) can't silence auto-refresh for that feed indefinitely; a value too large to represent clamps to the cap rather than falling back to the 1 hour default |
+| Device can't reach the network (`HttpResult::Unreachable`: offline, cellular data off, roaming off, on a call, connection lost mid-request) | `last_refresh_error` recorded; **no backoff** and any existing one is left as it was. Nothing is wrong with the feed, and backing it off would keep auto-refresh away for 15 minutes after connectivity returns, for every feed at once |
+| Other status, host-side network error (refused, TLS, timeout, DNS), unparseable body, failed save | `last_refresh_error` recorded; `retry_after_until` = now + 15 minutes (`FAILURE_BACKOFF_SECS`) so a broken feed isn't retried on every foreground |
+
+The shell decides which `URLError` codes count as the device being offline
+(`FeedFetcher.deviceConnectivityCodes`). Timeouts, DNS failures and refused
+connections are deliberately **not** in that set, since they can't be told apart
+from a dead host.
+
+A failed refresh never moves `last_refreshed` and never discards the stored
+validators.
+
+**Metadata survives a degraded response.** The upsert writes the parsed title,
+artwork and description as-is, and `parse_feed` yields "no value" for a feed
+without them (the title falls back to the feed URL; artwork and description are
+empty). "Without them" includes elements that are present but **blank**: `feed-rs`
+hands `<title></title>`, `<description>   </description>` or a whitespace-only
+image URL through as empty strings, so `parse_feed` trims every value and treats a
+blank one as missing. That is the single place "absent" is decided, and it also
+means a brand-new feed with an empty `<title>` is listed under its URL instead of
+as a blank row.
+
+Left alone, a trimmed or half-edited response would rename a feed to its URL
+(reordering the library) and drop its artwork until the next refresh. So
+`Subscription::inherit_missing_metadata` fills each of those three from the stored
+subscription when the response lacks it, field by field, on both the refresh and
+re-subscribe paths. A value the response does provide always wins, so a publisher
+changing its title or artwork is still picked up. The trade-off is that a
+publisher *removing* its artwork or description is not noticed; a stale image or
+blurb is harmless and a lost one is not.
+
+**Failure surfacing.** The last error is persisted, shown as a warning marker on
+the library row (the reason is read out by VoiceOver) and as a line under the
+title on the details page. The next success clears it.
+
+A separate failure can follow a successful refresh: the explicit reload of the open
+feed's episode list (see the implementation note above) can itself fail. The
+refresh did succeed, so that is not recorded as a refresh error. If a list is
+already showing, the core keeps it and shows a non-blocking "Couldn't update the
+episode list" banner (`SubscriptionDetailView::list_notice`) instead of replacing
+the list with an error screen. Only when nothing is on screen yet (the initial
+load) does a failed load become the blocking error.
+
+The banner means the rows on screen are older than what is stored, so something has
+to retry the reload, and two things do, both in place (the rows stay visible, no
+spinner): **re-entering the feed**, and **the next successful refresh of it**, even a
+304, which would otherwise leave the list alone because "nothing changed" on the
+server says nothing about what the screen is showing. A failed refresh doesn't
+retry, since it says nothing about whether the stored episodes are current. The
+banner clears when a reload succeeds, and on switching to another feed.
+
+**Background refresh.** `BGAppRefreshTask` is best-effort: iOS decides when, and
+whether, it runs, and the request time is only a lower bound. It is requested for
+**3 hours** out each time the app backgrounds and at the start of every run (so
+the chain survives a run cut short). That is deliberately shorter than the 12-hour
+interval: only due feeds are fetched, so an early wake is cheap, whereas a longer
+request would push the system's real run well past the interval. A run gets about
+30 seconds, so it refreshes as many due feeds as fit; the rest wait for the next
+foreground or wake-up. When the system expires the task, the shell sends
+`CancelRefresh`: the feeds still waiting are dropped (and any auto-refresh held
+for the library load), while the fetch already in flight is left to finish and
+have its outcome recorded, so nothing further starts. A refresh counts as busy
+until its outcome is **written** (`RefreshStatePersisted`), not merely decided:
+the run ends once nothing is busy and iOS may suspend the app right after, so
+finishing earlier could lose the timestamp, error or backoff. A failed write ends
+the refresh like a successful one. It does not download, and
+a background launch does not resume interrupted downloads either: the core only
+loads those on `ResumePendingDownloads`, which the shell sends the first time
+the app becomes active, never from `Started`. It will not run if Background App
+Refresh is off, in Low Power Mode, or after the user force-quits the app, so
+foreground refresh is the reliable path. Declared in `iOS/project.yml`
+(`UIBackgroundModes: fetch`, `BGTaskSchedulerPermittedIdentifiers`); the
+identifier lives in `iOS/Pollux/BackgroundRefresh.swift` and a test checks the
+two agree.
+
+**Not yet**
+
+- Per-feed and global refresh-interval settings. The interval is the hardcoded
+  `REFRESH_INTERVAL_HOURS`; the cascading pattern waits on the Settings feature.
+- Re-evaluating download rules after a refresh (no download rules exist yet).
+- The "app only updates while foregrounded" signal when background refresh is
+  unavailable (deferred to Settings).
+- A per-feed "refreshing" indicator on the details page beyond the pull-to-refresh
+  spinner; the empty state of a feed with no episodes cannot be pulled to refresh.
+
 ## De-listed Episodes
+
+*Status: the marking is implemented; the hiding and toggle below are not.*
 
 When an episode is no longer present in a feed's RSS/Atom/JSONFeed:
 
@@ -98,6 +247,40 @@ When an episode is no longer present in a feed's RSS/Atom/JSONFeed:
 - A "Show unavailable episodes" toggle reveals them
 - If the episode audio file is still on device, it remains playable
 - Episode is marked with "Removed from feed" status (see `episode.md`)
+
+As built, an episode is marked `RemovedFromFeed` only once it has been
+**continuously absent for 48 hours of wall time**: the first refresh that doesn't
+see it starts a clock, and an episode is flagged only if a refresh at least 48
+hours later still doesn't see it. A single absence is not enough: a truncated or
+stale response (a CDN glitch, a feed briefly serving only its newest items) would
+otherwise mark most of a feed removed, and removed episodes cannot be downloaded
+until they reappear. The window is time rather than a count of refreshes because
+a count is reached in minutes: during one stale-cache incident a user pulling to
+refresh a few times would see the same bad response each time. A feed that
+genuinely dropped an episode is flagged by the first refresh after the window,
+including a "latest episode only" feed, where every older episode goes after 48
+hours.
+
+"Refresh" here includes a 304. A feed that stops changing answers every later
+refresh with one, and without help the episode a body first omitted would never be
+flagged. So a 304 flags the episodes whose clock has already run 48 hours. It never
+starts a clock (no body was compared, so nothing is known to be missing), and a
+failed or rate-limited refresh doesn't flag anything, because neither says the
+stored list still matches the server.
+
+The clock restarts whenever the episode reappears: missing, present, missing is
+two separate absences, not one long one. A clock recorded in the future (the wall
+clock was ahead and has since been corrected) is restarted at the true time rather
+than trusted.
+
+Only `NotDownloaded` or `Failed` episodes are flagged. A downloaded, queued, or
+in-flight episode keeps its state so its file stays playable and its download is
+not orphaned; its clock keeps running, so if the file is later deleted the next
+refresh flags it. If a marked episode reappears in the feed it returns to
+`NotDownloaded`. A refresh that returns an **empty** feed marks nothing and does
+not start a clock, since that is far more likely a broken response than every
+episode being deleted. The episode list does not yet hide removed episodes or
+offer the "Show unavailable episodes" toggle.
 
 Permanent metadata retention is intentional — it supports the library model
 and keeps the archive complete even as publishers rotate content.

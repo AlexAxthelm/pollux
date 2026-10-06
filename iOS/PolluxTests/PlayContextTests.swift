@@ -13,7 +13,8 @@ private func makeManager() throws -> DatabaseManager {
 private func seed(_ db: DatabaseManager, episodeId: String) async throws {
     let sub = Subscription(
         id: "sub-1", feedUrl: "https://example.com/sub-1.rss", title: "Feed",
-        artworkUrl: nil, description: nil, lastRefreshed: nil, createdAt: 1)
+        artworkUrl: nil, description: nil, lastRefreshed: nil, createdAt: 1,
+        etag: nil, lastModified: nil, lastRefreshError: nil, retryAfterUntil: nil)
     try await db.execute(.upsertSubscription(sub))
     let episode = Episode(
         id: episodeId, feedGuid: "guid-\(episodeId)", subscriptionId: "sub-1",

@@ -35,6 +35,10 @@ fn model_with(episodes: Vec<Episode>) -> Model {
             description: None,
             last_refreshed: None,
             created_at: 0,
+            etag: None,
+            last_modified: None,
+            last_refresh_error: None,
+            retry_after_until: None,
         }],
         episodes,
         ..Model::default()

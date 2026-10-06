@@ -42,6 +42,8 @@ pub struct LibraryView {
     pub subscriptions: Vec<SubscriptionSummary>,
     pub loading: bool,
     pub error: Option<String>,
+    /// Any feed is queued for or being refreshed (drives the "Refresh all" button).
+    pub refreshing: bool,
 }
 
 #[derive(Facet, Serialize, Deserialize, Clone)]
@@ -49,6 +51,11 @@ pub struct SubscriptionSummary {
     pub id: String,
     pub title: String,
     pub artwork_url: Option<String>,
+    /// Queued for, or in the middle of, a refresh.
+    pub refreshing: bool,
+    /// Why the last refresh failed, for the row's failure indicator. Absent after a
+    /// successful refresh.
+    pub refresh_error: Option<String>,
 }
 
 /// The selected subscription's episode list, shown on the details page. Empty by
@@ -68,6 +75,12 @@ pub struct SubscriptionDetailView {
     /// the episode it concerns so an episode's detail page shows it only when it's
     /// about that episode, while the list shows it for any.
     pub download_notice: Option<DownloadNotice>,
+    /// The open feed is queued for or being refreshed.
+    pub refreshing: bool,
+    /// A non-blocking warning that the list below may be out of date, because reloading
+    /// it after a refresh failed. Shown as a banner above the list, which stays in place
+    /// (unlike `error`, which replaces it).
+    pub list_notice: Option<String>,
 }
 
 /// A failed-download-operation notice, paired with the episode it's about. Transient

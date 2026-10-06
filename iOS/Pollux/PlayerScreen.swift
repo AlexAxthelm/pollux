@@ -22,7 +22,7 @@ struct PlayerScreen: View {
         VStack(spacing: 16) {
             pages
             if let error = player.error {
-                DownloadNoticeBanner(message: error)
+                NoticeBanner(message: error)
             }
             scrubber
             titleBlock

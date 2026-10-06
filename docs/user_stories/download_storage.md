@@ -9,6 +9,10 @@ I want to download episodes
 so that I can listen offline
 
 As a user
+I want downloads to keep going when I leave the app or lock my phone
+so that I don't have to babysit a long download
+
+As a user
 I want to limit how much space podcasts use,
 so that I can have more space for my photos 
 

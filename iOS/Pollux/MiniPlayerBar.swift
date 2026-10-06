@@ -13,7 +13,7 @@ struct MiniPlayerBar: View {
     var body: some View {
         VStack(spacing: 0) {
             if let error = player.error {
-                DownloadNoticeBanner(message: error)
+                NoticeBanner(message: error)
             }
             HStack(spacing: 12) {
                 Button(action: onOpen) {

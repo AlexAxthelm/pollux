@@ -9,3 +9,12 @@ pub const PLAYED_TOLERANCE_SECS: u32 = 15;
 /// While playing, position is persisted at least this often (in addition to pause,
 /// seek, backgrounding and end), bounding what a crash can lose.
 pub const POSITION_CHECKPOINT_SECS: u32 = 10;
+/// Backoff applied to a 429 that carries no usable `Retry-After`.
+pub const RATE_LIMIT_BACKOFF_SECS: i64 = 3600;
+/// Longest wait honoured from a `Retry-After`. A host asking for more (a year, a date far
+/// in the future, a typo) would otherwise silence auto-refresh for that feed
+/// indefinitely; manual refresh ignores the backoff, but few users would think to try it.
+pub const MAX_RETRY_AFTER_SECS: i64 = 24 * 3600;
+/// How long auto-refresh leaves a feed alone after a failed refresh, so a broken feed
+/// isn't retried on every foreground. Manual refresh ignores it.
+pub const FAILURE_BACKOFF_SECS: i64 = 900;

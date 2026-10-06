@@ -9,6 +9,9 @@ struct PolluxApp: App {
         WindowGroup {
             RootView(core: core)
         }
+        .backgroundTask(.appRefresh(BackgroundRefresh.identifier)) { [core] in
+            await core.runBackgroundRefresh()
+        }
     }
 }
 
@@ -57,9 +60,16 @@ private struct RootView: View {
                     showPlayer = false
                 }
             }
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .background {
-                    core.update(.appBackgrounded)
+            .onChange(of: scenePhase, initial: true) { _, phase in
+                // The lifecycle logic lives in `Core` so it can be tested; this only maps
+                // the scene phase onto it. `initial: true` covers cold launch.
+                switch phase {
+                case .active:
+                    core.appBecameActive()
+                case .background:
+                    core.appEnteredBackground()
+                default:
+                    break
                 }
             }
     }

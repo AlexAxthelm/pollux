@@ -25,14 +25,25 @@ pub fn parse_feed(url: &str, body: Vec<u8>) -> Result<(Subscription, Vec<Episode
     let subscription = Subscription {
         id: subscription_id.clone(),
         feed_url: url.to_string(),
+        // "Absent" is decided here, once: a value that is missing *or blank* (an empty or
+        // whitespace-only element, which feed-rs hands through as `""`/`Some("")`/
+        // `Some("   ")`) becomes the URL fallback for the title and `None` for the rest.
+        // `Subscription::inherit_missing_metadata` relies on this to tell "the response
+        // had no value" from "the response had one", and a brand-new feed with an empty
+        // `<title>` gets a readable URL instead of a blank row.
         title: feed
             .title
-            .map(|t| t.content)
+            .and_then(|t| non_blank(t.content))
             .unwrap_or_else(|| url.to_string()),
-        description: feed.description.map(|d| d.content),
-        artwork_url: feed.logo.map(|img| img.uri),
+        description: feed.description.and_then(|d| non_blank(d.content)),
+        artwork_url: feed.logo.and_then(|img| non_blank(img.uri)),
         last_refreshed: Some(now),
         created_at: now,
+        // Validators come from the HTTP response, not the body; the caller fills them.
+        etag: None,
+        last_modified: None,
+        last_refresh_error: None,
+        retry_after_until: None,
     };
 
     // Episode identity is (subscription, feed_guid) in storage, where a repeat
@@ -106,7 +117,17 @@ pub fn parse_feed(url: &str, body: Vec<u8>) -> Result<(Subscription, Vec<Episode
     Ok((subscription, episodes))
 }
 
-fn now_unix() -> i64 {
+/// `s` with surrounding whitespace removed, or `None` when nothing is left.
+fn non_blank(s: String) -> Option<String> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+pub(crate) fn now_unix() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -174,6 +195,98 @@ mod tests {
 
     fn parse_episodes(body: Vec<u8>) -> Vec<Episode> {
         parse_feed(URL, body).expect("feed should parse").1
+    }
+
+    /// An RSS feed whose channel carries exactly `channel` (plus a link and one item), for
+    /// exercising how channel-level metadata is read.
+    fn rss_with_channel(channel: &str) -> Vec<u8> {
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>{channel}<link>https://example.com</link>
+<item><title>E</title><guid>g</guid><enclosure url="https://example.com/a.mp3" type="audio/mpeg" length="1"/></item>
+</channel></rss>"#
+        )
+        .into_bytes()
+    }
+
+    fn parse_subscription(channel: &str) -> Subscription {
+        parse_feed(URL, rss_with_channel(channel))
+            .expect("feed should parse")
+            .0
+    }
+
+    #[test]
+    fn a_missing_title_falls_back_to_the_feed_url() {
+        let sub = parse_subscription("");
+        assert_eq!(sub.title, URL);
+        assert!(sub.description.is_none());
+        assert!(sub.artwork_url.is_none());
+    }
+
+    #[test]
+    fn a_blank_title_is_treated_as_missing_not_kept_as_empty() {
+        // feed-rs hands an empty or whitespace-only element through as "". Kept as-is it
+        // would give a blank library row, and a refresh would blank a good stored title.
+        for channel in [
+            "<title></title>",
+            "<title/>",
+            "<title>   </title>",
+            "<title><![CDATA[]]></title>",
+        ] {
+            assert_eq!(parse_subscription(channel).title, URL, "{channel}");
+        }
+    }
+
+    #[test]
+    fn a_blank_description_is_treated_as_missing() {
+        for channel in [
+            "<description></description>",
+            "<description/>",
+            "<description>   </description>",
+            "<description><![CDATA[]]></description>",
+        ] {
+            assert!(
+                parse_subscription(channel).description.is_none(),
+                "{channel}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_blank_artwork_url_is_treated_as_missing() {
+        // feed-rs keeps a whitespace-only image URL verbatim, which is not a usable URL.
+        for channel in [
+            "<image></image>",
+            "<image><url></url></image>",
+            "<image><url>   </url></image>",
+        ] {
+            assert!(
+                parse_subscription(channel).artwork_url.is_none(),
+                "{channel}"
+            );
+        }
+    }
+
+    #[test]
+    fn real_values_are_kept_and_trimmed() {
+        let sub = parse_subscription(
+            "<title>  Padded Title  </title><description> About the show </description>\
+             <image><url> https://example.com/art.png </url></image>",
+        );
+        assert_eq!(sub.title, "Padded Title");
+        assert_eq!(sub.description.as_deref(), Some("About the show"));
+        assert_eq!(
+            sub.artwork_url.as_deref(),
+            Some("https://example.com/art.png")
+        );
+    }
+
+    #[test]
+    fn non_blank_trims_and_rejects_only_blank_text() {
+        assert_eq!(non_blank("  x  ".to_string()).as_deref(), Some("x"));
+        assert_eq!(non_blank("a b".to_string()).as_deref(), Some("a b"));
+        assert!(non_blank(String::new()).is_none());
+        assert!(non_blank(" \t\n ".to_string()).is_none());
     }
 
     #[test]

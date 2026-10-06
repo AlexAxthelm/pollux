@@ -18,6 +18,12 @@ pub struct Model {
     pub episode_sort: EpisodeSortOrder,
     pub detail_loading: bool,
     pub detail_error: Option<String>,
+    // A non-blocking warning that the episode list on screen may be out of date: a
+    // reload (after a refresh) failed while a list was already showing. Unlike
+    // `detail_error`, which replaces the whole list, this leaves the list in place and
+    // is shown as a banner. While it is set, re-entering the feed and a 304 refresh of it
+    // both retry the reload in place; it is cleared by a successful load or a feed switch.
+    pub list_notice: Option<String>,
 
     // Download manager. Serial for MVP: at most one episode downloads at a time
     // (`downloading` holds its id), the rest wait in `download_queue` (front = next
@@ -27,6 +33,9 @@ pub struct Model {
     // the queue itself is rebuilt from the DB at launch.
     pub download_queue: Vec<QueuedDownload>,
     pub downloading: Option<String>,
+    // Set once the first foreground activation has asked storage for downloads a
+    // previous session left in flight, so later activations don't repeat the request.
+    pub pending_downloads_requested: bool,
 
     // Live progress of the in-flight download (the one in `downloading`). Transient
     // and never persisted: a partial download can't resume across a restart, so a
@@ -52,6 +61,19 @@ pub struct Model {
     // The episode the player is on (playing or paused), if any. Survives restarts via
     // the stored play context; see `player.rs`.
     pub active_playback: Option<ActivePlayback>,
+
+    // Feed refresh. Serial like downloads: at most one feed is fetched at a time
+    // (`refreshing` holds its subscription id), the rest wait in `refresh_queue`
+    // (front = next up). Kept apart from the library `loading`/`error`, which the
+    // subscribe flow reads to detect success. In-memory only; per-feed outcomes
+    // (error, retry-after) live on the `Subscription` and are persisted.
+    pub refresh_queue: Vec<String>,
+    pub refreshing: Option<String>,
+    // Auto-refresh can be requested (the app became active) before the first library
+    // load lands, when there is nothing to judge staleness against. The request is held
+    // here and honoured as soon as the subscriptions arrive.
+    pub subscriptions_loaded: bool,
+    pub auto_refresh_pending: bool,
 
     // Active theme selection. Defaults (System / FollowSystem) reproduce the OS's
     // native appearance. Hard-coded for now — no UI changes it until the Settings

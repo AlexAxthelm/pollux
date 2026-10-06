@@ -54,6 +54,18 @@ pub enum StorageOperation {
     /// The episode last saved by `SavePlayContext` (as `Episode`), or `NotFound`.
     LoadPlayContext,
     ClearPlayContext,
+    /// Records the outcome of a refresh that did not produce a new feed body (304,
+    /// 429, or a failure). `last_refreshed` is left unchanged when `None`; the error
+    /// and retry-after columns are written verbatim (NULL when `None`). A moved
+    /// `last_refreshed` (a 304) also confirms episodes already missing from the feed:
+    /// those whose absence has lasted the grace period are flagged, and the count comes
+    /// back as `StorageResult::EpisodesRemoved`.
+    UpdateRefreshState {
+        subscription_id: String,
+        last_refreshed: Option<i64>,
+        last_refresh_error: Option<String>,
+        retry_after_until: Option<i64>,
+    },
     UpsertFeedWithEpisodes {
         subscription: Subscription,
         episodes: Vec<Episode>,
@@ -68,6 +80,9 @@ pub enum StorageResult {
     Subscriptions(Vec<Subscription>),
     Episode(Episode),
     Episodes(Vec<Episode>),
+    /// Answer to `UpdateRefreshState`: how many episodes that write flagged
+    /// `RemovedFromFeed` (a 304 confirms pending absences; nothing else flags any).
+    EpisodesRemoved(u64),
     NotFound,
     Error(String),
 }

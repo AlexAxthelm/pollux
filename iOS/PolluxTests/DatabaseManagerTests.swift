@@ -25,7 +25,11 @@ private func makeSubscription(
         artworkUrl: nil,
         description: nil,
         lastRefreshed: nil,
-        createdAt: 1_000_000
+        createdAt: 1_000_000,
+        etag: nil,
+        lastModified: nil,
+        lastRefreshError: nil,
+        retryAfterUntil: nil
     )
 }
 
@@ -107,7 +111,11 @@ struct DatabaseManagerTests {
             artworkUrl: "https://example.com/art.png",
             description: sub.description,
             lastRefreshed: 2_000_000,
-            createdAt: sub.createdAt
+            createdAt: sub.createdAt,
+            etag: nil,
+            lastModified: nil,
+            lastRefreshError: nil,
+            retryAfterUntil: nil
         )
         try await db.execute(.upsertSubscription(updated))
 

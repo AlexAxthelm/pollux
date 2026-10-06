@@ -11,7 +11,11 @@ Nothing else can start without this. Minimal UI elements.
 - **Database schema**: episodes, subscriptions, playlists, play history, settings
 - **RSS feed parsing**: fetch a URI, parse RSS 2.0, store feed + episode metadata
 - **Feed refresh**: polling mechanism, HTTP conditional GETs (304 handling),
-  background refresh where platform supports it
+  background refresh where platform supports it. *Built:* manual (details page,
+  Refresh all), foreground auto-refresh, best-effort `BGAppRefreshTask`, 304/429
+  handling, persisted failure state. *Remaining:* refresh-interval settings,
+  hiding removed episodes, the foreground-only notice. See
+  `features/subscription.md`.
 - **Download manager**: queue, serial downloads for MVP, storage limit check
   before download, fail-on-full behavior
 - **Navigation structure**: Library (home), Settings entry point,
@@ -114,7 +118,8 @@ Rounding out MVP to a complete, shippable state.
 - **Subscription-level download rules**: cascading defaults (global → feed)
 - **Settings completion**: all known settings wired up, cascading defaults
   pattern throughout
-- **Error states**: feed refresh failures (indicator on subscription row),
+- **Error states**: feed refresh failures (indicator on subscription row; the
+  row marker and details-page line are built),
   download failures (retry button), invalid URI on subscribe, storage full
   notification
 - **Empty states**: library with no subscriptions, playlist with no matching

@@ -32,12 +32,63 @@ One-to-many with Episode.
 
 See also: `GLOSSARY.md` — Subscription.
 
+#### Refresh state
+
+Besides its identity and feed metadata, a Subscription carries the bookkeeping
+feed refresh needs (see `features/subscription.md`, "Refresh as built"):
+
+- `last_refreshed` — when the feed was last successfully fetched (a 304 counts).
+- `etag`, `last_modified` — validators from the last successful fetch, replayed
+  as a conditional GET.
+- `last_refresh_error` — why the most recent refresh failed; cleared on success.
+- `retry_after_until` — unix time before which *automatic* refresh leaves the
+  feed alone. Set from `Retry-After` on a 429, or to a short backoff after any
+  other failure. Manual refresh ignores it.
+
+Refresh outcomes that produce no new body (304, 429, failures) are written by
+`UpdateRefreshState`; a 200 goes through the normal feed upsert, which overwrites
+all of the above from the fresh parse. A 304's write also flags episodes whose
+`missing_since` clock has run the grace period, and reports how many.
+
 ### Episode *(Identified)*
 
 The atomic unit of content. Belongs to a Subscription. Has playback status,
 download status, and flag state.
 
 See also: `GLOSSARY.md` — Episode, Playback status, Flag.
+
+#### What a refresh preserves
+
+On a conflict, the episode upsert refreshes feed-owned metadata (title,
+description, enclosure URL, artwork, pub date, duration) and **keeps** the row's
+`id`, playback state, flags, `download_status` and `local_path`. Two fields
+need care:
+
+- `file_size_bytes` — for a `Downloaded` episode this is the real on-disk size
+  recorded by the download path, so a refresh keeps it rather than overwriting it
+  with the feed's advertised `<enclosure length>`. For every other episode the
+  feed's value is the freshest available and is written.
+- `download_status` — an episode flagged `RemovedFromFeed` that reappears in the
+  feed returns to `NotDownloaded`. Episodes that drop out of the feed are flagged
+  only after being absent for 48 hours, and only if they are `NotDownloaded` or
+  `Failed`; see `features/subscription.md`, "De-listed Episodes".
+- `missing_since` — storage-only (the core never sees it): the unix time an
+  episode was first missed by a refresh, or NULL while it is present. Every
+  refresh with a non-empty feed starts a clock for each of the subscription's
+  episodes that doesn't have one, and the upsert clears it for the ones still
+  present, so only absent episodes keep it. An episode is flagged once its clock
+  is at least `removalGraceSeconds` (48 hours) old.
+
+#### Schema baseline
+
+Until the first release the database is disposable, so the schema is a single
+baseline (`v1_initial`, in `iOS/Pollux/DatabaseMigrations.swift`) that is edited in
+place rather than grown by appending migrations. In debug builds the migrator
+erases and recreates the database whenever that definition changes, so an existing
+simulator database never needs wiping by hand. Before the first release, remove
+that erase-on-change and freeze the baseline; after that every schema change is a
+new append-only migration, and each one that alters a table that can already hold
+rows should be tested against a database that has some.
 
 #### Identity across refreshes
 

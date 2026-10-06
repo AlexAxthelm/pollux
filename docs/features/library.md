@@ -91,7 +91,11 @@ not MVP).
 ## Actions
 
 - **Refresh all**: triggers a feed refresh for all subscriptions. Accessible
-  via toolbar button
+  via toolbar button. *As built:* the button (spinner while refreshing, disabled
+  when the library is empty) and pull-to-refresh on the list both send
+  `RefreshAll`, which refreshes feeds one at a time in list order. Each row
+  shows a spinner while its feed is queued or fetching and a warning marker if
+  its last refresh failed.
 - **Add subscription**: in toolbar.
 - **Downloads**: link to the download queue / storage screen, accessible from
   library (button in toolbar).

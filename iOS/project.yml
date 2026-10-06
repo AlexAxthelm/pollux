@@ -22,8 +22,10 @@ targets:
       path: Pollux/Info.plist
       properties:
         UILaunchScreen: {}
-        # Keep playing with the screen locked or the app in the background.
-        UIBackgroundModes: [audio]
+        # audio: keep playing with the screen locked or the app in the background.
+        # fetch: background feed refresh (BGAppRefreshTask); see Pollux/BackgroundRefresh.swift.
+        UIBackgroundModes: [audio, fetch]
+        BGTaskSchedulerPermittedIdentifiers: [com.example.pollux.refresh]
     dependencies:
       - package: Shared
       - package: App
