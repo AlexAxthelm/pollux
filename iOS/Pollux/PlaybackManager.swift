@@ -13,7 +13,9 @@ final class PlaybackManager {
     /// Core events (ticks, end of file, interruptions…) go out through this.
     private let send: (Event) -> Void
 
-    private var currentEpisodeId: String?
+    /// The load the engine is on. Everything reported to the core carries it, so the
+    /// core can drop news from an item it has since replaced.
+    private var currentSession: UInt32?
     /// Seeks still in flight. A streaming seek takes a moment, and the engine keeps
     /// reporting the old position until it lands; those ticks would snap the UI back.
     private var pendingSeeks = 0
@@ -33,8 +35,8 @@ final class PlaybackManager {
     /// Carries out one core operation. Synchronous: AVPlayer queues its own work.
     func perform(_ operation: PlayerOperation) -> PlayerResult {
         switch operation {
-        case let .load(episodeId, source, startSecs, autoplay):
-            return load(episodeId: episodeId, source: source, startSecs: startSecs, autoplay: autoplay)
+        case let .load(session, source, startSecs, autoplay):
+            return load(session: session, source: source, startSecs: startSecs, autoplay: autoplay)
         case .play:
             player.play()
         case .pause:
@@ -48,7 +50,7 @@ final class PlaybackManager {
     }
 
     private func load(
-        episodeId: String, source: PlayerSource, startSecs: UInt32, autoplay: Bool,
+        session: UInt32, source: PlayerSource, startSecs: UInt32, autoplay: Bool,
     ) -> PlayerResult {
         let url: URL
         switch source {
@@ -72,9 +74,9 @@ final class PlaybackManager {
             return .error("Couldn't start audio: \(error.localizedDescription)")
         }
 
-        currentEpisodeId = episodeId
+        currentSession = session
         let item = AVPlayerItem(url: url)
-        observe(item, episodeId: episodeId)
+        observe(item, session: session)
         player.replaceCurrentItem(with: item)
         // Exact seek: a resume that lands a few seconds off would defeat the rewind.
         seek(to: startSecs)
@@ -97,26 +99,26 @@ final class PlaybackManager {
         player.pause()
         player.replaceCurrentItem(with: nil)
         statusObservation = nil
-        currentEpisodeId = nil
+        currentSession = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     // MARK: - Engine → core
 
-    private func observe(_ item: AVPlayerItem, episodeId: String) {
+    private func observe(_ item: AVPlayerItem, session: UInt32) {
         statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             let status = item.status
             let duration = item.duration.seconds
             let message = item.error?.localizedDescription
             Task { @MainActor [weak self] in
-                guard let self, currentEpisodeId == episodeId else { return }
+                guard let self, currentSession == session else { return }
                 switch status {
                 case .readyToPlay:
                     if duration.isFinite, duration > 0 {
-                        send(.playerDuration(episodeId: episodeId, durationSecs: UInt32(duration)))
+                        send(.playerDuration(session: session, durationSecs: UInt32(duration)))
                     }
                 case .failed:
-                    send(.playerFailed(episodeId: episodeId, message: message ?? "Playback failed"))
+                    send(.playerFailed(session: session, message: message ?? "Playback failed"))
                 default:
                     break
                 }
@@ -127,7 +129,7 @@ final class PlaybackManager {
             NotificationCenter.default.addObserver(
                 forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main,
             ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.send(.playerEnded(episodeId)) }
+                MainActor.assumeIsolated { self?.send(.playerEnded(session: session)) }
             },
             NotificationCenter.default.addObserver(
                 forName: AVPlayerItem.failedToPlayToEndTimeNotification, object: item, queue: .main,
@@ -135,7 +137,7 @@ final class PlaybackManager {
                 let error = note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
                 let message = error?.localizedDescription ?? "Playback stopped unexpectedly"
                 MainActor.assumeIsolated {
-                    self?.send(.playerFailed(episodeId: episodeId, message: message))
+                    self?.send(.playerFailed(session: session, message: message))
                 }
             },
         ]
@@ -151,11 +153,11 @@ final class PlaybackManager {
     }
 
     private func reportTick(seconds: Double) {
-        guard let id = currentEpisodeId,
+        guard let session = currentSession,
               pendingSeeks == 0,
               player.timeControlStatus == .playing,
               seconds.isFinite, seconds >= 0 else { return }
-        send(.playerTick(episodeId: id, positionSecs: UInt32(seconds)))
+        send(.playerTick(session: session, positionSecs: UInt32(seconds)))
     }
 
     /// Phone calls, Siri and unplugged headphones pause playback; the core is told so
@@ -175,7 +177,7 @@ final class PlaybackManager {
             MainActor.assumeIsolated {
                 switch type {
                 case .began:
-                    self?.send(.pause)
+                    self?.send(.interrupted)
                 case .ended where options?.contains(.shouldResume) == true:
                     self?.send(.play)
                 default:
@@ -190,7 +192,7 @@ final class PlaybackManager {
                 .flatMap(AVAudioSession.RouteChangeReason.init(rawValue:))
             MainActor.assumeIsolated {
                 if reason == .oldDeviceUnavailable {
-                    self?.send(.pause)
+                    self?.send(.interrupted)
                 }
             }
         }

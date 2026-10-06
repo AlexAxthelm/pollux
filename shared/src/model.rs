@@ -61,6 +61,9 @@ pub struct Model {
     // The episode the player is on (playing or paused), if any. Survives restarts via
     // the stored play context; see `player.rs`.
     pub active_playback: Option<ActivePlayback>,
+    // Last session id handed to the engine (see `player.rs`). Only ever increases, so an
+    // id is never reused across episodes or reloads.
+    pub player_sessions: u32,
 
     // Feed refresh. Serial like downloads: at most one feed is fetched at a time
     // (`refreshing` holds its subscription id), the rest wait in `refresh_queue`
@@ -88,6 +91,8 @@ pub struct Model {
 #[derive(Clone, Debug)]
 pub struct ActivePlayback {
     pub episode: Episode,
+    /// The engine load this state belongs to; engine news for any other is stale.
+    pub session: u32,
     pub position_secs: u32,
     /// The engine's duration, authoritative over the feed's `episode.duration_secs`.
     pub duration_secs: Option<u32>,

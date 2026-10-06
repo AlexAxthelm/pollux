@@ -661,21 +661,19 @@ impl App for Pollux {
             Event::SkipBack => player::skip_back(model),
             Event::SeekTo(secs) => player::seek_to(model, secs),
             Event::AppBackgrounded => player::on_backgrounded(model),
+            Event::Interrupted => player::interrupt(model),
             Event::PlayerTick {
-                episode_id,
+                session,
                 position_secs,
-            } => player::on_tick(model, &episode_id, position_secs),
+            } => player::on_tick(model, session, position_secs),
             Event::PlayerDuration {
-                episode_id,
+                session,
                 duration_secs,
-            } => player::on_duration(model, &episode_id, duration_secs),
-            Event::PlayerEnded(episode_id) => player::on_ended(model, &episode_id),
-            Event::PlayerFailed {
-                episode_id,
-                message,
-            } => player::on_failure(model, &episode_id, message),
-            Event::PlayerResponded { episode_id, result } => {
-                player::on_response(model, &episode_id, *result)
+            } => player::on_duration(model, session, duration_secs),
+            Event::PlayerEnded { session } => player::on_ended(model, session),
+            Event::PlayerFailed { session, message } => player::on_failure(model, session, message),
+            Event::PlayerResponded { session, result } => {
+                player::on_response(model, session, *result)
             }
             Event::PlayContextLoaded(result) => player::on_context_loaded(model, *result),
             // Required resolution sink for playback persistence writes. These are
@@ -1296,27 +1294,33 @@ pub enum Event {
     SeekTo(u32),
     /// The app left the foreground: flush the playback position.
     AppBackgrounded,
+    /// The system paused playback (a call, Siri, unplugged headphones). Unlike `Pause`
+    /// this is not the listener leaving: the place is saved but the episode is never
+    /// counted as played, so playback can resume to the end.
+    Interrupted,
     /// Engine position report (~1/s while playing). Transient; the core persists on
-    /// its own checkpoints, not per tick.
+    /// its own checkpoints, not per tick. `session` is the load that produced it.
     PlayerTick {
-        episode_id: String,
+        session: u32,
         position_secs: u32,
     },
     /// The engine learned the real duration, which beats the feed's possibly-missing one.
     PlayerDuration {
-        episode_id: String,
+        session: u32,
         duration_secs: u32,
     },
     /// The engine reached the end of the file.
-    PlayerEnded(String),
+    PlayerEnded {
+        session: u32,
+    },
     /// The engine failed to play or lost the item.
     PlayerFailed {
-        episode_id: String,
+        session: u32,
         message: String,
     },
     /// Resolution of a player operation; an error is treated like `PlayerFailed`.
     PlayerResponded {
-        episode_id: String,
+        session: u32,
         result: Box<PlayerResult>,
     },
     /// The episode saved as active by the previous session, loaded at launch.

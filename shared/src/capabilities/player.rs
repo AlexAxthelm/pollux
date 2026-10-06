@@ -25,7 +25,9 @@ pub enum PlayerOperation {
     /// playing immediately when `autoplay` is set. Also used to swap a streaming
     /// episode onto its freshly downloaded local copy mid-play.
     Load {
-        episode_id: String,
+        /// Tags everything the engine reports about this item, so the core can drop
+        /// news from an item it has since replaced.
+        session: u32,
         source: PlayerSource,
         start_secs: u32,
         autoplay: bool,

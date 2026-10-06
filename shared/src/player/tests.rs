@@ -5,7 +5,7 @@ use crate::capabilities::download::DownloadResult;
 use crate::domain::Subscription;
 use crate::Pollux;
 
-fn episode(id: &str) -> Episode {
+pub(super) fn episode(id: &str) -> Episode {
     Episode {
         id: id.to_string(),
         feed_guid: format!("{id}-guid"),
@@ -25,7 +25,7 @@ fn episode(id: &str) -> Episode {
     }
 }
 
-fn model_with(episodes: Vec<Episode>) -> Model {
+pub(super) fn model_with(episodes: Vec<Episode>) -> Model {
     Model {
         subscriptions: vec![Subscription {
             id: "sub".to_string(),
@@ -45,21 +45,34 @@ fn model_with(episodes: Vec<Episode>) -> Model {
     }
 }
 
-fn send(model: &mut Model, event: Event) -> Vec<Effect> {
+pub(super) fn send(model: &mut Model, event: Event) -> Vec<Effect> {
     Pollux.update(event, model).effects().collect()
 }
 
-fn tick(model: &mut Model, id: &str, secs: u32) -> Vec<Effect> {
+/// The current load's session, which the shell tags every engine event with.
+pub(super) fn session(model: &Model) -> u32 {
+    active(model).session
+}
+
+/// A position report from the engine for the current load.
+pub(super) fn tick(model: &mut Model, secs: u32) -> Vec<Effect> {
+    let session = session(model);
     send(
         model,
         Event::PlayerTick {
-            episode_id: id.into(),
+            session,
             position_secs: secs,
         },
     )
 }
 
-fn player_ops(effects: &[Effect]) -> Vec<PlayerOperation> {
+/// The engine reaching the end of the current load.
+pub(super) fn send_ended(model: &mut Model) -> Vec<Effect> {
+    let session = session(model);
+    send(model, Event::PlayerEnded { session })
+}
+
+pub(super) fn player_ops(effects: &[Effect]) -> Vec<PlayerOperation> {
     effects
         .iter()
         .filter_map(|e| match e {
@@ -69,7 +82,7 @@ fn player_ops(effects: &[Effect]) -> Vec<PlayerOperation> {
         .collect()
 }
 
-fn storage_ops(effects: &[Effect]) -> Vec<StorageOperation> {
+pub(super) fn storage_ops(effects: &[Effect]) -> Vec<StorageOperation> {
     effects
         .iter()
         .filter_map(|e| match e {
@@ -79,7 +92,7 @@ fn storage_ops(effects: &[Effect]) -> Vec<StorageOperation> {
         .collect()
 }
 
-fn checkpoints(effects: &[Effect]) -> Vec<(PlaybackStatus, Option<u32>)> {
+pub(super) fn checkpoints(effects: &[Effect]) -> Vec<(PlaybackStatus, Option<u32>)> {
     storage_ops(effects)
         .into_iter()
         .filter_map(|op| match op {
@@ -93,11 +106,11 @@ fn checkpoints(effects: &[Effect]) -> Vec<(PlaybackStatus, Option<u32>)> {
         .collect()
 }
 
-fn active(model: &Model) -> &ActivePlayback {
+pub(super) fn active(model: &Model) -> &ActivePlayback {
     model.active_playback.as_ref().expect("an active episode")
 }
 
-fn view_player(model: &Model) -> PlayerView {
+pub(super) fn view_player(model: &Model) -> PlayerView {
     Pollux.view(model).player.expect("a player view")
 }
 
@@ -169,7 +182,7 @@ fn a_played_episode_restarts_from_the_top() {
 fn pause_then_play_rewinds_and_persists_position() {
     let mut model = model_with(vec![episode("e1")]);
     send(&mut model, Event::PlayEpisode("e1".into()));
-    tick(&mut model, "e1", 50);
+    tick(&mut model, 50);
 
     let effects = send(&mut model, Event::Pause);
     assert!(matches!(
@@ -202,13 +215,13 @@ fn rewind_is_clamped_at_zero() {
 fn ticks_persist_only_every_checkpoint_interval() {
     let mut model = model_with(vec![episode("e1")]);
     send(&mut model, Event::PlayEpisode("e1".into()));
-    assert!(checkpoints(&tick(&mut model, "e1", 3)).is_empty());
-    assert!(checkpoints(&tick(&mut model, "e1", 9)).is_empty());
+    assert!(checkpoints(&tick(&mut model, 3)).is_empty());
+    assert!(checkpoints(&tick(&mut model, 9)).is_empty());
     assert_eq!(
-        checkpoints(&tick(&mut model, "e1", 10)),
+        checkpoints(&tick(&mut model, 10)),
         vec![(PlaybackStatus::InProgress, Some(10))]
     );
-    assert!(checkpoints(&tick(&mut model, "e1", 12)).is_empty());
+    assert!(checkpoints(&tick(&mut model, 12)).is_empty());
 }
 
 #[test]
@@ -229,22 +242,11 @@ fn skips_use_the_default_increments_and_clamp_to_the_episode() {
     send(&mut model, Event::SkipBack);
     assert_eq!(active(&model).position_secs, 0);
 
-    // Forward past the end clamps to the duration (600s) — never beyond it.
+    // Skipping forward from near the end never overshoots into another episode: it
+    // finishes this one (see `played_tests`).
     send(&mut model, Event::SeekTo(595));
     send(&mut model, Event::SkipForward);
-    assert_eq!(active(&model).position_secs, 600);
-}
-
-#[test]
-fn pausing_within_the_tolerance_of_the_end_marks_played() {
-    let mut model = model_with(vec![episode("e1")]);
-    send(&mut model, Event::PlayEpisode("e1".into()));
-    tick(&mut model, "e1", 590);
-    let effects = send(&mut model, Event::Pause);
-    assert_eq!(
-        checkpoints(&effects),
-        vec![(PlaybackStatus::Played, Some(0))]
-    );
+    assert!(model.active_playback.is_none());
     assert_eq!(model.episodes[0].playback_status, PlaybackStatus::Played);
 }
 
@@ -254,10 +256,11 @@ fn engine_duration_overrides_the_feed_duration() {
     e.duration_secs = None;
     let mut model = model_with(vec![e]);
     send(&mut model, Event::PlayEpisode("e1".into()));
+    let session = session(&model);
     send(
         &mut model,
         Event::PlayerDuration {
-            episode_id: "e1".into(),
+            session,
             duration_secs: 300,
         },
     );
@@ -268,7 +271,7 @@ fn engine_duration_overrides_the_feed_duration() {
 fn reaching_the_end_marks_played_and_clears_the_player() {
     let mut model = model_with(vec![episode("e1")]);
     send(&mut model, Event::PlayEpisode("e1".into()));
-    let effects = send(&mut model, Event::PlayerEnded("e1".into()));
+    let effects = send_ended(&mut model);
 
     assert!(model.active_playback.is_none());
     assert!(Pollux.view(&model).player.is_none());
@@ -286,7 +289,7 @@ fn reaching_the_end_marks_played_and_clears_the_player() {
 fn starting_another_episode_checkpoints_the_first() {
     let mut model = model_with(vec![episode("e1"), episode("e2")]);
     send(&mut model, Event::PlayEpisode("e1".into()));
-    tick(&mut model, "e1", 42);
+    tick(&mut model, 42);
     let effects = send(&mut model, Event::PlayEpisode("e2".into()));
     assert!(storage_ops(&effects).iter().any(|op| matches!(
         op,
@@ -300,7 +303,7 @@ fn starting_another_episode_checkpoints_the_first() {
 fn a_finished_download_swaps_the_stream_for_the_local_file_at_the_playhead() {
     let mut model = model_with(vec![episode("e1")]);
     send(&mut model, Event::PlayEpisode("e1".into()));
-    tick(&mut model, "e1", 77);
+    tick(&mut model, 77);
 
     let effects = send(
         &mut model,
@@ -329,10 +332,11 @@ fn a_finished_download_swaps_the_stream_for_the_local_file_at_the_playhead() {
 fn a_failed_stream_pauses_with_a_notice_and_play_reloads() {
     let mut model = model_with(vec![episode("e1")]);
     send(&mut model, Event::PlayEpisode("e1".into()));
+    let session = session(&model);
     send(
         &mut model,
         Event::PlayerFailed {
-            episode_id: "e1".into(),
+            session,
             message: "offline".into(),
         },
     );
@@ -356,10 +360,11 @@ fn a_missing_local_file_falls_back_to_streaming_and_redownloads() {
     let mut model = model_with(vec![e]);
     send(&mut model, Event::PlayEpisode("e1".into()));
 
+    let session = session(&model);
     let effects = send(
         &mut model,
         Event::PlayerFailed {
-            episode_id: "e1".into(),
+            session,
             message: "file missing".into(),
         },
     );
@@ -415,14 +420,4 @@ fn nothing_saved_means_no_player() {
         Event::PlayContextLoaded(Box::new(StorageResult::NotFound)),
     );
     assert!(Pollux.view(&model).player.is_none());
-}
-
-#[test]
-fn stale_engine_events_for_another_episode_are_ignored() {
-    let mut model = model_with(vec![episode("e1")]);
-    send(&mut model, Event::PlayEpisode("e1".into()));
-    tick(&mut model, "other", 99);
-    send(&mut model, Event::PlayerEnded("other".into()));
-    assert_eq!(active(&model).position_secs, 0);
-    assert!(model.active_playback.is_some());
 }

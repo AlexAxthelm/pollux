@@ -4,6 +4,28 @@
 //!
 //! Engine-originated news arrives as ordinary events (`PlayerTick`, `PlayerEnded`, …)
 //! rather than request results, mirroring how download progress is reported.
+//!
+//! # Sessions
+//!
+//! Every `Load` gets a fresh *session* id, and the shell tags everything the engine
+//! reports with the session of the item that produced it. The core ignores news from
+//! any session but the current one, so a late tick, end-of-file or failure from a
+//! replaced item (a source swap, a retry, or a different episode) can't touch the
+//! current one.
+//!
+//! # When an episode counts as played
+//!
+//! The decision is made at the moments the listener *leaves* the episode, never as a
+//! side effect of saving progress:
+//!
+//! - the engine reaches the end of the file (natural completion);
+//! - they pause (explicitly) within the played tolerance of the end;
+//! - they start another episode while within the tolerance of the end.
+//!
+//! Periodic and background saves only ever record "in progress" and a position, so
+//! listening on through the last seconds with the screen locked is never cut short or
+//! reset. A system interruption (a call, unplugged headphones) is not leaving: it
+//! pauses and keeps the place so playback can resume to the end.
 
 use crux_core::{render::render, Command};
 
@@ -19,6 +41,8 @@ use crate::effect::Effect;
 use crate::model::{ActivePlayback, Model};
 use crate::view_model::PlayerView;
 
+#[cfg(test)]
+mod played_tests;
 #[cfg(test)]
 mod tests;
 
@@ -37,12 +61,19 @@ fn source_for(episode: &Episode) -> PlayerSource {
     }
 }
 
-fn player_op(episode_id: &str, op: PlayerOperation) -> Cmd {
-    let id = episode_id.to_string();
+/// Issues an engine operation. Its resolution comes back tagged with `session`, so an
+/// error from a replaced item is dropped rather than blamed on the current one.
+fn player_op(session: u32, op: PlayerOperation) -> Cmd {
     Command::request_from_shell(op).then_send(move |r| Event::PlayerResponded {
-        episode_id: id.clone(),
+        session,
         result: Box::new(r),
     })
+}
+
+/// Hands out the next session id. Ids only ever increase, across episodes.
+fn next_session(model: &mut Model) -> u32 {
+    model.player_sessions += 1;
+    model.player_sessions
 }
 
 /// Persists an episode's playback state. Best-effort: a failed write only costs
@@ -54,6 +85,18 @@ fn persist_playback(episode_id: &str, status: PlaybackStatus, position_secs: Opt
         position_secs,
     })
     .then_send(|r| Event::PlaybackPersisted(Box::new(r)))
+}
+
+fn save_play_context(episode_id: &str) -> Cmd {
+    Command::request_from_shell(StorageOperation::SavePlayContext {
+        episode_id: episode_id.to_string(),
+    })
+    .then_send(|r| Event::PlaybackPersisted(Box::new(r)))
+}
+
+fn clear_play_context() -> Cmd {
+    Command::request_from_shell(StorageOperation::ClearPlayContext)
+        .then_send(|r| Event::PlaybackPersisted(Box::new(r)))
 }
 
 /// Mirrors a playback-state change onto the feed on screen, if that episode is loaded,
@@ -70,34 +113,74 @@ fn sync_episode_row(
     }
 }
 
-/// The status and stored position for the current playhead: within the played
-/// tolerance of the end means played (position reset), otherwise in-progress.
-fn checkpoint_state(active: &ActivePlayback) -> (PlaybackStatus, Option<u32>) {
-    let duration = active.duration_secs.or(active.episode.duration_secs);
-    match duration {
-        Some(d)
-            if active.position_secs > 0
-                && active.position_secs.saturating_add(PLAYED_TOLERANCE_SECS) >= d =>
-        {
-            (PlaybackStatus::Played, Some(0))
-        }
-        _ => (PlaybackStatus::InProgress, Some(active.position_secs)),
-    }
+/// The duration to judge the end by: the engine's once known, else the feed's.
+fn known_duration(active: &ActivePlayback) -> Option<u32> {
+    active.duration_secs.or(active.episode.duration_secs)
 }
 
-/// Persists the current position/status. Called on pause, seek, backgrounding and
-/// every `POSITION_CHECKPOINT_SECS` of playback.
+/// Whether the playhead is close enough to the end to count as finished. The tolerance
+/// is `PLAYED_TOLERANCE_SECS`, but never more than a quarter of the episode, so a short
+/// clip isn't "finished" almost as soon as it starts. An unknown (or zero) duration is
+/// never in the tail: only the engine reaching the end can finish such an episode.
+fn in_tail(active: &ActivePlayback) -> bool {
+    let Some(duration) = known_duration(active).filter(|&d| d > 0) else {
+        return false;
+    };
+    let tolerance = PLAYED_TOLERANCE_SECS.min(duration / 4);
+    active.position_secs.saturating_add(tolerance) >= duration
+}
+
+/// Persists the current position as in-progress. Called on seek, interruption,
+/// backgrounding and every `POSITION_CHECKPOINT_SECS` of playback. It never decides
+/// "played": see the module docs.
 fn checkpoint(model: &mut Model) -> Cmd {
     let Some(active) = model.active_playback.as_mut() else {
         return Command::done();
     };
-    let (status, position) = checkpoint_state(active);
+    let position = Some(active.position_secs);
     active.last_checkpoint_secs = active.position_secs;
-    active.episode.playback_status = status.clone();
+    active.episode.playback_status = PlaybackStatus::InProgress;
     active.episode.playback_position_secs = position;
     let id = active.episode.id.clone();
-    sync_episode_row(model, &id, &status, position);
-    persist_playback(&id, status, position)
+    sync_episode_row(model, &id, &PlaybackStatus::InProgress, position);
+    persist_playback(&id, PlaybackStatus::InProgress, position)
+}
+
+/// Finishes the active episode: marked played with its position reset, the saved
+/// context cleared, the engine stopped, and the player inactive. There is no
+/// auto-advance until playlists exist.
+fn complete(model: &mut Model) -> Cmd {
+    let Some(active) = model.active_playback.take() else {
+        return Command::done();
+    };
+    let id = active.episode.id;
+    sync_episode_row(model, &id, &PlaybackStatus::Played, Some(0));
+    persist_playback(&id, PlaybackStatus::Played, Some(0))
+        .and(clear_play_context())
+        .and(player_op(active.session, PlayerOperation::Stop))
+        .and(render())
+}
+
+/// Settles the episode about to be replaced by another: played if it was left in the
+/// tail, otherwise its place is saved.
+fn leave_for_another(model: &mut Model) -> Cmd {
+    let Some(active) = model.active_playback.as_ref() else {
+        return Command::done();
+    };
+    if !in_tail(active) {
+        return checkpoint(model);
+    }
+    let id = active.episode.id.clone();
+    sync_episode_row(model, &id, &PlaybackStatus::Played, Some(0));
+    persist_playback(&id, PlaybackStatus::Played, Some(0))
+}
+
+/// Whether `session` is the current load's, i.e. the news is not stale.
+fn is_current(model: &Model, session: u32) -> bool {
+    model
+        .active_playback
+        .as_ref()
+        .is_some_and(|a| a.session == session)
 }
 
 /// Starts playing `episode_id` from the feed on screen. Resumes in place if it is
@@ -114,8 +197,8 @@ pub(crate) fn play_episode(model: &mut Model, episode_id: &str) -> Cmd {
         return render();
     };
 
-    // Whatever was playing keeps its place before it's replaced.
-    let outgoing = checkpoint(model);
+    // Whatever was playing keeps its place (or counts as played) before it's replaced.
+    let outgoing = leave_for_another(model);
 
     let source = source_for(&episode);
     // A played episode restarts from the top; otherwise resume with the usual rewind.
@@ -130,8 +213,10 @@ pub(crate) fn play_episode(model: &mut Model, episode_id: &str) -> Cmd {
     playing_episode.playback_position_secs = Some(start);
     sync_episode_row(model, episode_id, &PlaybackStatus::InProgress, Some(start));
     let streaming = matches!(source, PlayerSource::Stream { .. });
+    let session = next_session(model);
     model.active_playback = Some(ActivePlayback {
         episode: playing_episode,
+        session,
         position_secs: start,
         duration_secs: None,
         is_playing: true,
@@ -149,9 +234,9 @@ pub(crate) fn play_episode(model: &mut Model, episode_id: &str) -> Cmd {
         ))
         .and(save_play_context(episode_id))
         .and(player_op(
-            episode_id,
+            session,
             PlayerOperation::Load {
-                episode_id: episode_id.to_string(),
+                session,
                 source,
                 start_secs: start,
                 autoplay: true,
@@ -165,45 +250,44 @@ pub(crate) fn play_episode(model: &mut Model, episode_id: &str) -> Cmd {
     cmd.and(render())
 }
 
-fn save_play_context(episode_id: &str) -> Cmd {
-    Command::request_from_shell(StorageOperation::SavePlayContext {
-        episode_id: episode_id.to_string(),
-    })
-    .then_send(|r| Event::PlaybackPersisted(Box::new(r)))
-}
-
 /// Resumes the active episode, rewinding slightly for context.
 pub(crate) fn play(model: &mut Model) -> Cmd {
+    if model.active_playback.as_ref().is_none_or(|a| a.is_playing) {
+        return Command::done();
+    }
+    // A restored (or errored) episode has nothing loaded, so it needs a fresh session.
+    let needs_load = model.active_playback.as_ref().is_some_and(|a| !a.loaded);
+    let fresh = needs_load.then(|| next_session(model));
     let Some(active) = model.active_playback.as_mut() else {
         return Command::done();
     };
-    if active.is_playing {
-        return Command::done();
-    }
     active.error = None;
     active.is_playing = true;
     let rewound = active.position_secs.saturating_sub(RESUME_REWIND_SECS);
     active.position_secs = rewound;
-    let id = active.episode.id.clone();
-    let cmd = if active.loaded {
-        player_op(&id, PlayerOperation::Seek { secs: rewound })
-            .and(player_op(&id, PlayerOperation::Play))
-    } else {
-        // Cold-start restore (or recovery after an error): nothing is loaded yet.
+    let cmd = if let Some(session) = fresh {
+        active.session = session;
         active.loaded = true;
         player_op(
-            &id,
+            session,
             PlayerOperation::Load {
-                episode_id: id.clone(),
+                session,
                 source: active.source.clone(),
                 start_secs: rewound,
                 autoplay: true,
             },
         )
+    } else {
+        let session = active.session;
+        player_op(session, PlayerOperation::Seek { secs: rewound })
+            .and(player_op(session, PlayerOperation::Play))
     };
     cmd.and(render())
 }
 
+/// An explicit pause (the pause button, the lock screen, headphone controls). Pausing
+/// within the played tolerance of the end finishes the episode; otherwise it saves the
+/// place.
 pub(crate) fn pause(model: &mut Model) -> Cmd {
     let Some(active) = model.active_playback.as_mut() else {
         return Command::done();
@@ -212,8 +296,29 @@ pub(crate) fn pause(model: &mut Model) -> Cmd {
         return Command::done();
     }
     active.is_playing = false;
-    let id = active.episode.id.clone();
-    player_op(&id, PlayerOperation::Pause)
+    if in_tail(active) {
+        // `complete` stops the engine, which pauses it.
+        return complete(model);
+    }
+    let session = active.session;
+    player_op(session, PlayerOperation::Pause)
+        .and(checkpoint(model))
+        .and(render())
+}
+
+/// The system paused playback (a call, Siri, unplugged headphones). That is not the
+/// listener leaving: the place is saved and the episode stays active, so playback can
+/// resume and play out the final seconds.
+pub(crate) fn interrupt(model: &mut Model) -> Cmd {
+    let Some(active) = model.active_playback.as_mut() else {
+        return Command::done();
+    };
+    if !active.is_playing {
+        return Command::done();
+    }
+    active.is_playing = false;
+    let session = active.session;
+    player_op(session, PlayerOperation::Pause)
         .and(checkpoint(model))
         .and(render())
 }
@@ -227,28 +332,39 @@ pub(crate) fn toggle(model: &mut Model) -> Cmd {
 }
 
 /// Moves the playhead, clamped to the episode: a skip never runs past the end (so it
-/// can't spill into another episode) or before the start.
+/// can't spill into another episode) or before the start. Seeking to the very end
+/// finishes the episode.
 pub(crate) fn seek_to(model: &mut Model, secs: u32) -> Cmd {
+    let needs_load = model.active_playback.as_ref().is_some_and(|a| !a.loaded);
+    let fresh = needs_load.then(|| next_session(model));
     let Some(active) = model.active_playback.as_mut() else {
         return Command::done();
     };
-    let duration = active.duration_secs.or(active.episode.duration_secs);
+    let duration = known_duration(active).filter(|&d| d > 0);
+    // Skipping or scrubbing to the very end is finishing: decided here rather than left
+    // to the engine, which only reports the end of the file while it is playing.
+    if duration.is_some_and(|d| secs >= d) {
+        return complete(model);
+    }
     let target = duration.map_or(secs, |d| secs.min(d));
     active.position_secs = target;
-    let id = active.episode.id.clone();
-    let op = if active.loaded {
-        PlayerOperation::Seek { secs: target }
-    } else {
+    let (session, op) = if let Some(session) = fresh {
         // Seeking a restored-but-unloaded episode loads it paused at the new spot.
+        active.session = session;
         active.loaded = true;
-        PlayerOperation::Load {
-            episode_id: id.clone(),
-            source: active.source.clone(),
-            start_secs: target,
-            autoplay: false,
-        }
+        (
+            session,
+            PlayerOperation::Load {
+                session,
+                source: active.source.clone(),
+                start_secs: target,
+                autoplay: false,
+            },
+        )
+    } else {
+        (active.session, PlayerOperation::Seek { secs: target })
     };
-    player_op(&id, op).and(checkpoint(model)).and(render())
+    player_op(session, op).and(checkpoint(model)).and(render())
 }
 
 pub(crate) fn skip_forward(model: &mut Model) -> Cmd {
@@ -265,13 +381,13 @@ pub(crate) fn skip_back(model: &mut Model) -> Cmd {
     seek_to(model, position.saturating_sub(SKIP_BACKWARD_SECS))
 }
 
-pub(crate) fn on_tick(model: &mut Model, episode_id: &str, position_secs: u32) -> Cmd {
+pub(crate) fn on_tick(model: &mut Model, session: u32, position_secs: u32) -> Cmd {
+    if !is_current(model, session) {
+        return Command::done();
+    }
     let Some(active) = model.active_playback.as_mut() else {
         return Command::done();
     };
-    if active.episode.id != episode_id {
-        return Command::done();
-    }
     active.position_secs = position_secs;
     let due = active.is_playing
         && position_secs.abs_diff(active.last_checkpoint_secs) >= POSITION_CHECKPOINT_SECS;
@@ -282,71 +398,65 @@ pub(crate) fn on_tick(model: &mut Model, episode_id: &str, position_secs: u32) -
     }
 }
 
-pub(crate) fn on_duration(model: &mut Model, episode_id: &str, duration_secs: u32) -> Cmd {
-    match model.active_playback.as_mut() {
-        Some(active) if active.episode.id == episode_id => {
-            active.duration_secs = Some(duration_secs);
-            render()
-        }
-        _ => Command::done(),
-    }
-}
-
-/// The engine reached the end of the file: the episode is played and the player
-/// goes inactive (no auto-advance until playlists exist).
-pub(crate) fn on_ended(model: &mut Model, episode_id: &str) -> Cmd {
-    if model
-        .active_playback
-        .as_ref()
-        .is_none_or(|a| a.episode.id != episode_id)
-    {
+pub(crate) fn on_duration(model: &mut Model, session: u32, duration_secs: u32) -> Cmd {
+    if !is_current(model, session) {
         return Command::done();
     }
-    model.active_playback = None;
-    sync_episode_row(model, episode_id, &PlaybackStatus::Played, Some(0));
-    persist_playback(episode_id, PlaybackStatus::Played, Some(0))
-        .and(
-            Command::request_from_shell(StorageOperation::ClearPlayContext)
-                .then_send(|r| Event::PlaybackPersisted(Box::new(r))),
-        )
-        .and(player_op(episode_id, PlayerOperation::Stop))
-        .and(render())
+    if let Some(active) = model.active_playback.as_mut() {
+        active.duration_secs = Some(duration_secs);
+    }
+    render()
+}
+
+/// The engine reached the end of the file: natural completion.
+pub(crate) fn on_ended(model: &mut Model, session: u32) -> Cmd {
+    if !is_current(model, session) {
+        return Command::done();
+    }
+    complete(model)
 }
 
 /// The engine couldn't play (or lost) the item. A missing local file falls back to
 /// streaming and re-downloads; anything else leaves playback paused with a notice.
-pub(crate) fn on_failure(model: &mut Model, episode_id: &str, message: String) -> Cmd {
-    let Some(active) = model.active_playback.as_mut() else {
-        return Command::done();
-    };
-    if active.episode.id != episode_id {
+pub(crate) fn on_failure(model: &mut Model, session: u32, message: String) -> Cmd {
+    if !is_current(model, session) {
         return Command::done();
     }
-    let was_playing = active.is_playing;
-    let position = active.position_secs;
-    let id = active.episode.id.clone();
-    if !matches!(active.source, PlayerSource::Local { .. }) {
-        active.is_playing = false;
-        active.loaded = false;
-        active.error = Some(message);
+    let is_local = model
+        .active_playback
+        .as_ref()
+        .is_some_and(|a| matches!(a.source, PlayerSource::Local { .. }));
+    if !is_local {
+        if let Some(active) = model.active_playback.as_mut() {
+            active.is_playing = false;
+            active.loaded = false;
+            active.error = Some(message);
+        }
         return checkpoint(model).and(render());
     }
     // The downloaded file is unreadable (deleted behind our back, say): forget it and
-    // stream instead, carrying on from the same spot.
+    // stream instead, carrying on from the same spot under a new session.
+    let fresh = next_session(model);
+    let Some(active) = model.active_playback.as_mut() else {
+        return Command::done();
+    };
     let source = PlayerSource::Stream {
         url: active.episode.enclosure_url.clone(),
     };
+    let id = active.episode.id.clone();
     active.source = source.clone();
+    active.session = fresh;
     active.episode.download_status = DownloadStatus::NotDownloaded;
     active.episode.local_path = None;
     active.error = None;
     active.loaded = true;
+    let (position, was_playing) = (active.position_secs, active.is_playing);
     reset_to_not_downloaded(model, &id)
         .and(enqueue_download(model, &id))
         .and(player_op(
-            &id,
+            fresh,
             PlayerOperation::Load {
-                episode_id: id.clone(),
+                session: fresh,
                 source,
                 start_secs: position,
                 autoplay: was_playing,
@@ -355,10 +465,10 @@ pub(crate) fn on_failure(model: &mut Model, episode_id: &str, message: String) -
         .and(render())
 }
 
-pub(crate) fn on_response(model: &mut Model, episode_id: &str, result: PlayerResult) -> Cmd {
+pub(crate) fn on_response(model: &mut Model, session: u32, result: PlayerResult) -> Cmd {
     match result {
         PlayerResult::Ok => Command::done(),
-        PlayerResult::Error(message) => on_failure(model, episode_id, message),
+        PlayerResult::Error(message) => on_failure(model, session, message),
     }
 }
 
@@ -370,6 +480,10 @@ pub(crate) fn on_download_completed(
     local_path: &str,
     size_bytes: u64,
 ) -> Cmd {
+    let needs_swap = model.active_playback.as_ref().is_some_and(|a| {
+        a.episode.id == episode_id && a.loaded && matches!(a.source, PlayerSource::Stream { .. })
+    });
+    let swap_session = needs_swap.then(|| next_session(model));
     let Some(active) = model.active_playback.as_mut() else {
         return Command::done();
     };
@@ -379,21 +493,22 @@ pub(crate) fn on_download_completed(
     active.episode.download_status = DownloadStatus::Downloaded;
     active.episode.local_path = Some(local_path.to_string());
     active.episode.file_size_bytes = Some(size_bytes);
-    if !matches!(active.source, PlayerSource::Stream { .. }) {
-        return Command::done();
+    if matches!(active.source, PlayerSource::Stream { .. }) {
+        active.source = PlayerSource::Local {
+            local_path: local_path.to_string(),
+        };
     }
-    let source = PlayerSource::Local {
-        local_path: local_path.to_string(),
-    };
-    active.source = source.clone();
-    if !active.loaded {
+    let Some(session) = swap_session else {
+        // Not loaded into the engine (restored, or errored): the new source is picked up
+        // by the next Load. Already local: nothing to swap.
         return render();
-    }
+    };
+    active.session = session;
     player_op(
-        episode_id,
+        session,
         PlayerOperation::Load {
-            episode_id: episode_id.to_string(),
-            source,
+            session,
+            source: active.source.clone(),
             start_secs: active.position_secs,
             autoplay: active.is_playing,
         },
@@ -401,7 +516,9 @@ pub(crate) fn on_download_completed(
 }
 
 /// Restores the active episode at launch, paused, so the mini-player is there
-/// immediately. The engine isn't loaded until the first Play.
+/// immediately. The engine isn't loaded until the first Play. An episode that is already
+/// played is not restored (there's nothing left to resume), and its stale context is
+/// cleared.
 pub(crate) fn on_context_loaded(model: &mut Model, result: StorageResult) -> Cmd {
     if model.active_playback.is_some() {
         return Command::done();
@@ -409,13 +526,14 @@ pub(crate) fn on_context_loaded(model: &mut Model, result: StorageResult) -> Cmd
     let StorageResult::Episode(episode) = result else {
         return Command::done();
     };
-    let position = match episode.playback_status {
-        PlaybackStatus::Played => 0,
-        _ => episode.playback_position_secs.unwrap_or(0),
-    };
+    if episode.playback_status == PlaybackStatus::Played {
+        return clear_play_context();
+    }
+    let position = episode.playback_position_secs.unwrap_or(0);
     model.active_playback = Some(ActivePlayback {
         source: source_for(&episode),
         episode,
+        session: 0,
         position_secs: position,
         duration_secs: None,
         is_playing: false,
@@ -426,7 +544,8 @@ pub(crate) fn on_context_loaded(model: &mut Model, result: StorageResult) -> Cmd
     render()
 }
 
-/// Flushes position when the app leaves the foreground.
+/// Flushes position when the app leaves the foreground. Never decides "played": the
+/// listener may well be still listening with the screen locked.
 pub(crate) fn on_backgrounded(model: &mut Model) -> Cmd {
     checkpoint(model)
 }
@@ -448,7 +567,7 @@ pub(crate) fn player_view(model: &Model) -> Option<PlayerView> {
             .clone()
             .or_else(|| subscription.and_then(|s| s.artwork_url.clone())),
         position_secs: active.position_secs,
-        duration_secs: active.duration_secs.or(active.episode.duration_secs),
+        duration_secs: known_duration(active),
         is_playing: active.is_playing,
         is_streaming: matches!(active.source, PlayerSource::Stream { .. }),
         skip_forward_secs: SKIP_FORWARD_SECS,

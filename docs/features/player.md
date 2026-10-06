@@ -114,10 +114,25 @@ engine.
   moves onto the local file at the current position (a `Load` at the playhead).
   If the downloaded file turns out to be missing or unreadable, playback falls
   back to streaming and the episode is reset to not-downloaded and re-queued.
-- **Played tolerance.** An episode counts as played once the playhead is within
-  **15s** of the end (`PLAYED_TOLERANCE_SECS`); status becomes played and the
-  stored position resets to 0. The engine's duration wins over the feed's.
-  *Will become a user setting.*
+- **Played tolerance.** Played is decided when the listener *leaves* an episode,
+  never as a side effect of saving progress. It happens when the engine reaches
+  the end, when they pause, or when they start another episode, while within
+  **15s** of the end (`PLAYED_TOLERANCE_SECS`, but never more than a quarter of
+  a short episode). The status becomes played, the stored position resets to 0,
+  the saved context is cleared and the player goes inactive. The engine's
+  duration wins over the feed's; with no known duration only the engine reaching
+  the end finishes an episode. *Will become a user setting.*
+- **Not leaving.** Periodic saves and backgrounding only record in-progress and
+  a position, so listening on through the last seconds with the screen locked is
+  never cut short. A system pause (a call, Siri, unplugged headphones) keeps the
+  episode and its place and never counts as finishing, so it can resume and play
+  out the end.
+- **Restore.** An episode already marked played is not restored at launch (its
+  saved context is cleared); an in-progress one comes back paused at its place.
+- **Sessions.** Each load into the engine gets a session id, and everything the
+  engine reports carries it. The core ignores news from any other session, so a
+  late tick, end or failure from a replaced item (a source swap, a retry, another
+  episode) can't affect the current one.
 - **Position persistence.** Written at most every 10s while playing, and on
   pause, seek, backgrounding, switching episode, and end. Per-second ticks are
   transient.
