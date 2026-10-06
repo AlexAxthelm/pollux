@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::capabilities::player::PlayerSource;
-use crate::domain::{Episode, EpisodeSortOrder, Subscription};
+use crate::capabilities::player::MediaSource;
+use crate::domain::{Episode, EpisodeSortOrder, EpisodeSource, Subscription};
 use crate::theme::{ThemeId, ThemeMode};
 use crate::view_model::DownloadNotice;
 
@@ -97,7 +97,11 @@ pub struct ActivePlayback {
     /// The engine's duration, authoritative over the feed's `episode.duration_secs`.
     pub duration_secs: Option<u32>,
     pub is_playing: bool,
-    pub source: PlayerSource,
+    /// What the engine reads: the stream or the downloaded file.
+    pub media: MediaSource,
+    /// What playback was started from (a subscription today, a playlist later); named
+    /// by the player's "From:" row and navigated back to from it.
+    pub source: EpisodeSource,
     /// Whether the shell's engine currently has this episode loaded. False right after
     /// a cold-start restore (and after an error), so the next Play issues a `Load`.
     pub loaded: bool,

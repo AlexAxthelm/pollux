@@ -10,6 +10,8 @@ private func makeManager() throws -> DatabaseManager {
     return try DatabaseManager(path: path)
 }
 
+private let feed: EpisodeSource = .subscription(id: "sub-1")
+
 private func seed(_ db: DatabaseManager, episodeId: String) async throws {
     let sub = Subscription(
         id: "sub-1", feedUrl: "https://example.com/sub-1.rss", title: "Feed",
@@ -35,29 +37,30 @@ private func seed(_ db: DatabaseManager, episodeId: String) async throws {
         }
     }
 
-    @Test func savedContextLoadsTheEpisodeWithItsPosition() async throws {
+    @Test func savedContextLoadsTheEpisodeWithItsPositionAndSource() async throws {
         let db = try makeManager()
         try await seed(db, episodeId: "ep-1")
-        try await db.execute(.savePlayContext(episodeId: "ep-1"))
+        try await db.execute(.savePlayContext(episodeId: "ep-1", source: feed))
 
         let result = try await db.execute(.loadPlayContext)
-        guard case let .episode(episode) = result else {
-            Issue.record("Expected .episode, got \(result)")
+        guard case let .playContext(episode, source) = result else {
+            Issue.record("Expected .playContext, got \(result)")
             return
         }
         #expect(episode.id == "ep-1")
         #expect(episode.playbackPositionSecs == 120)
+        #expect(source == feed)
     }
 
     @Test func savingReplacesThePreviousContext() async throws {
         let db = try makeManager()
         try await seed(db, episodeId: "ep-1")
         try await seed(db, episodeId: "ep-2")
-        try await db.execute(.savePlayContext(episodeId: "ep-1"))
-        try await db.execute(.savePlayContext(episodeId: "ep-2"))
+        try await db.execute(.savePlayContext(episodeId: "ep-1", source: feed))
+        try await db.execute(.savePlayContext(episodeId: "ep-2", source: feed))
 
-        guard case let .episode(episode) = try await db.execute(.loadPlayContext) else {
-            Issue.record("Expected an episode")
+        guard case let .playContext(episode, _) = try await db.execute(.loadPlayContext) else {
+            Issue.record("Expected a play context")
             return
         }
         #expect(episode.id == "ep-2")
@@ -66,7 +69,7 @@ private func seed(_ db: DatabaseManager, episodeId: String) async throws {
     @Test func clearingRemovesIt() async throws {
         let db = try makeManager()
         try await seed(db, episodeId: "ep-1")
-        try await db.execute(.savePlayContext(episodeId: "ep-1"))
+        try await db.execute(.savePlayContext(episodeId: "ep-1", source: feed))
         try await db.execute(.clearPlayContext)
 
         guard case .notFound = try await db.execute(.loadPlayContext) else {
@@ -78,7 +81,7 @@ private func seed(_ db: DatabaseManager, episodeId: String) async throws {
     @Test func deletingTheSubscriptionDropsTheContext() async throws {
         let db = try makeManager()
         try await seed(db, episodeId: "ep-1")
-        try await db.execute(.savePlayContext(episodeId: "ep-1"))
+        try await db.execute(.savePlayContext(episodeId: "ep-1", source: feed))
         try await db.execute(.deleteSubscription(id: "sub-1"))
 
         guard case .notFound = try await db.execute(.loadPlayContext) else {

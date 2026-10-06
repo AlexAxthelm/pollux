@@ -30,13 +30,13 @@
 use crux_core::{render::render, Command};
 
 use crate::app::{enqueue_download, reset_to_not_downloaded, Event};
-use crate::capabilities::player::{PlayerOperation, PlayerResult, PlayerSource};
+use crate::capabilities::player::{MediaSource, PlayerOperation, PlayerResult};
 use crate::capabilities::storage::{StorageOperation, StorageResult};
 use crate::defaults::{
     PLAYED_TOLERANCE_SECS, POSITION_CHECKPOINT_SECS, RESUME_REWIND_SECS, SKIP_BACKWARD_SECS,
     SKIP_FORWARD_SECS,
 };
-use crate::domain::{DownloadStatus, Episode, PlaybackStatus};
+use crate::domain::{DownloadStatus, Episode, EpisodeSource, PlaybackStatus};
 use crate::effect::Effect;
 use crate::model::{ActivePlayback, Model};
 use crate::view_model::PlayerView;
@@ -50,12 +50,12 @@ type Cmd = Command<Effect, Event>;
 
 /// Where an episode should play from: its downloaded file when we have one, else the
 /// network.
-fn source_for(episode: &Episode) -> PlayerSource {
+fn source_for(episode: &Episode) -> MediaSource {
     match (&episode.download_status, &episode.local_path) {
-        (DownloadStatus::Downloaded, Some(path)) => PlayerSource::Local {
+        (DownloadStatus::Downloaded, Some(path)) => MediaSource::Local {
             local_path: path.clone(),
         },
-        _ => PlayerSource::Stream {
+        _ => MediaSource::Stream {
             url: episode.enclosure_url.clone(),
         },
     }
@@ -87,9 +87,10 @@ fn persist_playback(episode_id: &str, status: PlaybackStatus, position_secs: Opt
     .then_send(|r| Event::PlaybackPersisted(Box::new(r)))
 }
 
-fn save_play_context(episode_id: &str) -> Cmd {
+fn save_play_context(episode_id: &str, source: &EpisodeSource) -> Cmd {
     Command::request_from_shell(StorageOperation::SavePlayContext {
         episode_id: episode_id.to_string(),
+        source: source.clone(),
     })
     .then_send(|r| Event::PlaybackPersisted(Box::new(r)))
 }
@@ -200,7 +201,13 @@ pub(crate) fn play_episode(model: &mut Model, episode_id: &str) -> Cmd {
     // Whatever was playing keeps its place (or counts as played) before it's replaced.
     let outgoing = leave_for_another(model);
 
-    let source = source_for(&episode);
+    let media = source_for(&episode);
+    // Started from this episode's feed. When playlists exist the view that initiated
+    // playback decides (the event will carry the source); until then a feed's episode
+    // list is the only place playback starts.
+    let source = EpisodeSource::Subscription {
+        id: episode.subscription_id.clone(),
+    };
     // A played episode restarts from the top; otherwise resume with the usual rewind.
     let saved = match episode.playback_status {
         PlaybackStatus::Played => 0,
@@ -212,7 +219,7 @@ pub(crate) fn play_episode(model: &mut Model, episode_id: &str) -> Cmd {
     playing_episode.playback_status = PlaybackStatus::InProgress;
     playing_episode.playback_position_secs = Some(start);
     sync_episode_row(model, episode_id, &PlaybackStatus::InProgress, Some(start));
-    let streaming = matches!(source, PlayerSource::Stream { .. });
+    let streaming = matches!(media, MediaSource::Stream { .. });
     let session = next_session(model);
     model.active_playback = Some(ActivePlayback {
         episode: playing_episode,
@@ -220,6 +227,7 @@ pub(crate) fn play_episode(model: &mut Model, episode_id: &str) -> Cmd {
         position_secs: start,
         duration_secs: None,
         is_playing: true,
+        media: media.clone(),
         source: source.clone(),
         loaded: true,
         last_checkpoint_secs: start,
@@ -232,12 +240,12 @@ pub(crate) fn play_episode(model: &mut Model, episode_id: &str) -> Cmd {
             PlaybackStatus::InProgress,
             Some(start),
         ))
-        .and(save_play_context(episode_id))
+        .and(save_play_context(episode_id, &source))
         .and(player_op(
             session,
             PlayerOperation::Load {
                 session,
-                source,
+                media,
                 start_secs: start,
                 autoplay: true,
             },
@@ -272,7 +280,7 @@ pub(crate) fn play(model: &mut Model) -> Cmd {
             session,
             PlayerOperation::Load {
                 session,
-                source: active.source.clone(),
+                media: active.media.clone(),
                 start_secs: rewound,
                 autoplay: true,
             },
@@ -356,7 +364,7 @@ pub(crate) fn seek_to(model: &mut Model, secs: u32) -> Cmd {
             session,
             PlayerOperation::Load {
                 session,
-                source: active.source.clone(),
+                media: active.media.clone(),
                 start_secs: target,
                 autoplay: false,
             },
@@ -425,7 +433,7 @@ pub(crate) fn on_failure(model: &mut Model, session: u32, message: String) -> Cm
     let is_local = model
         .active_playback
         .as_ref()
-        .is_some_and(|a| matches!(a.source, PlayerSource::Local { .. }));
+        .is_some_and(|a| matches!(a.media, MediaSource::Local { .. }));
     if !is_local {
         if let Some(active) = model.active_playback.as_mut() {
             active.is_playing = false;
@@ -440,11 +448,11 @@ pub(crate) fn on_failure(model: &mut Model, session: u32, message: String) -> Cm
     let Some(active) = model.active_playback.as_mut() else {
         return Command::done();
     };
-    let source = PlayerSource::Stream {
+    let media = MediaSource::Stream {
         url: active.episode.enclosure_url.clone(),
     };
     let id = active.episode.id.clone();
-    active.source = source.clone();
+    active.media = media.clone();
     active.session = fresh;
     active.episode.download_status = DownloadStatus::NotDownloaded;
     active.episode.local_path = None;
@@ -457,7 +465,7 @@ pub(crate) fn on_failure(model: &mut Model, session: u32, message: String) -> Cm
             fresh,
             PlayerOperation::Load {
                 session: fresh,
-                source,
+                media,
                 start_secs: position,
                 autoplay: was_playing,
             },
@@ -481,7 +489,7 @@ pub(crate) fn on_download_completed(
     size_bytes: u64,
 ) -> Cmd {
     let needs_swap = model.active_playback.as_ref().is_some_and(|a| {
-        a.episode.id == episode_id && a.loaded && matches!(a.source, PlayerSource::Stream { .. })
+        a.episode.id == episode_id && a.loaded && matches!(a.media, MediaSource::Stream { .. })
     });
     let swap_session = needs_swap.then(|| next_session(model));
     let Some(active) = model.active_playback.as_mut() else {
@@ -493,8 +501,8 @@ pub(crate) fn on_download_completed(
     active.episode.download_status = DownloadStatus::Downloaded;
     active.episode.local_path = Some(local_path.to_string());
     active.episode.file_size_bytes = Some(size_bytes);
-    if matches!(active.source, PlayerSource::Stream { .. }) {
-        active.source = PlayerSource::Local {
+    if matches!(active.media, MediaSource::Stream { .. }) {
+        active.media = MediaSource::Local {
             local_path: local_path.to_string(),
         };
     }
@@ -508,7 +516,7 @@ pub(crate) fn on_download_completed(
         session,
         PlayerOperation::Load {
             session,
-            source: active.source.clone(),
+            media: active.media.clone(),
             start_secs: active.position_secs,
             autoplay: active.is_playing,
         },
@@ -523,7 +531,7 @@ pub(crate) fn on_context_loaded(model: &mut Model, result: StorageResult) -> Cmd
     if model.active_playback.is_some() {
         return Command::done();
     }
-    let StorageResult::Episode(episode) = result else {
+    let StorageResult::PlayContext { episode, source } = result else {
         return Command::done();
     };
     if episode.playback_status == PlaybackStatus::Played {
@@ -531,7 +539,8 @@ pub(crate) fn on_context_loaded(model: &mut Model, result: StorageResult) -> Cmd
     }
     let position = episode.playback_position_secs.unwrap_or(0);
     model.active_playback = Some(ActivePlayback {
-        source: source_for(&episode),
+        media: source_for(&episode),
+        source,
         episode,
         session: 0,
         position_secs: position,
@@ -556,11 +565,21 @@ pub(crate) fn player_view(model: &Model) -> Option<PlayerView> {
         .subscriptions
         .iter()
         .find(|s| s.id == active.episode.subscription_id);
+    // The source's display name. A subscription is named by its feed.
+    let source_title = match &active.source {
+        EpisodeSource::Subscription { id } => model
+            .subscriptions
+            .iter()
+            .find(|s| &s.id == id)
+            .map(|s| s.title.clone())
+            .unwrap_or_default(),
+    };
     Some(PlayerView {
         episode_id: active.episode.id.clone(),
-        subscription_id: active.episode.subscription_id.clone(),
         episode_title: active.episode.title.clone(),
         feed_title: subscription.map(|s| s.title.clone()).unwrap_or_default(),
+        source: active.source.clone(),
+        source_title,
         artwork_url: active
             .episode
             .artwork_url
@@ -569,7 +588,7 @@ pub(crate) fn player_view(model: &Model) -> Option<PlayerView> {
         position_secs: active.position_secs,
         duration_secs: known_duration(active),
         is_playing: active.is_playing,
-        is_streaming: matches!(active.source, PlayerSource::Stream { .. }),
+        is_streaming: matches!(active.media, MediaSource::Stream { .. }),
         skip_forward_secs: SKIP_FORWARD_SECS,
         skip_back_secs: SKIP_BACKWARD_SECS,
         error: active.error.clone(),

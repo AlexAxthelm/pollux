@@ -49,6 +49,15 @@ pub(super) fn send(model: &mut Model, event: Event) -> Vec<Effect> {
     Pollux.update(event, model).effects().collect()
 }
 
+/// What the shell answers `LoadPlayContext` with: the saved episode and where it was
+/// started from (the subscription the test episodes belong to).
+pub(super) fn saved_context(episode: Episode) -> Event {
+    Event::PlayContextLoaded(Box::new(StorageResult::PlayContext {
+        episode,
+        source: EpisodeSource::Subscription { id: "sub".into() },
+    }))
+}
+
 /// The current load's session, which the shell tags every engine event with.
 pub(super) fn session(model: &Model) -> u32 {
     active(model).session
@@ -122,7 +131,7 @@ fn playing_an_undownloaded_episode_streams_and_starts_a_download() {
     assert!(matches!(
         player_ops(&effects).as_slice(),
         [PlayerOperation::Load {
-            source: PlayerSource::Stream { .. },
+            media: MediaSource::Stream { .. },
             start_secs: 0,
             autoplay: true,
             ..
@@ -153,7 +162,7 @@ fn playing_a_downloaded_episode_uses_the_file_and_resumes_with_a_rewind() {
     assert!(matches!(
         player_ops(&effects).as_slice(),
         [PlayerOperation::Load {
-            source: PlayerSource::Local { .. },
+            media: MediaSource::Local { .. },
             start_secs: 97,
             ..
         }]
@@ -319,7 +328,7 @@ fn a_finished_download_swaps_the_stream_for_the_local_file_at_the_playhead() {
     assert!(matches!(
         player_ops(&effects).as_slice(),
         [PlayerOperation::Load {
-            source: PlayerSource::Local { .. },
+            media: MediaSource::Local { .. },
             start_secs: 77,
             autoplay: true,
             ..
@@ -372,7 +381,7 @@ fn a_missing_local_file_falls_back_to_streaming_and_redownloads() {
     assert!(player_ops(&effects).iter().any(|op| matches!(
         op,
         PlayerOperation::Load {
-            source: PlayerSource::Stream { .. },
+            media: MediaSource::Stream { .. },
             autoplay: true,
             ..
         }
@@ -388,10 +397,7 @@ fn cold_start_restores_the_active_episode_paused_and_loads_on_first_play() {
     e.playback_position_secs = Some(200);
     let mut model = model_with(vec![]);
 
-    let effects = send(
-        &mut model,
-        Event::PlayContextLoaded(Box::new(StorageResult::Episode(e))),
-    );
+    let effects = send(&mut model, saved_context(e));
     assert!(
         player_ops(&effects).is_empty(),
         "restore must not touch the engine"
@@ -420,4 +426,53 @@ fn nothing_saved_means_no_player() {
         Event::PlayContextLoaded(Box::new(StorageResult::NotFound)),
     );
     assert!(Pollux.view(&model).player.is_none());
+}
+
+#[test]
+fn playing_saves_the_source_with_the_play_context() {
+    let mut model = model_with(vec![episode("e1")]);
+
+    let effects = send(&mut model, Event::PlayEpisode("e1".into()));
+
+    assert!(storage_ops(&effects).iter().any(|op| matches!(
+        op,
+        StorageOperation::SavePlayContext { episode_id, source }
+            if episode_id == "e1"
+                && *source == EpisodeSource::Subscription { id: "sub".into() }
+    )));
+    assert_eq!(
+        active(&model).source,
+        EpisodeSource::Subscription { id: "sub".into() }
+    );
+}
+
+#[test]
+fn the_player_view_names_and_targets_the_source() {
+    let mut model = model_with(vec![episode("e1")]);
+    send(&mut model, Event::PlayEpisode("e1".into()));
+
+    let view = view_player(&model);
+
+    assert_eq!(
+        view.source,
+        EpisodeSource::Subscription { id: "sub".into() }
+    );
+    assert_eq!(view.source_title, "Feed");
+}
+
+#[test]
+fn a_restored_episode_keeps_the_source_it_was_started_from() {
+    let mut model = model_with(vec![]);
+    let mut e = episode("e1");
+    e.playback_status = PlaybackStatus::InProgress;
+    e.playback_position_secs = Some(30);
+
+    send(&mut model, saved_context(e));
+
+    let view = view_player(&model);
+    assert_eq!(
+        view.source,
+        EpisodeSource::Subscription { id: "sub".into() }
+    );
+    assert_eq!(view.source_title, "Feed");
 }

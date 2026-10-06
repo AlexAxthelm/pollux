@@ -1,7 +1,7 @@
 use facet::Facet;
 use serde::{Deserialize, Serialize};
 
-use crate::domain::{DownloadStatus, EpisodeSortOrder, PlaybackStatus};
+use crate::domain::{DownloadStatus, EpisodeSortOrder, EpisodeSource, PlaybackStatus};
 use crate::theme::ThemeView;
 
 #[derive(Facet, Serialize, Deserialize, Clone, Default)]
@@ -21,9 +21,13 @@ pub struct ViewModel {
 #[derive(Facet, Serialize, Deserialize, Clone)]
 pub struct PlayerView {
     pub episode_id: String,
-    pub subscription_id: String,
     pub episode_title: String,
+    /// The episode's own feed (the Now Playing "artist"), distinct from `source`.
     pub feed_title: String,
+    /// What playback was started from; the "From:" row names `source_title` and
+    /// navigates back to `source`.
+    pub source: EpisodeSource,
+    pub source_title: String,
     /// Episode art, falling back to the feed's; the shell supplies the placeholder.
     pub artwork_url: Option<String>,
     pub position_secs: u32,

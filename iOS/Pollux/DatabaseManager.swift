@@ -59,8 +59,8 @@ actor DatabaseManager {
             try await deleteSubscription(id: id)
         case let .upsertFeedWithEpisodes(subscription, episodes):
             try await upsertFeedWithEpisodes(subscription: subscription, episodes: episodes)
-        case let .savePlayContext(episodeId):
-            try await savePlayContext(episodeId: episodeId)
+        case let .savePlayContext(episodeId, source):
+            try await savePlayContext(episodeId: episodeId, source: source)
         case .loadPlayContext:
             try loadPlayContext()
         case .clearPlayContext:

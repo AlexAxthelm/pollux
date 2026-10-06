@@ -127,6 +127,12 @@ engine.
   never cut short. A system pause (a call, Siri, unplugged headphones) keeps the
   episode and its place and never counts as finishing, so it can resume and play
   out the end.
+- **Source.** Playback remembers what it was started from as an `EpisodeSource`
+  (a subscription today; see `DATA_MODEL.md`), saved with the play context and
+  restored with it. The "From:" row names it and tapping it navigates back to it.
+  It is separate from the episode's own feed, which is what the lock screen shows
+  as the artist. Playback started from a feed's episode list uses that feed; once
+  playlists exist the view that starts playback will say which source it is.
 - **Restore.** An episode already marked played is not restored at launch (its
   saved context is cleared); an in-progress one comes back paused at its place.
 - **Sessions.** Each load into the engine gets a session id, and everything the

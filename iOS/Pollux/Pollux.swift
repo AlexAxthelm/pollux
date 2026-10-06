@@ -89,13 +89,17 @@ private struct RootView: View {
         }
     }
 
-    /// Dismisses the player and shows the podcast the active episode belongs to.
+    /// Dismisses the player and shows what playback was started from. A subscription is
+    /// the only source for now; a playlist will get its own case here.
     private func goToSource(of player: PlayerView) {
-        guard let subscription = core.view.library.subscriptions
-            .first(where: { $0.id == player.subscriptionId })
-        else { return }
-        showPlayer = false
-        path = NavigationPath()
-        path.append(subscription)
+        switch player.source {
+        case let .subscription(id):
+            guard let subscription = core.view.library.subscriptions
+                .first(where: { $0.id == id })
+            else { return }
+            showPlayer = false
+            path = NavigationPath()
+            path.append(subscription)
+        }
     }
 }

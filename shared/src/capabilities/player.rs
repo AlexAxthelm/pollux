@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Where the shell should read an episode's audio from.
 #[derive(Facet, Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[repr(C)]
-pub enum PlayerSource {
+pub enum MediaSource {
     /// Stream straight from the enclosure URL.
     Stream { url: String },
     /// A downloaded file; `local_path` is relative to the app's storage root and is
@@ -28,7 +28,7 @@ pub enum PlayerOperation {
         /// Tags everything the engine reports about this item, so the core can drop
         /// news from an item it has since replaced.
         session: u32,
-        source: PlayerSource,
+        media: MediaSource,
         start_secs: u32,
         autoplay: bool,
     },

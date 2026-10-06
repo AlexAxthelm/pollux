@@ -4,8 +4,8 @@
 use crux_core::App;
 
 use super::tests::{
-    active, checkpoints, episode, model_with, player_ops, send, send_ended, session, storage_ops,
-    tick, view_player,
+    active, checkpoints, episode, model_with, player_ops, saved_context, send, send_ended, session,
+    storage_ops, tick, view_player,
 };
 use super::*;
 use crate::Pollux;
@@ -53,10 +53,7 @@ fn a_played_episode_is_not_restored_and_its_saved_context_is_cleared() {
     e.playback_position_secs = Some(0);
     let mut model = model_with(vec![]);
 
-    let effects = send(
-        &mut model,
-        Event::PlayContextLoaded(Box::new(StorageResult::Episode(e))),
-    );
+    let effects = send(&mut model, saved_context(e));
 
     assert!(Pollux.view(&model).player.is_none());
     assert!(storage_ops(&effects)
@@ -71,10 +68,7 @@ fn an_in_progress_episode_is_still_restored() {
     e.playback_position_secs = Some(595);
     let mut model = model_with(vec![]);
 
-    send(
-        &mut model,
-        Event::PlayContextLoaded(Box::new(StorageResult::Episode(e))),
-    );
+    send(&mut model, saved_context(e));
 
     assert_eq!(view_player(&model).position_secs, 595);
 }

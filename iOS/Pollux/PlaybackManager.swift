@@ -35,8 +35,8 @@ final class PlaybackManager {
     /// Carries out one core operation. Synchronous: AVPlayer queues its own work.
     func perform(_ operation: PlayerOperation) -> PlayerResult {
         switch operation {
-        case let .load(session, source, startSecs, autoplay):
-            return load(session: session, source: source, startSecs: startSecs, autoplay: autoplay)
+        case let .load(session, media, startSecs, autoplay):
+            return load(session: session, media: media, startSecs: startSecs, autoplay: autoplay)
         case .play:
             player.play()
         case .pause:
@@ -50,10 +50,10 @@ final class PlaybackManager {
     }
 
     private func load(
-        session: UInt32, source: PlayerSource, startSecs: UInt32, autoplay: Bool,
+        session: UInt32, media: MediaSource, startSecs: UInt32, autoplay: Bool,
     ) -> PlayerResult {
         let url: URL
-        switch source {
+        switch media {
         case let .stream(urlString):
             guard let parsed = URL(string: urlString) else {
                 return .error("Invalid episode URL")

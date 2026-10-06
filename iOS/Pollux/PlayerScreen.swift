@@ -121,7 +121,7 @@ struct PlayerScreen: View {
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
             Button(action: onGoToSource) {
-                Text("From: \(player.feedTitle)")
+                Text("From: \(player.sourceTitle)")
                     .font(.subheadline)
                     .foregroundStyle(themeColors.accent)
                     .lineLimit(1)
