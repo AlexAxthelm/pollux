@@ -16,7 +16,7 @@ enum DatabaseManagerError: Error, LocalizedError {
 }
 
 actor DatabaseManager {
-    private let db: DatabasePool
+    let db: DatabasePool
 
     init() throws {
         guard let support = FileManager.default.urls(
@@ -74,6 +74,16 @@ actor DatabaseManager {
                 columns: ["subscription_id"],
             )
         }
+        // The episode the player was on, so the mini-player can be restored at launch.
+        // Single row (id pinned to 1); position lives on the episode itself. Deleting
+        // the episode (via its subscription) drops the row with it.
+        migrator.registerMigration("v2_play_context") { db in
+            try db.create(table: "play_context") { t in
+                t.column("id", .integer).primaryKey().check(sql: "id = 1")
+                t.column("episode_id", .text).notNull()
+                    .references("episodes", column: "id", onDelete: .cascade)
+            }
+        }
         try migrator.migrate(db)
     }
 
@@ -95,6 +105,12 @@ actor DatabaseManager {
             try await deleteSubscription(id: id)
         case let .upsertFeedWithEpisodes(subscription, episodes):
             try await upsertFeedWithEpisodes(subscription: subscription, episodes: episodes)
+        case let .savePlayContext(episodeId):
+            try await savePlayContext(episodeId: episodeId)
+        case .loadPlayContext:
+            try loadPlayContext()
+        case .clearPlayContext:
+            try await clearPlayContext()
         default:
             try await executeEpisode(operation)
         }

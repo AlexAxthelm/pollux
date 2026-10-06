@@ -22,6 +22,8 @@ targets:
       path: Pollux/Info.plist
       properties:
         UILaunchScreen: {}
+        # Keep playing with the screen locked or the app in the background.
+        UIBackgroundModes: [audio]
     dependencies:
       - package: Shared
       - package: App

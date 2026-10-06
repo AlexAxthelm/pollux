@@ -18,6 +18,11 @@ struct PolluxApp: App {
 private struct RootView: View {
     @ObservedObject var core: Core
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var showPlayer = false
+    /// The library's navigation stack, owned here so the player can jump back to the
+    /// podcast it is playing from.
+    @State private var path = NavigationPath()
 
     private var theme: ThemeView {
         core.view.theme
@@ -28,10 +33,59 @@ private struct RootView: View {
     }
 
     var body: some View {
-        ContentView(core: core)
+        ContentView(core: core, path: $path)
+            // Hidden entirely when nothing is active, and while the full player is up.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if let player = core.view.player, !showPlayer {
+                    MiniPlayerBar(
+                        player: player,
+                        onOpen: { showPlayer = true },
+                        onTogglePlay: { core.update(.togglePlay) },
+                    )
+                }
+            }
+            .fullScreenCover(isPresented: $showPlayer) {
+                fullPlayer
+            }
             .environment(\.themeColors, colors)
             .tint(colors.accent)
             .background(colors.background.ignoresSafeArea())
             .preferredColorScheme(theme.preferredColorScheme)
+            .onChange(of: core.view.player?.episodeId) { _, episodeId in
+                // The episode finished (or was cleared): nothing left to show.
+                if episodeId == nil {
+                    showPlayer = false
+                }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .background {
+                    core.update(.appBackgrounded)
+                }
+            }
+    }
+
+    @ViewBuilder private var fullPlayer: some View {
+        if let player = core.view.player {
+            PlayerScreen(
+                player: player,
+                send: { core.update($0) },
+                onHide: { showPlayer = false },
+                onGoToSource: { goToSource(of: player) },
+            )
+            // A cover doesn't reliably inherit the theme applied below it.
+            .environment(\.themeColors, colors)
+            .tint(colors.accent)
+            .preferredColorScheme(theme.preferredColorScheme)
+        }
+    }
+
+    /// Dismisses the player and shows the podcast the active episode belongs to.
+    private func goToSource(of player: PlayerView) {
+        guard let subscription = core.view.library.subscriptions
+            .first(where: { $0.id == player.subscriptionId })
+        else { return }
+        showPlayer = false
+        path = NavigationPath()
+        path.append(subscription)
     }
 }

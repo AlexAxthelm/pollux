@@ -2,12 +2,13 @@ import App
 import SwiftUI
 
 /// One episode in the subscription details list. Shows stored data (art, title,
-/// date, duration, description, read-only played/download status) and a working
-/// download control. Playback and more-actions remain DEBUG-tinted, disabled
-/// placeholders because their engines don't exist yet — see `DebugStyle.swift`.
+/// date, duration, description, read-only played/download status) plus working play
+/// and download controls.
 struct EpisodeRow: View {
     @Environment(\.themeColors) private var themeColors
     let episode: EpisodeSummary
+    /// Start (or resume) playing this episode.
+    let onPlay: (String) -> Void
     /// Queue this episode for download (or retry a failed one).
     let onDownload: (String) -> Void
     /// Remove this episode's downloaded file.
@@ -137,14 +138,17 @@ struct EpisodeRow: View {
         }
     }
 
-    /// Trailing controls: the still-stubbed play button (no playback engine yet) and
-    /// the three-dots menu, which is where the download action now lives. Download
-    /// *status* stays inline (`metaRow`); this menu is the *action* surface.
+    /// Trailing controls: the play button and the three-dots menu, which is where the
+    /// download action lives. Download *status* stays inline (`metaRow`); this menu is
+    /// the *action* surface.
     private var trailingControls: some View {
         HStack(spacing: 12) {
-            Image(systemName: "play.circle.fill")
-                .font(.title2)
-                .stubbed()
+            Button { onPlay(episode.id) } label: {
+                Image(systemName: "play.circle.fill")
+                    .font(.title2)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Play")
             moreMenu
         }
     }
@@ -200,8 +204,7 @@ struct EpisodeRow: View {
         }
     }
 
-    /// Only meaningful for in-progress episodes; nothing sets a position yet, so
-    /// in practice this stays nil until the playback engine lands.
+    /// Only meaningful for in-progress episodes.
     private var playbackPositionText: String? {
         guard episode.playbackStatus == .inProgress,
               let position = EpisodeFormatting.formatDuration(episode.playbackPositionSecs)

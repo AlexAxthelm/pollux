@@ -8,9 +8,33 @@ use crate::theme::ThemeView;
 pub struct ViewModel {
     pub library: LibraryView,
     pub subscription_detail: SubscriptionDetailView,
+    /// The active player, if any (see `PlayerView`).
+    pub player: Option<PlayerView>,
     /// Active theme, resolved by the shell into platform colors. Present on every
     /// render so the shell can apply it globally without a separate query.
     pub theme: ThemeView,
+}
+
+/// The active episode's transport state, present whenever the mini-player should show
+/// (playing or paused) and absent when nothing is active. The shell derives the
+/// full-player and lock-screen presentation from this alone.
+#[derive(Facet, Serialize, Deserialize, Clone)]
+pub struct PlayerView {
+    pub episode_id: String,
+    pub subscription_id: String,
+    pub episode_title: String,
+    pub feed_title: String,
+    /// Episode art, falling back to the feed's; the shell supplies the placeholder.
+    pub artwork_url: Option<String>,
+    pub position_secs: u32,
+    pub duration_secs: Option<u32>,
+    pub is_playing: bool,
+    /// True while playing from the network rather than a downloaded file.
+    pub is_streaming: bool,
+    pub skip_forward_secs: u32,
+    pub skip_back_secs: u32,
+    /// Why playback failed, shown as a transient banner; playback stays paused.
+    pub error: Option<String>,
 }
 
 #[derive(Facet, Serialize, Deserialize, Clone, Default)]

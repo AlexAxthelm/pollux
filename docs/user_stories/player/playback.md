@@ -96,3 +96,7 @@ so that I can quickly control playback
 As a listener
 I want to select the output device (Bluetooth, AirPlay, speaker, etc)
 so that I can listen how I want
+
+As a listener
+I want to choose how close to the end an episode must be to count as played
+so that I can match it to how much outro I tolerate

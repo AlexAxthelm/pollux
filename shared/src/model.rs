@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::capabilities::player::PlayerSource;
 use crate::domain::{Episode, EpisodeSortOrder, Subscription};
 use crate::theme::{ThemeId, ThemeMode};
 use crate::view_model::DownloadNotice;
@@ -48,11 +49,34 @@ pub struct Model {
     // starts another download action or switches feeds.
     pub download_notice: Option<DownloadNotice>,
 
+    // The episode the player is on (playing or paused), if any. Survives restarts via
+    // the stored play context; see `player.rs`.
+    pub active_playback: Option<ActivePlayback>,
+
     // Active theme selection. Defaults (System / FollowSystem) reproduce the OS's
     // native appearance. Hard-coded for now — no UI changes it until the Settings
     // appearance section lands and drives `Event::SetTheme`.
     pub theme_id: ThemeId,
     pub theme_mode: ThemeMode,
+}
+
+/// The player's current episode and transport state. Holds its own `Episode` copy so
+/// playback doesn't depend on `model.episodes` (which only holds the feed on screen,
+/// and is empty after a cold-start restore).
+#[derive(Clone, Debug)]
+pub struct ActivePlayback {
+    pub episode: Episode,
+    pub position_secs: u32,
+    /// The engine's duration, authoritative over the feed's `episode.duration_secs`.
+    pub duration_secs: Option<u32>,
+    pub is_playing: bool,
+    pub source: PlayerSource,
+    /// Whether the shell's engine currently has this episode loaded. False right after
+    /// a cold-start restore (and after an error), so the next Play issues a `Load`.
+    pub loaded: bool,
+    /// Position at the last persisted checkpoint, to space periodic writes.
+    pub last_checkpoint_secs: u32,
+    pub error: Option<String>,
 }
 
 /// An episode waiting to be downloaded. Carries the enclosure URL so the download

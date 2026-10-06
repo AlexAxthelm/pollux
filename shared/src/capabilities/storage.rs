@@ -45,6 +45,15 @@ pub enum StorageOperation {
         local_path: Option<String>,
         size_bytes: Option<u64>,
     },
+    /// Records which episode is the active one so the mini-player can be restored on
+    /// cold start. Position lives on the episode row (`UpdatePlaybackStatus`), so only
+    /// the identity is stored here. Single-row: saving replaces the previous value.
+    SavePlayContext {
+        episode_id: String,
+    },
+    /// The episode last saved by `SavePlayContext` (as `Episode`), or `NotFound`.
+    LoadPlayContext,
+    ClearPlayContext,
     UpsertFeedWithEpisodes {
         subscription: Subscription,
         episodes: Vec<Episode>,

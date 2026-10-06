@@ -4,12 +4,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::capabilities::download::{DownloadOperation, DownloadResult};
 use crate::capabilities::http::{HttpOperation, HttpResult};
+use crate::capabilities::player::PlayerResult;
 use crate::capabilities::storage::{StorageOperation, StorageResult};
 use crate::domain::{DownloadStatus, Episode, EpisodeSortOrder};
 use crate::effect::Effect;
 use crate::feed_parser::parse_feed;
 use crate::html::strip_html_preview;
 use crate::model::{DownloadProgress, Model, QueuedDownload};
+use crate::player;
 use crate::theme::{theme_view, ThemeId, ThemeMode};
 use crate::view_model::{
     DownloadNotice, EpisodeSummary, LibraryView, SubscriptionDetailView, SubscriptionSummary,
@@ -36,7 +38,11 @@ impl App for Pollux {
                 // mid-download, and resume it.
                 let pending = Command::request_from_shell(StorageOperation::ListPendingDownloads)
                     .then_send(|r| Event::PendingDownloadsLoaded(Box::new(r)));
-                subscriptions.and(pending).and(render())
+                // Restore the episode that was active when the app last closed, so the
+                // mini-player is up immediately (paused).
+                let context = Command::request_from_shell(StorageOperation::LoadPlayContext)
+                    .then_send(|r| Event::PlayContextLoaded(Box::new(r)));
+                subscriptions.and(pending).and(context).and(render())
             }
             Event::SubscriptionsLoaded(result) => {
                 model.loading = false;
@@ -226,50 +232,7 @@ impl App for Pollux {
                 // downloaded, removed from feed, or an episode we don't have loaded —
                 // is a no-op, so a stray or repeated event can't double-enqueue or
                 // re-download a file we already have.
-                let found = model
-                    .episodes
-                    .iter()
-                    .find(|e| e.id == episode_id)
-                    .map(|e| (e.download_status.clone(), e.enclosure_url.clone()));
-                match found {
-                    Some((DownloadStatus::NotDownloaded, url))
-                    | Some((DownloadStatus::Failed, url)) => {
-                        if !download_allowed(model) {
-                            // Fail-on-full: unlimited today, so this is unreachable.
-                            // When a storage cap exists this is where a download is
-                            // refused up front and marked Failed instead of started.
-                            set_download_state(
-                                model,
-                                &episode_id,
-                                DownloadStatus::Failed,
-                                None,
-                                None,
-                            );
-                            persist_download_state(&episode_id, DownloadStatus::Failed, None, None)
-                                .and(render())
-                        } else {
-                            set_download_state(
-                                model,
-                                &episode_id,
-                                DownloadStatus::Queued,
-                                None,
-                                None,
-                            );
-                            model.download_queue.push(QueuedDownload {
-                                episode_id: episode_id.clone(),
-                                url,
-                            });
-                            let persist = persist_download_state(
-                                &episode_id,
-                                DownloadStatus::Queued,
-                                None,
-                                None,
-                            );
-                            persist.and(maybe_start_next(model)).and(render())
-                        }
-                    }
-                    _ => render(),
-                }
+                enqueue_download(model, &episode_id).and(render())
             }
             Event::DownloadProgress {
                 episode_id,
@@ -302,13 +265,16 @@ impl App for Pollux {
                         Some(local_path.clone()),
                         Some(size_bytes),
                     );
+                    // Playing this episode off the network? Move it onto the file.
+                    let swap =
+                        player::on_download_completed(model, &episode_id, &local_path, size_bytes);
                     let persist = persist_download_state(
                         &episode_id,
                         DownloadStatus::Downloaded,
                         Some(local_path),
                         Some(size_bytes),
                     );
-                    persist.and(maybe_start_next(model)).and(render())
+                    persist.and(swap).and(maybe_start_next(model)).and(render())
                 }
                 DownloadResult::Error(reason) => {
                     finish_active(model, &episode_id);
@@ -436,6 +402,34 @@ impl App for Pollux {
                 model.theme_mode = mode;
                 render()
             }
+            Event::PlayEpisode(id) => player::play_episode(model, &id),
+            Event::Play => player::play(model),
+            Event::Pause => player::pause(model),
+            Event::TogglePlay => player::toggle(model),
+            Event::SkipForward => player::skip_forward(model),
+            Event::SkipBack => player::skip_back(model),
+            Event::SeekTo(secs) => player::seek_to(model, secs),
+            Event::AppBackgrounded => player::on_backgrounded(model),
+            Event::PlayerTick {
+                episode_id,
+                position_secs,
+            } => player::on_tick(model, &episode_id, position_secs),
+            Event::PlayerDuration {
+                episode_id,
+                duration_secs,
+            } => player::on_duration(model, &episode_id, duration_secs),
+            Event::PlayerEnded(episode_id) => player::on_ended(model, &episode_id),
+            Event::PlayerFailed {
+                episode_id,
+                message,
+            } => player::on_failure(model, &episode_id, message),
+            Event::PlayerResponded { episode_id, result } => {
+                player::on_response(model, &episode_id, *result)
+            }
+            Event::PlayContextLoaded(result) => player::on_context_loaded(model, *result),
+            // Required resolution sink for playback persistence writes. These are
+            // best-effort (the next checkpoint retries), so there is nothing to do.
+            Event::PlaybackPersisted(_) => Command::done(),
         }
     }
 
@@ -460,6 +454,7 @@ impl App for Pollux {
                 error: model.error.clone(),
             },
             subscription_detail: build_subscription_detail(model),
+            player: player::player_view(model),
             theme: theme_view(model.theme_id, model.theme_mode),
         }
     }
@@ -558,6 +553,40 @@ fn sort_episodes(episodes: &mut [EpisodeSummary], order: EpisodeSortOrder) {
     }
 }
 
+/// Queues an episode's download (and starts it if nothing is in flight). Only a
+/// not-downloaded or failed (retry) episode can start a download. Every other state —
+/// already queued/downloading, already downloaded, removed from feed, or an episode we
+/// don't have loaded — is a no-op, so a stray or repeated request can't double-enqueue
+/// or re-download a file we already have. Shared by the explicit download action and
+/// by playback, which downloads what it streams.
+pub(crate) fn enqueue_download(model: &mut Model, episode_id: &str) -> Command<Effect, Event> {
+    let found = model
+        .episodes
+        .iter()
+        .find(|e| e.id == episode_id)
+        .map(|e| (e.download_status.clone(), e.enclosure_url.clone()));
+    match found {
+        Some((DownloadStatus::NotDownloaded, url)) | Some((DownloadStatus::Failed, url)) => {
+            if !download_allowed(model) {
+                // Fail-on-full: unlimited today, so this is unreachable.
+                // When a storage cap exists this is where a download is
+                // refused up front and marked Failed instead of started.
+                set_download_state(model, episode_id, DownloadStatus::Failed, None, None);
+                persist_download_state(episode_id, DownloadStatus::Failed, None, None)
+            } else {
+                set_download_state(model, episode_id, DownloadStatus::Queued, None, None);
+                model.download_queue.push(QueuedDownload {
+                    episode_id: episode_id.to_string(),
+                    url,
+                });
+                persist_download_state(episode_id, DownloadStatus::Queued, None, None)
+                    .and(maybe_start_next(model))
+            }
+        }
+        _ => Command::done(),
+    }
+}
+
 /// Pre-download storage check. Unlimited today — the user-configurable soft cap
 /// arrives with the Settings screen (see ROADMAP follow-ups). Device-full is not
 /// predicted here; it surfaces as the shell's write failing (`DownloadResult::Error`
@@ -620,7 +649,10 @@ fn persist_download_state(
 /// Resets an episode to not-downloaded (in the model) and returns the command that
 /// persists it. The single shape used everywhere a download ends without a file —
 /// cancelling an active or queued download, and deleting a stored one.
-fn reset_to_not_downloaded(model: &mut Model, episode_id: &str) -> Command<Effect, Event> {
+pub(crate) fn reset_to_not_downloaded(
+    model: &mut Model,
+    episode_id: &str,
+) -> Command<Effect, Event> {
     set_download_state(model, episode_id, DownloadStatus::NotDownloaded, None, None);
     persist_download_state(episode_id, DownloadStatus::NotDownloaded, None, None)
 }
@@ -724,6 +756,45 @@ pub enum Event {
         id: ThemeId,
         mode: ThemeMode,
     },
+    /// Start playing an episode from the feed on screen (or resume it if active).
+    PlayEpisode(String),
+    Play,
+    Pause,
+    TogglePlay,
+    /// Skip by the configured increments (30s forward / 15s back for now).
+    SkipForward,
+    SkipBack,
+    /// Move the playhead to an absolute position (scrubber, lock-screen scrub).
+    SeekTo(u32),
+    /// The app left the foreground: flush the playback position.
+    AppBackgrounded,
+    /// Engine position report (~1/s while playing). Transient; the core persists on
+    /// its own checkpoints, not per tick.
+    PlayerTick {
+        episode_id: String,
+        position_secs: u32,
+    },
+    /// The engine learned the real duration, which beats the feed's possibly-missing one.
+    PlayerDuration {
+        episode_id: String,
+        duration_secs: u32,
+    },
+    /// The engine reached the end of the file.
+    PlayerEnded(String),
+    /// The engine failed to play or lost the item.
+    PlayerFailed {
+        episode_id: String,
+        message: String,
+    },
+    /// Resolution of a player operation; an error is treated like `PlayerFailed`.
+    PlayerResponded {
+        episode_id: String,
+        result: Box<PlayerResult>,
+    },
+    /// The episode saved as active by the previous session, loaded at launch.
+    PlayContextLoaded(Box<StorageResult>),
+    /// Resolution sink for best-effort playback writes (position, play context).
+    PlaybackPersisted(Box<StorageResult>),
 }
 
 #[cfg(test)]
@@ -827,8 +898,16 @@ mod tests {
         assert!(model.loading);
 
         let effects: Vec<Effect> = cmd.effects().collect();
-        // ListSubscriptions + ListPendingDownloads + render.
-        assert_eq!(effects.len(), 3);
+        // ListSubscriptions + ListPendingDownloads + LoadPlayContext + render.
+        assert_eq!(effects.len(), 4);
+
+        let has_context = effects
+            .iter()
+            .any(|e| matches!(e, Effect::Storage(r) if matches!(r.operation, StorageOperation::LoadPlayContext)));
+        assert!(
+            has_context,
+            "expected a LoadPlayContext storage effect to restore the mini-player"
+        );
 
         let has_storage = effects
             .iter()

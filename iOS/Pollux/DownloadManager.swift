@@ -196,7 +196,18 @@ actor DownloadManager {
     }
 
     private func absoluteURL(for relativePath: String) -> URL {
-        storageRoot.appendingPathComponent(relativePath)
+        Self.absoluteURL(for: relativePath, root: storageRoot)
+    }
+
+    /// Resolves a stored (relative) download path against the storage root. Shared
+    /// with playback, which opens the same files.
+    static func absoluteURL(for relativePath: String, root: URL) -> URL {
+        root.appendingPathComponent(relativePath)
+    }
+
+    /// The default storage root: Application Support.
+    static func defaultStorageRoot() -> URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
     }
 
     /// A filesystem-safe, stable, collision-free file name for an episode. The episode

@@ -71,6 +71,10 @@ The core listening experience.
   strip, disappears when nothing active
 - **Active playlist persistence**: restore on cold start
 
+*Status: the engine, player, mini-player and cold-start restore are built
+(subscription-as-playlist only, no auto-advance). See "Decisions (MVP
+implementation)" in `docs/features/player.md`.*
+
 Milestone: can find an episode, play it, control it from lock screen, resume
 where you left off.
 

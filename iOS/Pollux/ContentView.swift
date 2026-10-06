@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var core: Core
+    @Binding var path: NavigationPath
     @Environment(\.themeColors) private var themeColors
     @State private var feedUrl = ""
     @State private var isSubscribing = false
@@ -11,7 +12,7 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 Group {
                     if core.view.library.loading {
@@ -79,5 +80,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView(core: Core())
+    ContentView(core: Core(), path: .constant(NavigationPath()))
 }

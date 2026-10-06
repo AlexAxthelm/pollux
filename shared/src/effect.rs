@@ -5,6 +5,7 @@ use crux_core::{macros::effect, render::RenderOperation};
 
 use crate::capabilities::download::DownloadOperation;
 use crate::capabilities::http::HttpOperation;
+use crate::capabilities::player::PlayerOperation;
 use crate::capabilities::storage::StorageOperation;
 
 #[effect(facet_typegen)]
@@ -14,4 +15,5 @@ pub enum Effect {
     Storage(StorageOperation),
     Http(HttpOperation),
     Download(DownloadOperation),
+    Player(PlayerOperation),
 }

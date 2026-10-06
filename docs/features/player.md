@@ -102,3 +102,38 @@ nav stack.
 
 The active playlist and current position are restored on cold start, so the
 mini-player is visible immediately if something was playing when the app closed.
+
+## Decisions (MVP implementation)
+
+Recorded so they are not silently reversed. The core owns all of this policy
+(`shared/src/player.rs`); the shell's `PlaybackManager` only drives the audio
+engine.
+
+- **Streaming.** Playing an episode that isn't downloaded streams from its
+  enclosure URL *and* queues a download. When the download finishes, playback
+  moves onto the local file at the current position (a `Load` at the playhead).
+  If the downloaded file turns out to be missing or unreadable, playback falls
+  back to streaming and the episode is reset to not-downloaded and re-queued.
+- **Played tolerance.** An episode counts as played once the playhead is within
+  **15s** of the end (`PLAYED_TOLERANCE_SECS`); status becomes played and the
+  stored position resets to 0. The engine's duration wins over the feed's.
+  *Will become a user setting.*
+- **Position persistence.** Written at most every 10s while playing, and on
+  pause, seek, backgrounding, switching episode, and end. Per-second ticks are
+  transient.
+- **Resume rewind.** 3s on any resume after a pause (and on cold-start restore
+  and when resuming a saved position), clamped at 0. Hard-coded until Settings
+  exists (`defaults.rs`), as are the 30s/15s skips.
+- **No auto-advance (yet).** At the end of an episode it is marked played and the
+  player goes inactive (the mini-player disappears). "Next episode" arrives with
+  playlists.
+- **Presentation.** The full player is a full-screen cover from the root; the
+  mini-player is a bottom inset on the root. Tapping "From: …" dismisses the
+  cover and shows the podcast.
+- **OS integration.** Audio session `.playback` / `spokenAudio`, background
+  audio mode, pause on headphone unplug, pause on interruption (auto-resume only
+  if the system says so). Lock-screen commands: play, pause, toggle, skip
+  ±(30/15), and scrubbing. Next/previous track are disabled (skip buttons stand
+  in for them, per podcast convention).
+- **Errors.** A playback failure leaves playback paused with a transient banner
+  in the player and mini-player; pressing play retries.
