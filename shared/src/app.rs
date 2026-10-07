@@ -687,6 +687,9 @@ impl App for Pollux {
             // Required resolution sink for playback persistence writes. These are
             // best-effort (the next checkpoint retries), so there is nothing to do.
             Event::PlaybackPersisted(_) => Command::done(),
+            Event::PlayContextSaved { episode_id, result } => {
+                player::on_context_saved(model, &episode_id, &result)
+            }
         }
     }
 
@@ -1372,8 +1375,15 @@ pub enum Event {
     },
     /// The episode saved as active by the previous session, loaded at launch.
     PlayContextLoaded(Box<StorageResult>),
-    /// Resolution sink for best-effort playback writes (position, play context).
+    /// Resolution sink for best-effort playback writes (position, play-context clears).
+    /// Position writes retry at the next checkpoint, so there is nothing to do.
     PlaybackPersisted(Box<StorageResult>),
+    /// A play-context save resolved. A failure is retried at the next checkpoint; see
+    /// `ActivePlayback::context_saved`.
+    PlayContextSaved {
+        episode_id: String,
+        result: Box<StorageResult>,
+    },
 }
 
 #[cfg(test)]

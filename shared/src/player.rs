@@ -43,6 +43,8 @@ use crate::model::{ActivePlayback, Model};
 use crate::view_model::PlayerView;
 
 #[cfg(test)]
+mod context_save_tests;
+#[cfg(test)]
 mod download_recovery_tests;
 #[cfg(test)]
 mod played_tests;
@@ -91,11 +93,29 @@ fn persist_playback(episode_id: &str, status: PlaybackStatus, position_secs: Opt
 }
 
 fn save_play_context(episode_id: &str, source: &EpisodeSource) -> Cmd {
+    let id = episode_id.to_string();
     Command::request_from_shell(StorageOperation::SavePlayContext {
         episode_id: episode_id.to_string(),
         source: source.clone(),
     })
-    .then_send(|r| Event::PlaybackPersisted(Box::new(r)))
+    .then_send(move |r| Event::PlayContextSaved {
+        episode_id: id.clone(),
+        result: Box::new(r),
+    })
+}
+
+/// A play-context save resolved. Success means a relaunch will restore this episode; a
+/// failure leaves it unsaved, and every checkpoint retries until it lands. News about an
+/// episode that has since been replaced says nothing about the current one.
+pub(crate) fn on_context_saved(model: &mut Model, episode_id: &str, result: &StorageResult) -> Cmd {
+    if let Some(active) = model
+        .active_playback
+        .as_mut()
+        .filter(|a| a.episode.id == episode_id)
+    {
+        active.context_saved = !matches!(result, StorageResult::Error(_));
+    }
+    Command::done()
 }
 
 fn clear_play_context() -> Cmd {
@@ -146,8 +166,13 @@ fn checkpoint(model: &mut Model) -> Cmd {
     active.episode.playback_status = PlaybackStatus::InProgress;
     active.episode.playback_position_secs = position;
     let id = active.episode.id.clone();
+    let unsaved_context = (!active.context_saved).then(|| active.source.clone());
     sync_episode_row(model, &id, &PlaybackStatus::InProgress, position);
-    persist_playback(&id, PlaybackStatus::InProgress, position)
+    let write = persist_playback(&id, PlaybackStatus::InProgress, position);
+    match unsaved_context {
+        Some(source) => write.and(save_play_context(&id, &source)),
+        None => write,
+    }
 }
 
 /// Finishes the active episode: marked played with its position reset, the saved
@@ -235,6 +260,8 @@ pub(crate) fn play_episode(model: &mut Model, episode_id: &str) -> Cmd {
         loaded: true,
         last_checkpoint_secs: start,
         resume_after_interruption: false,
+        // The save below is only a request until storage confirms it.
+        context_saved: false,
         error: None,
     });
 
@@ -605,6 +632,8 @@ pub(crate) fn on_context_loaded(model: &mut Model, result: StorageResult) -> Cmd
         loaded: false,
         last_checkpoint_secs: position,
         resume_after_interruption: false,
+        // It came from the saved context, so that is what is saved.
+        context_saved: true,
         error: None,
     });
     render()

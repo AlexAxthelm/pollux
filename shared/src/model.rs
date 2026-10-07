@@ -111,6 +111,11 @@ pub struct ActivePlayback {
     /// end of that interruption may resume it. Cleared by any explicit play or seek, and
     /// never set when playback was already paused (the listener's choice stands).
     pub resume_after_interruption: bool,
+    /// Whether this episode is known to be saved as the play context a relaunch restores.
+    /// False from the moment playback starts until storage confirms the write; while it is
+    /// false every checkpoint re-sends it, so one failed write can't leave a relaunch
+    /// restoring the wrong episode (or none).
+    pub context_saved: bool,
     pub error: Option<String>,
 }
 
