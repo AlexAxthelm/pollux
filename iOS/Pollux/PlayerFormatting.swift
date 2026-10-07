@@ -39,6 +39,16 @@ enum PlayerFormatting {
         return formatter
     }()
 
+    /// A time from the system (the engine's position or duration, a lock-screen scrub) as
+    /// whole seconds for the core, or nil when it isn't a usable time: NaN, infinite, or too
+    /// large for the core's seconds. Negatives clamp to 0. `UInt32(_:)` traps on those
+    /// values, so a bad number from an accessory or the engine must be refused here rather
+    /// than crash the app.
+    static func wholeSeconds(_ value: Double) -> UInt32? {
+        guard value.isFinite, value < Double(UInt32.max) + 1 else { return nil }
+        return UInt32(max(0, value))
+    }
+
     /// Fraction of the episode played, 0...1; 0 when the duration is unknown.
     static func fraction(position: UInt32, duration: UInt32?) -> Double {
         guard let duration, duration > 0 else { return 0 }

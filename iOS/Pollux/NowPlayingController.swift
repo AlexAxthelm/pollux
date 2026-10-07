@@ -97,7 +97,11 @@ final class NowPlayingController {
             guard let event = event as? MPChangePlaybackPositionCommandEvent else {
                 return .commandFailed
             }
-            let secs = UInt32(max(0, event.positionTime))
+            // A car or Bluetooth device can send nonsense (NaN, a huge value); refuse it
+            // rather than trap converting it.
+            guard let secs = PlayerFormatting.wholeSeconds(event.positionTime) else {
+                return .commandFailed
+            }
             Task { @MainActor in self?.send(.seekTo(secs)) }
             return .success
         }

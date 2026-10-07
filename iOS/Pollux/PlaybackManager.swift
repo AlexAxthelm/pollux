@@ -174,8 +174,8 @@ final class PlaybackManager {
                 guard let self, currentSession == session else { return }
                 switch status {
                 case .readyToPlay:
-                    if duration.isFinite, duration > 0 {
-                        send(.playerDuration(session: session, durationSecs: UInt32(duration)))
+                    if duration > 0, let secs = PlayerFormatting.wholeSeconds(duration) {
+                        send(.playerDuration(session: session, durationSecs: secs))
                     }
                 case .failed:
                     send(.playerMediaUnusable(session: session, message: message ?? "Playback failed"))
@@ -216,8 +216,9 @@ final class PlaybackManager {
         guard let session = currentSession,
               pendingSeeks == 0,
               player.timeControlStatus == .playing,
-              seconds.isFinite, seconds >= 0 else { return }
-        send(.playerTick(session: session, positionSecs: UInt32(seconds)))
+              seconds >= 0,
+              let secs = PlayerFormatting.wholeSeconds(seconds) else { return }
+        send(.playerTick(session: session, positionSecs: secs))
     }
 
     /// Phone calls, Siri and unplugged headphones pause playback; the core is told so

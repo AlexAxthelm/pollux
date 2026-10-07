@@ -50,6 +50,28 @@ import Testing
         }
     }
 
+    // MARK: - Whole seconds from the system's Doubles
+
+    @Test func wholeSecondsTruncateOrdinaryValues() {
+        #expect(PlayerFormatting.wholeSeconds(0) == 0)
+        #expect(PlayerFormatting.wholeSeconds(12.9) == 12)
+        #expect(PlayerFormatting.wholeSeconds(7200) == 7200)
+        #expect(PlayerFormatting.wholeSeconds(Double(UInt32.max)) == UInt32.max)
+    }
+
+    @Test func wholeSecondsClampNegativesToZero() {
+        #expect(PlayerFormatting.wholeSeconds(-1) == 0)
+        #expect(PlayerFormatting.wholeSeconds(-0.5) == 0)
+        #expect(PlayerFormatting.wholeSeconds(-.infinity) == nil)
+    }
+
+    @Test func wholeSecondsRefuseWhatIsNotATime() {
+        #expect(PlayerFormatting.wholeSeconds(.nan) == nil)
+        #expect(PlayerFormatting.wholeSeconds(.infinity) == nil)
+        #expect(PlayerFormatting.wholeSeconds(Double(UInt32.max) + 1) == nil)
+        #expect(PlayerFormatting.wholeSeconds(1e300) == nil)
+    }
+
     @Test func spokenTimeIsStableAcrossRepeatedCalls() {
         // One shared formatter must give the same answer however often it is used.
         let first = PlayerFormatting.spoken(754)
