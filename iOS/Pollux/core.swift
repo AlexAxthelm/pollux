@@ -210,7 +210,7 @@ class Core: ObservableObject {
     /// it is played).
     private func startPlaybackIfNeeded() {
         guard playback == nil else { return }
-        if let root = DownloadManager.defaultStorageRoot() {
+        if let root = StorageRoot.applicationSupport() {
             playback = PlaybackManager(storageRoot: root) { [weak self] event in
                 self?.update(event)
             }

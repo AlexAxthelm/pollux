@@ -66,9 +66,7 @@ actor DownloadManager {
         if let storageRoot {
             root = storageRoot
         } else {
-            guard let support = FileManager.default.urls(
-                for: .applicationSupportDirectory, in: .userDomainMask,
-            ).first else {
+            guard let support = StorageRoot.applicationSupport() else {
                 throw DownloadManagerError.storageUnavailable
             }
             root = support
@@ -203,11 +201,6 @@ actor DownloadManager {
     /// with playback, which opens the same files.
     static func absoluteURL(for relativePath: String, root: URL) -> URL {
         root.appendingPathComponent(relativePath)
-    }
-
-    /// The default storage root: Application Support.
-    static func defaultStorageRoot() -> URL? {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
     }
 
     /// A filesystem-safe, stable, collision-free file name for an episode. The episode

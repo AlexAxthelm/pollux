@@ -24,9 +24,7 @@ actor DatabaseManager {
 
     init() throws {
         now = { Date() }
-        guard let support = FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask,
-        ).first else {
+        guard let support = StorageRoot.applicationSupport() else {
             fatalError("Application Support directory unavailable")
         }
         try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
