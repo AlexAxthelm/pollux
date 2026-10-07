@@ -1,4 +1,5 @@
 import App
+import Combine
 import SwiftUI
 
 @main
@@ -39,22 +40,32 @@ private struct RootView: View {
         ContentView(core: core, path: $path)
             // Hidden entirely when nothing is active, and while the full player is up.
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if let player = core.view.player, !showPlayer {
-                    MiniPlayerBar(
-                        player: player,
-                        onOpen: { showPlayer = true },
-                        onTogglePlay: { core.update(.togglePlay) },
-                    )
-                }
+                MiniPlayerHost(
+                    playerState: core.playerState,
+                    isPlayerOpen: showPlayer,
+                    onOpen: { showPlayer = true },
+                    onTogglePlay: { core.update(.togglePlay) },
+                )
             }
             .fullScreenCover(isPresented: $showPlayer) {
-                fullPlayer
+                FullPlayerHost(
+                    playerState: core.playerState,
+                    colors: colors,
+                    theme: theme,
+                    send: { core.update($0) },
+                    onHide: { showPlayer = false },
+                    onGoToSource: { goToSource(of: $0) },
+                )
             }
             .environment(\.themeColors, colors)
             .tint(colors.accent)
             .background(colors.background.ignoresSafeArea())
             .preferredColorScheme(theme.preferredColorScheme)
-            .onChange(of: core.view.player?.episodeId) { _, episodeId in
+            // Subscribed to rather than observed: this view must not be re-evaluated every
+            // second just because the playing position changed.
+            .onReceive(
+                core.playerState.$player.map { $0?.episodeId }.removeDuplicates(),
+            ) { episodeId in
                 // The episode finished (or was cleared): nothing left to show.
                 if episodeId == nil {
                     showPlayer = false
@@ -74,21 +85,6 @@ private struct RootView: View {
             }
     }
 
-    @ViewBuilder private var fullPlayer: some View {
-        if let player = core.view.player {
-            PlayerScreen(
-                player: player,
-                send: { core.update($0) },
-                onHide: { showPlayer = false },
-                onGoToSource: { goToSource(of: player) },
-            )
-            // A cover doesn't reliably inherit the theme applied below it.
-            .environment(\.themeColors, colors)
-            .tint(colors.accent)
-            .preferredColorScheme(theme.preferredColorScheme)
-        }
-    }
-
     /// Dismisses the player and shows what playback was started from. A subscription is
     /// the only source for now; a playlist will get its own case here.
     private func goToSource(of player: PlayerView) {
@@ -100,6 +96,47 @@ private struct RootView: View {
             showPlayer = false
             path = NavigationPath()
             path.append(subscription)
+        }
+    }
+}
+
+/// The mini-player. Observes the player state itself so the root view, and the list under
+/// it, are not re-evaluated every time the playing position changes.
+private struct MiniPlayerHost: View {
+    @ObservedObject var playerState: PlayerState
+    let isPlayerOpen: Bool
+    let onOpen: () -> Void
+    let onTogglePlay: () -> Void
+
+    var body: some View {
+        // Hidden entirely when nothing is active, and while the full player is up.
+        if let player = playerState.player, !isPlayerOpen {
+            MiniPlayerBar(player: player, onOpen: onOpen, onTogglePlay: onTogglePlay)
+        }
+    }
+}
+
+/// The full-screen player, observing the player state for the same reason.
+private struct FullPlayerHost: View {
+    @ObservedObject var playerState: PlayerState
+    let colors: ThemeColors
+    let theme: ThemeView
+    let send: (Event) -> Void
+    let onHide: () -> Void
+    let onGoToSource: (PlayerView) -> Void
+
+    var body: some View {
+        if let player = playerState.player {
+            PlayerScreen(
+                player: player,
+                send: send,
+                onHide: onHide,
+                onGoToSource: { onGoToSource(player) },
+            )
+            // A cover doesn't reliably inherit the theme applied below it.
+            .environment(\.themeColors, colors)
+            .tint(colors.accent)
+            .preferredColorScheme(theme.preferredColorScheme)
         }
     }
 }

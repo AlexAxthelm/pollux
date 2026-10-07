@@ -4,7 +4,12 @@ import Shared
 
 @MainActor
 class Core: ObservableObject {
-    @Published var view: ViewModel
+    /// What the core last rendered, minus the player: `view.player` is always nil. The
+    /// player changes every second while playing, so it lives in `playerState`, and `view` is
+    /// republished only when something else (the library, the episode list, the theme)
+    /// changed. See `PlayerState`.
+    @Published private(set) var view: ViewModel
+    let playerState = PlayerState()
 
     private var core: CoreFfi
     private let db: DatabaseManager
@@ -73,7 +78,9 @@ class Core: ObservableObject {
         guard let view = try? ViewModel.bincodeDeserialize(input: [UInt8](core.view())) else {
             fatalError("Failed to deserialize initial ViewModel from core")
         }
-        self.view = view
+        let (rest, player) = Core.splittingPlayer(view)
+        self.view = rest
+        playerState.update(player)
         Task { @MainActor [weak self] in
             for await (operation, requestId) in storageStream {
                 guard let self else { return }
@@ -159,8 +166,13 @@ class Core: ObservableObject {
             ) else {
                 fatalError("Failed to deserialize ViewModel during render")
             }
-            view = updatedView
-            nowPlaying?.update(updatedView.player)
+            let (rest, player) = Core.splittingPlayer(updatedView)
+            // Equality is far cheaper than SwiftUI re-evaluating an unchanged episode list.
+            if rest != view {
+                view = rest
+            }
+            playerState.update(player)
+            nowPlaying?.update(player)
 
         case let .storage(operation):
             // Enqueue for the serial consumer set up in init (preserves write order).
@@ -207,7 +219,14 @@ class Core: ObservableObject {
             self?.update(event)
         }
         // Publish the current state now rather than at the next render.
-        nowPlaying?.update(view.player)
+        nowPlaying?.update(playerState.player)
+    }
+
+    /// Separates the player from the rest of a rendered view model.
+    private static func splittingPlayer(_ rendered: ViewModel) -> (rest: ViewModel, player: PlayerView?) {
+        var rest = rendered
+        rest.player = nil
+        return (rest, rendered.player)
     }
 
     /// Runs a download-capability operation on the DownloadManager actor (so the UI
