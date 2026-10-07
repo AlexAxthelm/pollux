@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::capabilities::player::MediaSource;
 use crate::domain::{Episode, EpisodeSortOrder, EpisodeSource, Subscription};
@@ -49,6 +49,10 @@ pub struct Model {
     // the episode leaves the Failed state; the persisted status is enough to know it
     // failed across a restart.
     pub download_errors: HashMap<String, String>,
+    // Episodes whose download the listener cancelled or deleted this session. Playback
+    // downloads what it streams, but skips these: it must not bring back what they just
+    // turned away. Asking for the download again (`DownloadEpisode`) removes the entry.
+    pub declined_downloads: HashSet<String>,
 
     // A transient, non-blocking notice for a download *operation* that failed without
     // changing the episode's state — a persistence write that didn't commit, or a file

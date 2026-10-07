@@ -47,6 +47,8 @@ use crate::view_model::PlayerView;
 #[cfg(test)]
 mod context_save_tests;
 #[cfg(test)]
+mod download_declined_tests;
+#[cfg(test)]
 mod download_loop_tests;
 #[cfg(test)]
 mod download_recovery_tests;
@@ -81,6 +83,18 @@ fn player_op(session: u32, op: PlayerOperation) -> Cmd {
         session,
         result: Box::new(r),
     })
+}
+
+/// Downloads what playback is streaming, unless the listener turned that download away
+/// (cancelled it, or deleted the file). Every download playback starts on its own goes
+/// through here: starting an episode, resuming one whose download never started or failed,
+/// and replacing a file the engine lost. Only an explicit request (`DownloadEpisode`) can
+/// override a decline.
+fn auto_download(model: &mut Model, episode_id: &str) -> Cmd {
+    if model.declined_downloads.contains(episode_id) {
+        return Command::done();
+    }
+    enqueue_download(model, episode_id)
 }
 
 /// Hands out the next session id. Ids only ever increase, across episodes.
@@ -293,7 +307,7 @@ pub(crate) fn play_episode(model: &mut Model, episode_id: &str) -> Cmd {
     // Streaming now, local later: kick off the download so the copy is there next
     // time (and for the mid-play swap in `on_download_completed`).
     if streaming {
-        cmd = cmd.and(enqueue_download(model, episode_id));
+        cmd = cmd.and(auto_download(model, episode_id));
     }
     cmd.and(render())
 }
@@ -340,7 +354,7 @@ pub(crate) fn play(model: &mut Model) -> Cmd {
     let retry = (matches!(active.media, MediaSource::Stream { .. }) && !active.local_unusable)
         .then(|| active.episode.id.clone());
     match retry {
-        Some(id) => cmd.and(enqueue_download(model, &id)).and(render()),
+        Some(id) => cmd.and(auto_download(model, &id)).and(render()),
         None => cmd.and(render()),
     }
 }
@@ -575,7 +589,7 @@ pub(crate) fn on_failure(
             "The downloaded file can't be played. Playing from the stream instead.".to_string(),
         )
     } else {
-        reset_to_not_downloaded(model, &id).and(enqueue_download(model, &id))
+        reset_to_not_downloaded(model, &id).and(auto_download(model, &id))
     };
     download
         .and(player_op(

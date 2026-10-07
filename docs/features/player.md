@@ -138,6 +138,10 @@ engine.
   as playback went on). The memory is per playback session and clears when a
   local file loads; after a relaunch the cycle can run a couple of times before
   it stops. The bad file stays on disk until a retry overwrites it.
+  Playback never downloads against the listener's wishes: once they cancel or
+  delete an episode's download, starting or resuming it, or replacing a file the
+  engine lost, streams without fetching it again. Only asking for the download
+  (the Download action) lifts that. This is remembered for the session only.
 - **Played tolerance.** Played is decided when the listener *leaves* an episode,
   never as a side effect of saving progress. It happens when the engine reaches
   the end, when they pause, or when they start another episode, while within

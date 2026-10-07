@@ -481,6 +481,8 @@ impl App for Pollux {
             Event::DownloadEpisode(episode_id) => {
                 // A fresh user action supersedes any stale op-failure notice.
                 model.download_notice = None;
+                // Asking for it is the opposite of declining it.
+                model.declined_downloads.remove(&episode_id);
                 // Only a not-downloaded or failed (retry) episode can start a
                 // download. Every other state — already queued/downloading, already
                 // downloaded, removed from feed, or an episode we don't have loaded —
@@ -552,6 +554,8 @@ impl App for Pollux {
             Event::CancelDownload(episode_id) => {
                 // A fresh user action supersedes any stale op-failure notice.
                 model.download_notice = None;
+                // Their call: playback must not start it again behind their back.
+                model.declined_downloads.insert(episode_id.clone());
                 if model.downloading.as_deref() == Some(episode_id.as_str()) {
                     // Active download: ask the shell to cancel the task and flush the
                     // partial file. The in-flight Download request then resolves as
@@ -588,6 +592,8 @@ impl App for Pollux {
             Event::DeleteDownload(episode_id) => {
                 // A fresh user action supersedes any stale op-failure notice.
                 model.download_notice = None;
+                // Deleting it says they don't want it kept: don't fetch it again for them.
+                model.declined_downloads.insert(episode_id.clone());
                 let local_path = model
                     .episodes
                     .iter()
