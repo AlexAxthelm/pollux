@@ -15,7 +15,7 @@ final class PlaybackManager {
 
     /// The load the engine is on. Everything reported to the core carries it, so the
     /// core can drop news from an item it has since replaced.
-    private var currentSession: UInt32?
+    private(set) var currentSession: UInt32?
     /// Seeks still in flight. A streaming seek takes a moment, and the engine keeps
     /// reporting the old position until it lands; those ticks would snap the UI back.
     private var pendingSeeks = 0
@@ -28,6 +28,12 @@ final class PlaybackManager {
         self.send = send
         observeTime()
         observeSession()
+    }
+
+    /// Whether the engine has an item loaded. Exposed so tests can tell a failed load that
+    /// left the old item playing from one that unloaded it.
+    var hasLoadedItem: Bool {
+        player.currentItem != nil
     }
 
     // MARK: - Operations
@@ -49,7 +55,21 @@ final class PlaybackManager {
         return .ok
     }
 
+    /// Replaces the current item with `media`. If that can't be done the engine is left with
+    /// nothing loaded rather than with whatever was playing before: the core has already
+    /// moved on to this item (paused, with the error), so audio from the old one would play
+    /// on under a UI that says nothing is playing, with its news dropped as stale.
     private func load(
+        session: UInt32, media: MediaSource, startSecs: UInt32, autoplay: Bool,
+    ) -> PlayerResult {
+        let result = startLoading(session: session, media: media, startSecs: startSecs, autoplay: autoplay)
+        if case .error = result {
+            unloadCurrentItem()
+        }
+        return result
+    }
+
+    private func startLoading(
         session: UInt32, media: MediaSource, startSecs: UInt32, autoplay: Bool,
     ) -> PlayerResult {
         let url: URL
@@ -96,11 +116,19 @@ final class PlaybackManager {
     }
 
     private func stop() {
+        unloadCurrentItem()
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    /// Drops the current item and stops reporting for it. Leaves the audio session alone:
+    /// after a failed load the core may immediately load another source (a missing
+    /// download falls back to streaming), and releasing the session in between would
+    /// briefly hand audio back to other apps.
+    private func unloadCurrentItem() {
         player.pause()
         player.replaceCurrentItem(with: nil)
         statusObservation = nil
         currentSession = nil
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     // MARK: - Engine → core
