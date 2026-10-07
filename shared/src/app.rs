@@ -532,13 +532,9 @@ impl App for Pollux {
                 }
                 DownloadResult::Error(reason) => {
                     finish_active(model, &episode_id);
-                    set_download_state(model, &episode_id, DownloadStatus::Failed, None, None);
-                    // Keep the shell's specific reason so the UI can show it beside
-                    // Retry (set_download_state cleared any older one above).
-                    model.download_errors.insert(episode_id.clone(), reason);
-                    let persist =
-                        persist_download_state(&episode_id, DownloadStatus::Failed, None, None);
-                    persist.and(maybe_start_next(model)).and(render())
+                    fail_download(model, &episode_id, reason)
+                        .and(maybe_start_next(model))
+                        .and(render())
                 }
                 DownloadResult::Cancelled => {
                     // The shell cancelled the task and flushed the partial file, so
@@ -938,6 +934,20 @@ fn persist_download_state(
         episode_id: id.clone(),
         result: Box::new(r),
     })
+}
+
+/// Marks an episode's download failed, keeping `reason` so the UI can show it beside Retry,
+/// and returns the command that persists it. Used when a download errors, and when the
+/// player finds a downloaded file is unusable even after being downloaded afresh.
+pub(crate) fn fail_download(
+    model: &mut Model,
+    episode_id: &str,
+    reason: String,
+) -> Command<Effect, Event> {
+    // `set_download_state` drops any older reason, so insert after it.
+    set_download_state(model, episode_id, DownloadStatus::Failed, None, None);
+    model.download_errors.insert(episode_id.to_string(), reason);
+    persist_download_state(episode_id, DownloadStatus::Failed, None, None)
 }
 
 /// Resets an episode to not-downloaded (in the model) and returns the command that

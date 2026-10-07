@@ -116,6 +116,12 @@ pub struct ActivePlayback {
     /// false every checkpoint re-sends it, so one failed write can't leave a relaunch
     /// restoring the wrong episode (or none).
     pub context_saved: bool,
+    /// A downloaded file for this episode was found unusable, and it has not played fine
+    /// since. The first time that is put down to a missing or damaged file and it is
+    /// downloaded again; if the fresh file is unusable too the file itself is bad, so it is
+    /// not downloaded again (that would loop for as long as playback goes on). Cleared when
+    /// a local file loads, which is proof it works.
+    pub local_unusable: bool,
     pub error: Option<String>,
 }
 

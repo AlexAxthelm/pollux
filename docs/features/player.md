@@ -130,7 +130,14 @@ engine.
   for the active episode don't depend on its feed being open (after a cold start
   no feed is): the core works from the active episode. Pressing play on an
   episode that is still streaming with no download queued or underway (never
-  started, or failed) queues it, as starting an episode does.
+  started, or failed) queues it, as starting an episode does. A file the engine
+  can't use is replaced by a fresh download once; if the fresh file is unusable
+  too, the file itself is bad, so the download is marked failed (with the reason
+  beside Retry), playback carries on from the stream, and pressing play doesn't
+  fetch it again (otherwise stream, download, swap, fail would repeat for as long
+  as playback went on). The memory is per playback session and clears when a
+  local file loads; after a relaunch the cycle can run a couple of times before
+  it stops. The bad file stays on disk until a retry overwrites it.
 - **Played tolerance.** Played is decided when the listener *leaves* an episode,
   never as a side effect of saving progress. It happens when the engine reaches
   the end, when they pause, or when they start another episode, while within

@@ -29,7 +29,9 @@
 
 use crux_core::{render::render, Command};
 
-use crate::app::{enqueue_download, reset_to_not_downloaded, Event, DESCRIPTION_PREVIEW_CHARS};
+use crate::app::{
+    enqueue_download, fail_download, reset_to_not_downloaded, Event, DESCRIPTION_PREVIEW_CHARS,
+};
 use crate::capabilities::player::{MediaSource, PlayerOperation, PlayerResult};
 use crate::capabilities::storage::{StorageOperation, StorageResult};
 use crate::defaults::{
@@ -44,6 +46,8 @@ use crate::view_model::PlayerView;
 
 #[cfg(test)]
 mod context_save_tests;
+#[cfg(test)]
+mod download_loop_tests;
 #[cfg(test)]
 mod download_recovery_tests;
 #[cfg(test)]
@@ -266,6 +270,7 @@ pub(crate) fn play_episode(model: &mut Model, episode_id: &str) -> Cmd {
         resume_after_interruption: false,
         // The save below is only a request until storage confirms it.
         context_saved: false,
+        local_unusable: false,
         error: None,
     });
 
@@ -329,9 +334,11 @@ pub(crate) fn play(model: &mut Model) -> Cmd {
     };
     // Still streaming with no file coming (a restored episode whose download was never
     // started, or failed): playing is the moment to try again, as starting an episode
-    // does. A download already queued or underway is left alone.
-    let retry =
-        matches!(active.media, MediaSource::Stream { .. }).then(|| active.episode.id.clone());
+    // does. A download already queued or underway is left alone, and so is one whose file
+    // already proved bad: that is a different problem, and fetching it again on every play
+    // would never end.
+    let retry = (matches!(active.media, MediaSource::Stream { .. }) && !active.local_unusable)
+        .then(|| active.episode.id.clone());
     match retry {
         Some(id) => cmd.and(enqueue_download(model, &id)).and(render()),
         None => cmd.and(render()),
@@ -485,6 +492,11 @@ pub(crate) fn on_duration(model: &mut Model, session: u32, duration_secs: u32) -
     }
     if let Some(active) = model.active_playback.as_mut() {
         active.duration_secs = Some(duration_secs);
+        // The engine opened the file well enough to read its length: it works. (A stream
+        // loading says nothing about the file, so it doesn't clear the suspicion.)
+        if matches!(active.media, MediaSource::Local { .. }) {
+            active.local_unusable = false;
+        }
     }
     render()
 }
@@ -551,9 +563,21 @@ pub(crate) fn on_failure(
     active.episode.local_path = None;
     active.error = None;
     active.loaded = true;
+    // A file that was missing or damaged is replaced once. If this one was already the
+    // replacement, the file itself is bad and fetching it again would loop for as long as
+    // playback goes on (stream, download, swap, fail, stream…): give up on downloading.
+    let replacement_failed = std::mem::replace(&mut active.local_unusable, true);
     let (position, was_playing) = (active.position_secs, active.is_playing);
-    reset_to_not_downloaded(model, &id)
-        .and(enqueue_download(model, &id))
+    let download = if replacement_failed {
+        fail_download(
+            model,
+            &id,
+            "The downloaded file can't be played. Playing from the stream instead.".to_string(),
+        )
+    } else {
+        reset_to_not_downloaded(model, &id).and(enqueue_download(model, &id))
+    };
+    download
         .and(player_op(
             fresh,
             PlayerOperation::Load {
@@ -647,6 +671,7 @@ pub(crate) fn on_context_loaded(model: &mut Model, result: StorageResult) -> Cmd
         resume_after_interruption: false,
         // It came from the saved context, so that is what is saved.
         context_saved: true,
+        local_unusable: false,
         error: None,
     });
     render()
