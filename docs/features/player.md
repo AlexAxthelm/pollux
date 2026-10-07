@@ -126,7 +126,11 @@ engine.
   undecodable), playback falls back to streaming and the episode is reset to
   not-downloaded and re-queued. Any other failure (another app holding the audio
   session, playback stopping mid-play) leaves the download alone, pauses with an
-  error, and a later play retries the same file.
+  error, and a later play retries the same file. Downloads started or retried
+  for the active episode don't depend on its feed being open (after a cold start
+  no feed is): the core works from the active episode. Pressing play on an
+  episode that is still streaming with no download queued or underway (never
+  started, or failed) queues it, as starting an episode does.
 - **Played tolerance.** Played is decided when the listener *leaves* an episode,
   never as a side effect of saving progress. It happens when the engine reaches
   the end, when they pause, or when they start another episode, while within
@@ -153,6 +157,9 @@ engine.
   playlists exist the view that starts playback will say which source it is.
 - **Restore.** An episode already marked played is not restored at launch (its
   saved context is cleared); an in-progress one comes back paused at its place.
+  The context is written once when playback starts, so a failed write is
+  retried at every checkpoint until storage confirms it; otherwise a relaunch
+  would restore the wrong episode, or none.
 - **Sessions.** Each load into the engine gets a session id, and everything the
   engine reports carries it. The core ignores news from any other session, so a
   late tick, end or failure from a replaced item (a source swap, a retry, another
