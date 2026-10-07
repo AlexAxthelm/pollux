@@ -120,6 +120,10 @@ pub struct ActivePlayback {
     /// false every checkpoint re-sends it, so one failed write can't leave a relaunch
     /// restoring the wrong episode (or none).
     pub context_saved: bool,
+    /// How many writes of the play context have failed. Checkpoints retry only until
+    /// `CONTEXT_SAVE_ATTEMPTS` have, so a write that can never succeed isn't retried for as
+    /// long as playback goes on.
+    pub context_save_failures: u32,
     /// A downloaded file for this episode was found unusable, and it has not played fine
     /// since. The first time that is put down to a missing or damaged file and it is
     /// downloaded again; if the fresh file is unusable too the file itself is bad, so it is

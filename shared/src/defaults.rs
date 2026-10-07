@@ -9,6 +9,11 @@ pub const PLAYED_TOLERANCE_SECS: u32 = 15;
 /// While playing, position is persisted at least this often (in addition to pause,
 /// seek, backgrounding and end), bounding what a crash can lose.
 pub const POSITION_CHECKPOINT_SECS: u32 = 10;
+/// How many times the play context is written before giving up on it (the write made when
+/// playback starts counts as the first; checkpoints retry a failed one). A write that can
+/// never succeed would otherwise be retried at every checkpoint for as long as playback
+/// goes on. The next episode starts afresh.
+pub const CONTEXT_SAVE_ATTEMPTS: u32 = 5;
 /// Backoff applied to a 429 that carries no usable `Retry-After`.
 pub const RATE_LIMIT_BACKOFF_SECS: i64 = 3600;
 /// Longest wait honoured from a `Retry-After`. A host asking for more (a year, a date far

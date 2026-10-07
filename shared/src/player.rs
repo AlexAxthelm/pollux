@@ -35,8 +35,8 @@ use crate::app::{
 use crate::capabilities::player::{MediaSource, PlayerOperation, PlayerResult};
 use crate::capabilities::storage::{StorageOperation, StorageResult};
 use crate::defaults::{
-    PLAYED_TOLERANCE_SECS, POSITION_CHECKPOINT_SECS, RESUME_REWIND_SECS, SKIP_BACKWARD_SECS,
-    SKIP_FORWARD_SECS,
+    CONTEXT_SAVE_ATTEMPTS, PLAYED_TOLERANCE_SECS, POSITION_CHECKPOINT_SECS, RESUME_REWIND_SECS,
+    SKIP_BACKWARD_SECS, SKIP_FORWARD_SECS,
 };
 use crate::domain::{DownloadStatus, Episode, EpisodeSource, PlaybackStatus};
 use crate::effect::Effect;
@@ -136,6 +136,9 @@ pub(crate) fn on_context_saved(model: &mut Model, episode_id: &str, result: &Sto
         .filter(|a| a.episode.id == episode_id)
     {
         active.context_saved = !matches!(result, StorageResult::Error(_));
+        if !active.context_saved {
+            active.context_save_failures += 1;
+        }
     }
     Command::done()
 }
@@ -188,7 +191,11 @@ fn checkpoint(model: &mut Model) -> Cmd {
     active.episode.playback_status = PlaybackStatus::InProgress;
     active.episode.playback_position_secs = position;
     let id = active.episode.id.clone();
-    let unsaved_context = (!active.context_saved).then(|| active.source.clone());
+    // Retry an unconfirmed context save, but not for ever: after enough failures the write
+    // is one that won't succeed, and trying again at every checkpoint only costs writes.
+    let retry_context =
+        !active.context_saved && active.context_save_failures < CONTEXT_SAVE_ATTEMPTS;
+    let unsaved_context = retry_context.then(|| active.source.clone());
     sync_episode_row(model, &id, &PlaybackStatus::InProgress, position);
     let write = persist_playback(&id, PlaybackStatus::InProgress, position);
     match unsaved_context {
@@ -284,6 +291,7 @@ pub(crate) fn play_episode(model: &mut Model, episode_id: &str) -> Cmd {
         resume_after_interruption: false,
         // The save below is only a request until storage confirms it.
         context_saved: false,
+        context_save_failures: 0,
         local_unusable: false,
         error: None,
     });
@@ -685,6 +693,7 @@ pub(crate) fn on_context_loaded(model: &mut Model, result: StorageResult) -> Cmd
         resume_after_interruption: false,
         // It came from the saved context, so that is what is saved.
         context_saved: true,
+        context_save_failures: 0,
         local_unusable: false,
         error: None,
     });

@@ -7,6 +7,7 @@ use super::tests::{
     active, checkpoints, episode, model_with, saved_context, send, storage_ops, tick,
 };
 use super::*;
+use crate::defaults::CONTEXT_SAVE_ATTEMPTS;
 
 fn context_saves(effects: &[Effect]) -> Vec<String> {
     storage_ops(effects)
@@ -116,6 +117,75 @@ fn starting_another_episode_saves_its_context_afresh() {
 
     assert_eq!(context_saves(&effects), vec!["e2".to_string()]);
     assert!(!active(&model).context_saved);
+}
+
+fn fail_the_save(model: &mut Model) {
+    let id = active(model).episode.id.clone();
+    saved(model, &id, StorageResult::Error("disk full".into()));
+}
+
+/// Fails the save the playback start made, then lets every checkpoint retry and fail, until
+/// the attempts are used up. Returns the attempts made, the first being the start's own.
+fn exhaust_the_attempts(model: &mut Model) -> u32 {
+    let mut attempts = 1;
+    fail_the_save(model);
+    let mut position = 0;
+    while attempts < CONTEXT_SAVE_ATTEMPTS {
+        position += 30;
+        let effects = tick(model, position);
+        assert_eq!(context_saves(&effects).len(), 1, "attempt {}", attempts + 1);
+        attempts += 1;
+        fail_the_save(model);
+    }
+    attempts
+}
+
+#[test]
+fn a_save_that_keeps_failing_is_given_up_on() {
+    let mut model = started();
+    let attempts = exhaust_the_attempts(&mut model);
+    assert_eq!(attempts, CONTEXT_SAVE_ATTEMPTS);
+
+    // Further checkpoints no longer try, however long playback goes on.
+    for position in [400, 430, 460] {
+        let effects = tick(&mut model, position);
+        assert!(context_saves(&effects).is_empty());
+    }
+    assert!(!active(&model).context_saved);
+}
+
+#[test]
+fn pausing_or_backgrounding_does_not_retry_a_given_up_save_either() {
+    let mut model = started();
+    exhaust_the_attempts(&mut model);
+
+    assert!(context_saves(&send(&mut model, Event::AppBackgrounded)).is_empty());
+    assert!(context_saves(&send(&mut model, Event::Pause)).is_empty());
+}
+
+#[test]
+fn giving_up_on_one_episode_does_not_stop_the_next_from_saving() {
+    let mut model = started();
+    exhaust_the_attempts(&mut model);
+
+    let effects = send(&mut model, Event::PlayEpisode("e2".into()));
+
+    assert_eq!(context_saves(&effects), vec!["e2".to_string()]);
+    fail_the_save(&mut model);
+    let effects = tick(&mut model, 30);
+    assert_eq!(context_saves(&effects), vec!["e2".to_string()]);
+}
+
+#[test]
+fn a_save_that_lands_before_the_limit_stops_the_retries() {
+    let mut model = started();
+    fail_the_save(&mut model);
+    tick(&mut model, 30);
+    saved(&mut model, "e1", StorageResult::Success);
+
+    for position in [60, 90, 120] {
+        assert!(context_saves(&tick(&mut model, position)).is_empty());
+    }
 }
 
 #[test]

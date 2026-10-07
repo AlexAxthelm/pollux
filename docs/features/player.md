@@ -170,7 +170,10 @@ engine.
   saved context is cleared); an in-progress one comes back paused at its place.
   The context is written once when playback starts, so a failed write is
   retried at every checkpoint until storage confirms it; otherwise a relaunch
-  would restore the wrong episode, or none.
+  would restore the wrong episode, or none. It is tried at most 5 times in all
+  (`CONTEXT_SAVE_ATTEMPTS`): a write that can't succeed isn't repeated for as long
+  as playback goes on, and the next episode starts afresh. Nothing is shown to the
+  listener; the cost of giving up is that a relaunch may not restore this episode.
 - **Sessions.** Each load into the engine gets a session id, and everything the
   engine reports carries it. The core ignores news from any other session, so a
   late tick, end or failure from a replaced item (a source swap, a retry, another
