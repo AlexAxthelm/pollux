@@ -107,6 +107,10 @@ pub struct ActivePlayback {
     pub loaded: bool,
     /// Position at the last persisted checkpoint, to space periodic writes.
     pub last_checkpoint_secs: u32,
+    /// Set when an audio-session interruption paused playback that was running, so the
+    /// end of that interruption may resume it. Cleared by any explicit play or seek, and
+    /// never set when playback was already paused (the listener's choice stands).
+    pub resume_after_interruption: bool,
     pub error: Option<String>,
 }
 

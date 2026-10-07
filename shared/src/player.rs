@@ -232,6 +232,7 @@ pub(crate) fn play_episode(model: &mut Model, episode_id: &str) -> Cmd {
         source: source.clone(),
         loaded: true,
         last_checkpoint_secs: start,
+        resume_after_interruption: false,
         error: None,
     });
 
@@ -272,6 +273,8 @@ pub(crate) fn play(model: &mut Model) -> Cmd {
     };
     active.error = None;
     active.is_playing = true;
+    // The listener took over: an interruption ending later must not second-guess them.
+    active.resume_after_interruption = false;
     let rewound = active.position_secs.saturating_sub(RESUME_REWIND_SECS);
     active.position_secs = rewound;
     let cmd = if let Some(session) = fresh {
@@ -317,8 +320,9 @@ pub(crate) fn pause(model: &mut Model) -> Cmd {
 
 /// The system paused playback (a call, Siri, unplugged headphones). That is not the
 /// listener leaving: the place is saved and the episode stays active, so playback can
-/// resume and play out the final seconds.
-pub(crate) fn interrupt(model: &mut Model) -> Cmd {
+/// resume and play out the final seconds. When `resumable`, the end of the interruption
+/// may resume it (see `on_interruption_ended`); a route change never does.
+pub(crate) fn interrupt(model: &mut Model, resumable: bool) -> Cmd {
     let Some(active) = model.active_playback.as_mut() else {
         return Command::done();
     };
@@ -326,10 +330,27 @@ pub(crate) fn interrupt(model: &mut Model) -> Cmd {
         return Command::done();
     }
     active.is_playing = false;
+    active.resume_after_interruption = resumable;
     let session = active.session;
     player_op(session, PlayerOperation::Pause)
         .and(checkpoint(model))
         .and(render())
+}
+
+/// An audio-session interruption ended. Playback resumes only if the system says it may
+/// *and* this interruption is what paused it: the system also reports "should resume"
+/// after interruptions that found playback already paused, and resuming then would start
+/// audio the listener had stopped.
+pub(crate) fn on_interruption_ended(model: &mut Model, should_resume: bool) -> Cmd {
+    let was_interrupted = model
+        .active_playback
+        .as_mut()
+        .is_some_and(|a| std::mem::take(&mut a.resume_after_interruption));
+    if should_resume && was_interrupted {
+        play(model)
+    } else {
+        Command::done()
+    }
 }
 
 pub(crate) fn toggle(model: &mut Model) -> Cmd {
@@ -349,6 +370,7 @@ pub(crate) fn seek_to(model: &mut Model, secs: u32) -> Cmd {
     let Some(active) = model.active_playback.as_mut() else {
         return Command::done();
     };
+    active.resume_after_interruption = false;
     let duration = known_duration(active).filter(|&d| d > 0);
     // Skipping or scrubbing to the very end is finishing: decided here rather than left
     // to the engine, which only reports the end of the file while it is playing.
@@ -549,6 +571,7 @@ pub(crate) fn on_context_loaded(model: &mut Model, result: StorageResult) -> Cmd
         is_playing: false,
         loaded: false,
         last_checkpoint_secs: position,
+        resume_after_interruption: false,
         error: None,
     });
     render()

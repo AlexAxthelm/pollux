@@ -117,7 +117,7 @@ fn a_system_interruption_in_the_tail_pauses_without_finishing() {
     send(&mut model, Event::PlayEpisode("e1".into()));
     tick(&mut model, 590);
 
-    let effects = send(&mut model, Event::Interrupted);
+    let effects = send(&mut model, Event::Interrupted { resumable: true });
 
     assert!(matches!(
         player_ops(&effects).as_slice(),
@@ -129,8 +129,13 @@ fn a_system_interruption_in_the_tail_pauses_without_finishing() {
     );
     assert!(!view_player(&model).is_playing);
 
-    // The system says it's fine to resume (the call ended): the last seconds play out.
-    let effects = send(&mut model, Event::Play);
+    // The call ended and the system says it's fine to resume: the last seconds play out.
+    let effects = send(
+        &mut model,
+        Event::InterruptionEnded {
+            should_resume: true,
+        },
+    );
     assert!(matches!(
         player_ops(&effects).as_slice(),
         [PlayerOperation::Seek { .. }, PlayerOperation::Play]
@@ -332,7 +337,7 @@ fn seeking_to_the_very_end_while_paused_finishes_the_episode() {
     // stuck active at 100%.
     let mut model = model_with(vec![episode("e1")]);
     send(&mut model, Event::PlayEpisode("e1".into()));
-    send(&mut model, Event::Interrupted);
+    send(&mut model, Event::Interrupted { resumable: true });
     assert!(!view_player(&model).is_playing);
 
     let effects = send(&mut model, Event::SeekTo(600));
@@ -352,4 +357,121 @@ fn a_seek_that_lands_short_of_the_end_does_not_finish() {
     send(&mut model, Event::SeekTo(599));
 
     assert_eq!(active(&model).position_secs, 599);
+}
+
+// --- Interruptions ---------------------------------------------------------------------
+
+fn interrupted() -> Event {
+    Event::Interrupted { resumable: true }
+}
+
+fn interruption_ended() -> Event {
+    Event::InterruptionEnded {
+        should_resume: true,
+    }
+}
+
+#[test]
+fn an_interruption_that_paused_playback_resumes_when_it_ends() {
+    let mut model = model_with(vec![episode("e1")]);
+    send(&mut model, Event::PlayEpisode("e1".into()));
+    tick(&mut model, 100);
+    send(&mut model, interrupted());
+    assert!(!view_player(&model).is_playing);
+
+    let effects = send(&mut model, interruption_ended());
+
+    assert!(view_player(&model).is_playing);
+    assert!(matches!(
+        player_ops(&effects).as_slice(),
+        [PlayerOperation::Seek { secs: 97 }, PlayerOperation::Play]
+    ));
+}
+
+#[test]
+fn an_interruption_does_not_resume_playback_the_listener_had_paused() {
+    // The system reports "should resume" after any interruption, including one that found
+    // playback already paused. The pause was the listener's choice and stands.
+    let mut model = model_with(vec![episode("e1")]);
+    send(&mut model, Event::PlayEpisode("e1".into()));
+    tick(&mut model, 100);
+    send(&mut model, Event::Pause);
+
+    send(&mut model, interrupted());
+    let effects = send(&mut model, interruption_ended());
+
+    assert!(!view_player(&model).is_playing);
+    assert!(player_ops(&effects).is_empty());
+}
+
+#[test]
+fn an_interruption_that_says_not_to_resume_leaves_playback_paused() {
+    let mut model = model_with(vec![episode("e1")]);
+    send(&mut model, Event::PlayEpisode("e1".into()));
+    send(&mut model, interrupted());
+
+    let effects = send(
+        &mut model,
+        Event::InterruptionEnded {
+            should_resume: false,
+        },
+    );
+
+    assert!(!view_player(&model).is_playing);
+    assert!(player_ops(&effects).is_empty());
+}
+
+#[test]
+fn a_route_change_pause_is_never_resumed_by_a_later_interruption() {
+    // Unplugged headphones pause playback but have no matching "ended" event. The arming
+    // must not linger and let an unrelated call, hours later, restart the audio.
+    let mut model = model_with(vec![episode("e1")]);
+    send(&mut model, Event::PlayEpisode("e1".into()));
+    send(&mut model, Event::Interrupted { resumable: false });
+    assert!(!view_player(&model).is_playing);
+
+    // Later: a call begins and ends while playback is paused.
+    send(&mut model, interrupted());
+    let effects = send(&mut model, interruption_ended());
+
+    assert!(!view_player(&model).is_playing);
+    assert!(player_ops(&effects).is_empty());
+}
+
+#[test]
+fn the_listener_taking_over_during_an_interruption_cancels_the_auto_resume() {
+    // Interrupted, then the listener plays and pauses by hand while the interruption is
+    // still nominally open: its end must not start playback again.
+    let mut model = model_with(vec![episode("e1")]);
+    send(&mut model, Event::PlayEpisode("e1".into()));
+    send(&mut model, interrupted());
+    send(&mut model, Event::Play);
+    send(&mut model, Event::Pause);
+    assert!(!view_player(&model).is_playing);
+
+    let effects = send(&mut model, interruption_ended());
+
+    assert!(!view_player(&model).is_playing);
+    assert!(player_ops(&effects).is_empty());
+}
+
+#[test]
+fn scrubbing_during_an_interruption_cancels_the_auto_resume() {
+    let mut model = model_with(vec![episode("e1")]);
+    send(&mut model, Event::PlayEpisode("e1".into()));
+    send(&mut model, interrupted());
+    send(&mut model, Event::SeekTo(300));
+
+    send(&mut model, interruption_ended());
+
+    assert!(!view_player(&model).is_playing);
+}
+
+#[test]
+fn the_end_of_an_interruption_with_nothing_active_does_nothing() {
+    let mut model = model_with(vec![]);
+
+    let effects = send(&mut model, interruption_ended());
+
+    assert!(effects.is_empty());
 }

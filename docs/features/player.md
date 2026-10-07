@@ -136,7 +136,12 @@ engine.
   a position, so listening on through the last seconds with the screen locked is
   never cut short. A system pause (a call, Siri, unplugged headphones) keeps the
   episode and its place and never counts as finishing, so it can resume and play
-  out the end.
+  out the end. When an audio-session interruption (a call, Siri) ends, playback
+  resumes only if that interruption is what paused it and the system says it may:
+  the system also says "may resume" after interruptions that found playback
+  already paused, and the listener's pause then stands. A pause from unplugged
+  headphones is never resumed automatically, and playing or scrubbing by hand
+  during an interruption cancels the auto-resume.
 - **Source.** Playback remembers what it was started from as an `EpisodeSource`
   (a subscription today; see `DATA_MODEL.md`), saved with the play context and
   restored with it. The "From:" row names it and tapping it navigates back to it.

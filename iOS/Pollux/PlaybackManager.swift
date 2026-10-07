@@ -161,8 +161,10 @@ final class PlaybackManager {
     }
 
     /// Phone calls, Siri and unplugged headphones pause playback; the core is told so
-    /// its state and the persisted position stay right. Playback resumes only when the
-    /// system says it should (e.g. after a call), never after unplugging.
+    /// its state and the persisted position stay right. The core decides whether an
+    /// interruption's end resumes playback: only if the interruption is what paused it
+    /// and the system says it may (it also says so after interruptions that found
+    /// playback already paused). Unplugging headphones is never resumed.
     private func observeSession() {
         let center = NotificationCenter.default
         let session = AVAudioSession.sharedInstance()
@@ -177,9 +179,10 @@ final class PlaybackManager {
             MainActor.assumeIsolated {
                 switch type {
                 case .began:
-                    self?.send(.interrupted)
-                case .ended where options?.contains(.shouldResume) == true:
-                    self?.send(.play)
+                    self?.send(.interrupted(resumable: true))
+                case .ended:
+                    let shouldResume = options?.contains(.shouldResume) == true
+                    self?.send(.interruptionEnded(shouldResume: shouldResume))
                 default:
                     break
                 }
@@ -192,7 +195,8 @@ final class PlaybackManager {
                 .flatMap(AVAudioSession.RouteChangeReason.init(rawValue:))
             MainActor.assumeIsolated {
                 if reason == .oldDeviceUnavailable {
-                    self?.send(.interrupted)
+                    // No "ended" notification follows a route change, so never resumable.
+                    self?.send(.interrupted(resumable: false))
                 }
             }
         }

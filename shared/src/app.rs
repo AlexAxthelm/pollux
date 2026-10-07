@@ -661,7 +661,10 @@ impl App for Pollux {
             Event::SkipBack => player::skip_back(model),
             Event::SeekTo(secs) => player::seek_to(model, secs),
             Event::AppBackgrounded => player::on_backgrounded(model),
-            Event::Interrupted => player::interrupt(model),
+            Event::Interrupted { resumable } => player::interrupt(model, resumable),
+            Event::InterruptionEnded { should_resume } => {
+                player::on_interruption_ended(model, should_resume)
+            }
             Event::PlayerTick {
                 session,
                 position_secs,
@@ -1296,8 +1299,20 @@ pub enum Event {
     AppBackgrounded,
     /// The system paused playback (a call, Siri, unplugged headphones). Unlike `Pause`
     /// this is not the listener leaving: the place is saved but the episode is never
-    /// counted as played, so playback can resume to the end.
-    Interrupted,
+    /// counted as played, so playback can resume to the end. `resumable` is true for an
+    /// audio-session interruption, which the system will announce the end of
+    /// (`InterruptionEnded`); false for a route change such as unplugged headphones, which
+    /// has no end event and must never be auto-resumed.
+    Interrupted {
+        resumable: bool,
+    },
+    /// An audio-session interruption ended. `should_resume` is the system's hint that
+    /// playback may continue; the core only acts on it if it was playing when the
+    /// interruption began (the system also sends it after interruptions that found
+    /// playback already paused).
+    InterruptionEnded {
+        should_resume: bool,
+    },
     /// Engine position report (~1/s while playing). Transient; the core persists on
     /// its own checkpoints, not per tick. `session` is the load that produced it.
     PlayerTick {
