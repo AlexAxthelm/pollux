@@ -34,4 +34,27 @@ import Testing
     @Test func spokenTimeIsWords() {
         #expect(PlayerFormatting.spoken(3723).contains("hour"))
     }
+
+    @Test func spokenTimeNamesEachUnitPresent() {
+        let spoken = PlayerFormatting.spoken(3723)
+        #expect(spoken.contains("hour"))
+        #expect(spoken.contains("minute"))
+        #expect(spoken.contains("second"))
+        // Under an hour there is no hours part.
+        #expect(!PlayerFormatting.spoken(123).contains("hour"))
+    }
+
+    @Test func spokenTimeIsNeverEmpty() {
+        for seconds: UInt32 in [0, 1, 59, 60, 3599, 3600, 86400] {
+            #expect(!PlayerFormatting.spoken(seconds).isEmpty)
+        }
+    }
+
+    @Test func spokenTimeIsStableAcrossRepeatedCalls() {
+        // One shared formatter must give the same answer however often it is used.
+        let first = PlayerFormatting.spoken(754)
+        for _ in 0 ..< 100 {
+            #expect(PlayerFormatting.spoken(754) == first)
+        }
+    }
 }

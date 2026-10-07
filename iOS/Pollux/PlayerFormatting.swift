@@ -27,11 +27,17 @@ enum PlayerFormatting {
 
     /// Spoken form for VoiceOver: "1 hour 2 minutes 3 seconds".
     static func spoken(_ seconds: UInt32) -> String {
+        spokenFormatter.string(from: TimeInterval(seconds)) ?? "\(seconds) seconds"
+    }
+
+    /// Built once: creating a formatter is costly, and the scrubber's accessibility value
+    /// asks for this on every update (every tick, and every step of a drag).
+    private static let spokenFormatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
         formatter.unitsStyle = .full
         formatter.allowedUnits = [.hour, .minute, .second]
-        return formatter.string(from: TimeInterval(seconds)) ?? "\(seconds) seconds"
-    }
+        return formatter
+    }()
 
     /// Fraction of the episode played, 0...1; 0 when the duration is unknown.
     static func fraction(position: UInt32, duration: UInt32?) -> Double {
