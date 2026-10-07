@@ -674,7 +674,12 @@ impl App for Pollux {
                 duration_secs,
             } => player::on_duration(model, session, duration_secs),
             Event::PlayerEnded { session } => player::on_ended(model, session),
-            Event::PlayerFailed { session, message } => player::on_failure(model, session, message),
+            Event::PlayerFailed { session, message } => {
+                player::on_failure(model, session, message, player::Failure::Other)
+            }
+            Event::PlayerMediaUnusable { session, message } => {
+                player::on_failure(model, session, message, player::Failure::MediaUnusable)
+            }
             Event::PlayerResponded { session, result } => {
                 player::on_response(model, session, *result)
             }
@@ -1328,12 +1333,21 @@ pub enum Event {
     PlayerEnded {
         session: u32,
     },
-    /// The engine failed to play or lost the item.
+    /// Playback failed for a reason that says nothing about the media (it stopped
+    /// mid-play, say). A downloaded file is kept; the listener sees the error and can
+    /// retry.
     PlayerFailed {
         session: u32,
         message: String,
     },
-    /// Resolution of a player operation; an error is treated like `PlayerFailed`.
+    /// The engine couldn't use the media itself: it failed to load or decode. A
+    /// downloaded file is then discarded in favor of streaming; see `player::on_failure`.
+    PlayerMediaUnusable {
+        session: u32,
+        message: String,
+    },
+    /// Resolution of a player operation; an error is treated like the matching failure
+    /// event (`PlayerFailed`, or `PlayerMediaUnusable` for `MediaUnusable`).
     PlayerResponded {
         session: u32,
         result: Box<PlayerResult>,

@@ -372,7 +372,7 @@ fn a_missing_local_file_falls_back_to_streaming_and_redownloads() {
     let session = session(&model);
     let effects = send(
         &mut model,
-        Event::PlayerFailed {
+        Event::PlayerMediaUnusable {
             session,
             message: "file missing".into(),
         },

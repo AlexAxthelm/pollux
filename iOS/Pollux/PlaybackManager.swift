@@ -84,8 +84,11 @@ final class PlaybackManager {
         session: UInt32, media: MediaSource, startSecs: UInt32, autoplay: Bool,
     ) -> PlayerResult {
         let result = startLoading(session: session, media: media, startSecs: startSecs, autoplay: autoplay)
-        if case .error = result {
+        switch result {
+        case .error, .mediaUnusable:
             unloadCurrentItem()
+        case .ok:
+            break
         }
         return result
     }
@@ -97,13 +100,13 @@ final class PlaybackManager {
         switch media {
         case let .stream(urlString):
             guard let parsed = URL(string: urlString) else {
-                return .error("Invalid episode URL")
+                return .mediaUnusable("Invalid episode URL")
             }
             url = parsed
         case let .local(localPath):
             url = DownloadManager.absoluteURL(for: localPath, root: storageRoot)
             guard FileManager.default.fileExists(atPath: url.path) else {
-                return .error("The downloaded file is missing")
+                return .mediaUnusable("The downloaded file is missing")
             }
         }
 
@@ -175,7 +178,7 @@ final class PlaybackManager {
                         send(.playerDuration(session: session, durationSecs: UInt32(duration)))
                     }
                 case .failed:
-                    send(.playerFailed(session: session, message: message ?? "Playback failed"))
+                    send(.playerMediaUnusable(session: session, message: message ?? "Playback failed"))
                 default:
                     break
                 }

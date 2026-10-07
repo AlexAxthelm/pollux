@@ -106,7 +106,7 @@ private func makeRig() -> Rig {
             .load(session: 2, media: .local(localPath: "Downloads/missing.mp3"), startSecs: 0, autoplay: true),
         )
 
-        #expect(result == .error("The downloaded file is missing"))
+        #expect(result == .mediaUnusable("The downloaded file is missing"))
         #expect(!rig.manager.hasLoadedItem)
         #expect(rig.manager.currentSession == nil)
     }
@@ -122,7 +122,7 @@ private func makeRig() -> Rig {
             .load(session: 2, media: .stream(url: ""), startSecs: 0, autoplay: true),
         )
 
-        #expect(result == .error("Invalid episode URL"))
+        #expect(result == .mediaUnusable("Invalid episode URL"))
         #expect(!rig.manager.hasLoadedItem)
         #expect(rig.manager.currentSession == nil)
     }
@@ -134,7 +134,7 @@ private func makeRig() -> Rig {
             .load(session: 1, media: .local(localPath: "Downloads/missing.mp3"), startSecs: 0, autoplay: false),
         )
 
-        #expect(result == .error("The downloaded file is missing"))
+        #expect(result == .mediaUnusable("The downloaded file is missing"))
         #expect(!rig.manager.hasLoadedItem)
     }
 

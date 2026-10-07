@@ -266,7 +266,7 @@ fn engine_events_from_a_replaced_load_are_ignored() {
     // The local file fails, so playback is re-loaded from the network: a new session.
     send(
         &mut model,
-        Event::PlayerFailed {
+        Event::PlayerMediaUnusable {
             session: first,
             message: "file missing".into(),
         },
@@ -474,4 +474,154 @@ fn the_end_of_an_interruption_with_nothing_active_does_nothing() {
     let effects = send(&mut model, interruption_ended());
 
     assert!(effects.is_empty());
+}
+
+// --- Failures on a downloaded file ----------------------------------------------------------
+
+/// A model whose only episode is downloaded and has just been started, so it plays from
+/// the local file.
+fn playing_a_download() -> Model {
+    let mut e = episode("e1");
+    e.download_status = DownloadStatus::Downloaded;
+    e.local_path = Some("Downloads/e1.mp3".into());
+    let mut model = model_with(vec![e]);
+    send(&mut model, Event::PlayEpisode("e1".into()));
+    model
+}
+
+fn download_state_writes(effects: &[Effect]) -> usize {
+    storage_ops(effects)
+        .iter()
+        .filter(|op| matches!(op, StorageOperation::UpdateDownloadState { .. }))
+        .count()
+}
+
+#[test]
+fn a_refused_audio_session_does_not_discard_a_good_download() {
+    // Another app holds the audio session, so the load is refused. That says nothing about
+    // the file, which must not be reset to not-downloaded and fetched again.
+    let mut model = playing_a_download();
+    let session = session(&model);
+
+    let effects = send(
+        &mut model,
+        Event::PlayerResponded {
+            session,
+            result: Box::new(PlayerResult::Error("Couldn't start audio: busy".into())),
+        },
+    );
+
+    assert_eq!(download_state_writes(&effects), 0);
+    assert!(model.downloading.is_none());
+    assert!(model.download_queue.is_empty());
+    assert_eq!(
+        model.episodes[0].download_status,
+        DownloadStatus::Downloaded
+    );
+    assert_eq!(
+        active(&model).episode.download_status,
+        DownloadStatus::Downloaded
+    );
+    let view = view_player(&model);
+    assert!(!view.is_playing);
+    assert!(!view.is_streaming, "still pointed at the local file");
+    assert_eq!(view.error.as_deref(), Some("Couldn't start audio: busy"));
+}
+
+#[test]
+fn after_a_refused_session_playing_again_retries_the_same_file() {
+    let mut model = playing_a_download();
+    let first = session(&model);
+    send(
+        &mut model,
+        Event::PlayerResponded {
+            session: first,
+            result: Box::new(PlayerResult::Error("Couldn't start audio: busy".into())),
+        },
+    );
+
+    let effects = send(&mut model, Event::Play);
+
+    assert!(matches!(
+        player_ops(&effects).as_slice(),
+        [PlayerOperation::Load {
+            media: MediaSource::Local { .. },
+            autoplay: true,
+            ..
+        }]
+    ));
+    assert!(view_player(&model).error.is_none());
+}
+
+#[test]
+fn a_mid_play_failure_on_a_download_is_not_taken_for_a_bad_file() {
+    let mut model = playing_a_download();
+    let session = session(&model);
+
+    let effects = send(
+        &mut model,
+        Event::PlayerFailed {
+            session,
+            message: "Playback stopped unexpectedly".into(),
+        },
+    );
+
+    assert_eq!(download_state_writes(&effects), 0);
+    assert_eq!(
+        model.episodes[0].download_status,
+        DownloadStatus::Downloaded
+    );
+    assert!(!view_player(&model).is_playing);
+}
+
+#[test]
+fn an_unusable_file_in_a_load_response_falls_back_to_streaming() {
+    // The same fallback as the engine's own "couldn't decode it" event, reached through
+    // the response to the Load itself (the file was missing).
+    let mut model = playing_a_download();
+    let session = session(&model);
+
+    let effects = send(
+        &mut model,
+        Event::PlayerResponded {
+            session,
+            result: Box::new(PlayerResult::MediaUnusable(
+                "The downloaded file is missing".into(),
+            )),
+        },
+    );
+
+    assert!(player_ops(&effects).iter().any(|op| matches!(
+        op,
+        PlayerOperation::Load {
+            media: MediaSource::Stream { .. },
+            autoplay: true,
+            ..
+        }
+    )));
+    // Reset to not-downloaded, queued, then started (nothing else is downloading).
+    assert_eq!(download_state_writes(&effects), 3);
+    assert_eq!(model.downloading.as_deref(), Some("e1"));
+    assert!(view_player(&model).error.is_none());
+}
+
+#[test]
+fn an_unusable_stream_just_shows_the_error() {
+    // There is no other source to fall back to: a streamed item the engine can't use is
+    // reported, not retried.
+    let mut model = model_with(vec![episode("e1")]);
+    send(&mut model, Event::PlayEpisode("e1".into()));
+    let session = session(&model);
+
+    send(
+        &mut model,
+        Event::PlayerMediaUnusable {
+            session,
+            message: "Invalid episode URL".into(),
+        },
+    );
+
+    let view = view_player(&model);
+    assert!(!view.is_playing);
+    assert_eq!(view.error.as_deref(), Some("Invalid episode URL"));
 }

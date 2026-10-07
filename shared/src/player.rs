@@ -447,9 +447,29 @@ pub(crate) fn on_ended(model: &mut Model, session: u32) -> Cmd {
     complete(model)
 }
 
-/// The engine couldn't play (or lost) the item. A missing local file falls back to
-/// streaming and re-downloads; anything else leaves playback paused with a notice.
-pub(crate) fn on_failure(model: &mut Model, session: u32, message: String) -> Cmd {
+/// Why the engine failed, as far as the shell can tell.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Failure {
+    /// The media itself can't be used: a missing, unreadable or undecodable file.
+    MediaUnusable,
+    /// Anything else (the audio session was refused, playback stopped mid-play). Says
+    /// nothing about the media.
+    Other,
+}
+
+/// The engine couldn't play (or lost) the item.
+///
+/// A downloaded file the engine reports as *unusable* (missing, unreadable, undecodable)
+/// is given up on: the episode streams instead, from the same spot, and is re-downloaded.
+/// Any other failure leaves playback paused with a notice and the download untouched, so
+/// a transient problem (another app holding the audio session, say) can't make the app
+/// discard a good multi-megabyte file and fetch it again.
+pub(crate) fn on_failure(
+    model: &mut Model,
+    session: u32,
+    message: String,
+    failure: Failure,
+) -> Cmd {
     if !is_current(model, session) {
         return Command::done();
     }
@@ -457,7 +477,7 @@ pub(crate) fn on_failure(model: &mut Model, session: u32, message: String) -> Cm
         .active_playback
         .as_ref()
         .is_some_and(|a| matches!(a.media, MediaSource::Local { .. }));
-    if !is_local {
+    if !(is_local && failure == Failure::MediaUnusable) {
         if let Some(active) = model.active_playback.as_mut() {
             active.is_playing = false;
             active.loaded = false;
@@ -499,7 +519,10 @@ pub(crate) fn on_failure(model: &mut Model, session: u32, message: String) -> Cm
 pub(crate) fn on_response(model: &mut Model, session: u32, result: PlayerResult) -> Cmd {
     match result {
         PlayerResult::Ok => Command::done(),
-        PlayerResult::Error(message) => on_failure(model, session, message),
+        PlayerResult::Error(message) => on_failure(model, session, message, Failure::Other),
+        PlayerResult::MediaUnusable(message) => {
+            on_failure(model, session, message, Failure::MediaUnusable)
+        }
     }
 }
 

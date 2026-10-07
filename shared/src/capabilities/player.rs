@@ -45,7 +45,13 @@ pub enum PlayerOperation {
 #[repr(C)]
 pub enum PlayerResult {
     Ok,
+    /// The operation failed for a reason that says nothing about the media: the audio
+    /// session was refused, say. A downloaded file is still good, and trying again later
+    /// may work.
     Error(String),
+    /// The media itself can't be used: the file is missing, unreadable or can't be
+    /// decoded. Only this lets the core give up on a downloaded file and stream instead.
+    MediaUnusable(String),
 }
 
 impl Operation for PlayerOperation {

@@ -122,8 +122,11 @@ engine.
 - **Streaming.** Playing an episode that isn't downloaded streams from its
   enclosure URL *and* queues a download. When the download finishes, playback
   moves onto the local file at the current position (a `Load` at the playhead).
-  If the downloaded file turns out to be missing or unreadable, playback falls
-  back to streaming and the episode is reset to not-downloaded and re-queued.
+  If the engine reports the downloaded file unusable (missing, unreadable or
+  undecodable), playback falls back to streaming and the episode is reset to
+  not-downloaded and re-queued. Any other failure (another app holding the audio
+  session, playback stopping mid-play) leaves the download alone, pauses with an
+  error, and a later play retries the same file.
 - **Played tolerance.** Played is decided when the listener *leaves* an episode,
   never as a side effect of saving progress. It happens when the engine reaches
   the end, when they pause, or when they start another episode, while within
