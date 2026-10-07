@@ -18,7 +18,10 @@ final class PlaybackManager {
     private(set) var currentSession: UInt32?
     /// Seeks still in flight. A streaming seek takes a moment, and the engine keeps
     /// reporting the old position until it lands; those ticks would snap the UI back.
-    private var pendingSeeks = 0
+    /// Internal so tests can see when a seek has landed, and hold the count up to check
+    /// that ticks are suppressed while one is pending (the test host's AVPlayer completes
+    /// seeks at once, so a real pending seek can't be observed there). Only `seek` changes it.
+    var pendingSeeks = 0
     private var timeObserver: Any?
     private var statusObservation: NSKeyValueObservation?
     private var notificationTokens: [NSObjectProtocol] = []
@@ -50,6 +53,12 @@ final class PlaybackManager {
     /// left the old item playing from one that unloaded it.
     var hasLoadedItem: Bool {
         player.currentItem != nil
+    }
+
+    /// The item the engine has loaded. Exposed so tests can post the notifications the
+    /// system would post for it (the end of the file, a failure) without playing it.
+    var loadedItem: AVPlayerItem? {
+        player.currentItem
     }
 
     // MARK: - Operations
@@ -160,6 +169,10 @@ final class PlaybackManager {
         player.pause()
         player.replaceCurrentItem(with: nil)
         statusObservation = nil
+        // The removed item must not report any more (its end or failure would arrive tagged
+        // with a session the core may still think is current).
+        notificationTokens.forEach(NotificationCenter.default.removeObserver)
+        notificationTokens = []
         currentSession = nil
     }
 
@@ -208,14 +221,20 @@ final class PlaybackManager {
         let interval = CMTime(seconds: 1, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             let seconds = time.seconds
-            MainActor.assumeIsolated { self?.reportTick(seconds: seconds) }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.reportTick(seconds: seconds, isPlaying: self.player.timeControlStatus == .playing)
+            }
         }
     }
 
-    private func reportTick(seconds: Double) {
+    /// Reports the position to the core, unless it can't be trusted: nothing is loaded, a seek
+    /// is still landing (the engine keeps reporting the old spot until it does), or the engine
+    /// isn't playing. Takes `isPlaying` rather than asking the player so tests can drive it.
+    func reportTick(seconds: Double, isPlaying: Bool) {
         guard let session = currentSession,
               pendingSeeks == 0,
-              player.timeControlStatus == .playing,
+              isPlaying,
               seconds >= 0,
               let secs = PlayerFormatting.wholeSeconds(seconds) else { return }
         send(.playerTick(session: session, positionSecs: secs))
