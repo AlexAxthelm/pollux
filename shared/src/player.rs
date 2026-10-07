@@ -47,6 +47,10 @@ mod context_save_tests;
 #[cfg(test)]
 mod download_recovery_tests;
 #[cfg(test)]
+mod interruption_resume_tests;
+#[cfg(test)]
+mod metadata_refresh_tests;
+#[cfg(test)]
 mod played_tests;
 #[cfg(test)]
 mod tests;
@@ -341,6 +345,9 @@ pub(crate) fn pause(model: &mut Model) -> Cmd {
     let Some(active) = model.active_playback.as_mut() else {
         return Command::done();
     };
+    // The listener's pause settles it even if an interruption already paused playback:
+    // that interruption ending later must not start audio they have just stopped.
+    active.resume_after_interruption = false;
     if !active.is_playing {
         return Command::done();
     }
@@ -363,6 +370,12 @@ pub(crate) fn interrupt(model: &mut Model, resumable: bool) -> Cmd {
     let Some(active) = model.active_playback.as_mut() else {
         return Command::done();
     };
+    if !resumable {
+        // A route change (headphones out) during an interruption: the output the audio
+        // was going to is gone, so the interruption's end must not restart it, even
+        // though that interruption is what paused it.
+        active.resume_after_interruption = false;
+    }
     if !active.is_playing {
         return Command::done();
     }
@@ -637,6 +650,33 @@ pub(crate) fn on_context_loaded(model: &mut Model, result: StorageResult) -> Cmd
         error: None,
     });
     render()
+}
+
+/// Brings the active episode's feed-supplied details up to date from the reloaded episode
+/// list, after a refresh. The player keeps its own copy of the episode, so without this a
+/// corrected or renewed audio URL would never reach it, and retrying a failed stream would
+/// load the old address again.
+///
+/// Only what the feed owns changes: title, description, artwork, duration, publication date
+/// and the audio URL, and the engine is not reloaded (the new URL is for the next load, not a
+/// reason to interrupt playback). Position, status and download state are the player's own
+/// and stay. A downloaded file keeps playing from the file.
+pub(crate) fn refresh_active_from_list(model: &mut Model) {
+    let Some(active) = model.active_playback.as_mut() else {
+        return;
+    };
+    let Some(fresh) = model.episodes.iter().find(|e| e.id == active.episode.id) else {
+        return;
+    };
+    active.episode.title = fresh.title.clone();
+    active.episode.description = fresh.description.clone();
+    active.episode.artwork_url = fresh.artwork_url.clone();
+    active.episode.duration_secs = fresh.duration_secs;
+    active.episode.pub_date = fresh.pub_date;
+    active.episode.enclosure_url = fresh.enclosure_url.clone();
+    if let MediaSource::Stream { url } = &mut active.media {
+        url.clone_from(&fresh.enclosure_url);
+    }
 }
 
 /// Flushes position when the app leaves the foreground. Never decides "played": the

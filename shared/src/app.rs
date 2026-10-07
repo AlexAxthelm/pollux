@@ -457,6 +457,9 @@ impl App for Pollux {
                     match *result {
                         StorageResult::Episodes(rows) => {
                             model.episodes = rows;
+                            // The player keeps its own copy of its episode; a refresh may
+                            // have corrected its details or audio URL.
+                            player::refresh_active_from_list(model);
                             model.detail_error = None;
                             model.list_notice = None;
                         }
