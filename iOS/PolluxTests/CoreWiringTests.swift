@@ -250,3 +250,45 @@ struct CoreWiringTests {
         #expect(rig.server.requestCount(for: "/e1.mp3") == 1)
     }
 }
+
+// MARK: - Playback is created on demand
+
+/// Saves an episode (with an unusable, empty enclosure URL, so a play attempt fails
+/// before any audio is touched) as the active play context.
+private func seedPlayContext(_ db: DatabaseManager) async throws {
+    let sub = Subscription(
+        id: "sub", feedUrl: "https://example.com/sub.rss", title: "Feed", artworkUrl: nil,
+        description: nil, lastRefreshed: longAgo, createdAt: longAgo, etag: nil, lastModified: nil,
+        lastRefreshError: nil, retryAfterUntil: nil,
+    )
+    try await db.execute(.upsertSubscription(sub))
+    let episode = Episode(
+        id: "ep", feedGuid: "ep-guid", subscriptionId: "sub", title: "Episode", description: nil,
+        pubDate: 1, durationSecs: 600, enclosureUrl: "", artworkUrl: nil,
+        playbackStatus: .inProgress, playbackPositionSecs: 30, downloadStatus: .notDownloaded,
+        isFlagged: false, fileSizeBytes: nil, localPath: nil,
+    )
+    try await db.execute(.upsertEpisode(episode))
+    try await db.execute(.savePlayContext(episodeId: "ep", source: .subscription(id: "sub")))
+}
+
+@Test @MainActor func restoringTheSavedEpisodeDoesNotCreateTheAudioEngine() async throws {
+    let rig = try await makeRig { db, _ in try await seedPlayContext(db) }
+
+    // The mini-player comes back (this is also what a background-refresh launch does)…
+    try await waitUntil { rig.core.view.player != nil }
+
+    // …without an audio engine or lock-screen integration behind it.
+    #expect(rig.core.view.player?.isPlaying == false)
+    #expect(!rig.core.hasPlaybackEngine)
+}
+
+@Test @MainActor func theFirstPlayRequestCreatesTheAudioEngine() async throws {
+    let rig = try await makeRig { db, _ in try await seedPlayContext(db) }
+    try await waitUntil { rig.core.view.player != nil }
+    #expect(!rig.core.hasPlaybackEngine)
+
+    rig.core.update(.togglePlay)
+
+    #expect(rig.core.hasPlaybackEngine)
+}

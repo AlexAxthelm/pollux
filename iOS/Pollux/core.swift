@@ -9,8 +9,20 @@ class Core: ObservableObject {
     private var core: CoreFfi
     private let db: DatabaseManager
     private let downloads: DownloadManager
+    /// The audio engine and the lock-screen integration. Created on the first playback
+    /// request, not at launch: the core is also created when iOS wakes the app in the
+    /// background to refresh feeds, and that launch must stay metadata-only (it restores
+    /// the saved episode for the mini-player, but touches neither audio nor the lock
+    /// screen). See `startPlaybackIfNeeded`.
     private var playback: PlaybackManager?
     private var nowPlaying: NowPlayingController?
+
+    /// Whether the audio engine has been created, i.e. whether playback has ever been
+    /// requested in this launch.
+    var hasPlaybackEngine: Bool {
+        playback != nil
+    }
+
     /// The session feed fetches go through. Injectable so tests can stub the network.
     private let feedSession: URLSession
     /// Asks the system for a future background-refresh wake-up. Injectable so tests can
@@ -62,14 +74,6 @@ class Core: ObservableObject {
             fatalError("Failed to deserialize initial ViewModel from core")
         }
         self.view = view
-        if let root = DownloadManager.defaultStorageRoot() {
-            playback = PlaybackManager(storageRoot: root) { [weak self] event in
-                self?.update(event)
-            }
-        }
-        nowPlaying = NowPlayingController { [weak self] event in
-            self?.update(event)
-        }
         Task { @MainActor [weak self] in
             for await (operation, requestId) in storageStream {
                 guard let self else { return }
@@ -178,12 +182,32 @@ class Core: ObservableObject {
         case let .player(operation):
             // The engine acts synchronously; resolve on the next turn so the result
             // doesn't re-enter the core while it is still handing us this batch.
+            startPlaybackIfNeeded()
             let result = playback?.perform(operation) ?? .error("Audio engine unavailable")
             let requestId = request.id
             Task { @MainActor [weak self] in
                 self?.resolveAndDispatch(requestId: requestId, result: result)
             }
         }
+    }
+
+    /// Creates the audio engine and the lock-screen integration the first time playback
+    /// is requested. Until then a launch, including a background-refresh one, has neither:
+    /// nothing is registered with the system's remote-command center, and no Now Playing
+    /// card is published (so a restored, paused episode isn't on the lock screen until
+    /// it is played).
+    private func startPlaybackIfNeeded() {
+        guard playback == nil else { return }
+        if let root = DownloadManager.defaultStorageRoot() {
+            playback = PlaybackManager(storageRoot: root) { [weak self] event in
+                self?.update(event)
+            }
+        }
+        nowPlaying = NowPlayingController { [weak self] event in
+            self?.update(event)
+        }
+        // Publish the current state now rather than at the next render.
+        nowPlaying?.update(view.player)
     }
 
     /// Runs a download-capability operation on the DownloadManager actor (so the UI
