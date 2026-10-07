@@ -830,9 +830,13 @@ fn sort_episodes(episodes: &mut [EpisodeSummary], order: EpisodeSortOrder) {
 /// or re-download a file we already have. Shared by the explicit download action and
 /// by playback, which downloads what it streams.
 pub(crate) fn enqueue_download(model: &mut Model, episode_id: &str) -> Command<Effect, Event> {
+    // The episode on the player counts even when its feed isn't on screen (after a cold
+    // start the list is empty until a feed is opened): playback must be able to download
+    // what it streams regardless of navigation.
     let found = model
         .episodes
         .iter()
+        .chain(model.active_playback.as_ref().map(|a| &a.episode))
         .find(|e| e.id == episode_id)
         .map(|e| (e.download_status.clone(), e.enclosure_url.clone()));
     match found {
@@ -885,9 +889,23 @@ fn set_download_state(
     if !matches!(status, DownloadStatus::Failed) {
         model.download_errors.remove(episode_id);
     }
-    if let Some(episode) = model.episodes.iter_mut().find(|e| e.id == episode_id) {
-        episode.download_status = status;
-        episode.local_path = local_path;
+    // The episode on the player keeps its own copy, which must follow too: it is what a
+    // restored player (with no feed open) decides on, and what stops a repeated request
+    // from enqueueing the same download twice.
+    let active = model
+        .active_playback
+        .as_mut()
+        .map(|a| &mut a.episode)
+        .filter(|e| e.id == episode_id);
+    for episode in model
+        .episodes
+        .iter_mut()
+        .find(|e| e.id == episode_id)
+        .into_iter()
+        .chain(active)
+    {
+        episode.download_status = status.clone();
+        episode.local_path = local_path.clone();
         episode.file_size_bytes = size_bytes;
     }
 }

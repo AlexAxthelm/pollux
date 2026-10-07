@@ -43,6 +43,8 @@ use crate::model::{ActivePlayback, Model};
 use crate::view_model::PlayerView;
 
 #[cfg(test)]
+mod download_recovery_tests;
+#[cfg(test)]
 mod played_tests;
 #[cfg(test)]
 mod tests;
@@ -294,7 +296,15 @@ pub(crate) fn play(model: &mut Model) -> Cmd {
         player_op(session, PlayerOperation::Seek { secs: rewound })
             .and(player_op(session, PlayerOperation::Play))
     };
-    cmd.and(render())
+    // Still streaming with no file coming (a restored episode whose download was never
+    // started, or failed): playing is the moment to try again, as starting an episode
+    // does. A download already queued or underway is left alone.
+    let retry =
+        matches!(active.media, MediaSource::Stream { .. }).then(|| active.episode.id.clone());
+    match retry {
+        Some(id) => cmd.and(enqueue_download(model, &id)).and(render()),
+        None => cmd.and(render()),
+    }
 }
 
 /// An explicit pause (the pause button, the lock screen, headphone controls). Pausing
