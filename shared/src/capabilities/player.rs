@@ -21,7 +21,7 @@ pub enum MediaSource {
 #[derive(Facet, Serialize, Deserialize, Clone, Debug)]
 #[repr(C)]
 pub enum PlayerOperation {
-    /// Replace the current item with `source`, positioned at `start_secs`. Starts
+    /// Replace the current item with `media`, positioned at `start_secs`. Starts
     /// playing immediately when `autoplay` is set. Also used to swap a streaming
     /// episode onto its freshly downloaded local copy mid-play.
     Load {
