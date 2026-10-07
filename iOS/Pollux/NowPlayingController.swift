@@ -5,8 +5,9 @@ import UIKit
 
 /// Lock-screen, Control Center, headphone and car integration. Remote commands are
 /// forwarded to the core as the same events the in-app controls send, so the lock
-/// screen and the player can never disagree; the Now Playing card is rebuilt from the
-/// core's `PlayerView` on every render.
+/// screen and the player can never disagree; the Now Playing card is built from the
+/// core's `PlayerView`, and rewritten only when it has gone out of date (see
+/// `NowPlayingPolicy`), since every rewrite resets the system's clock.
 @MainActor
 final class NowPlayingController {
     private let send: (Event) -> Void

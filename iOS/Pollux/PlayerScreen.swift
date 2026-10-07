@@ -2,8 +2,8 @@ import App
 import AVKit
 import SwiftUI
 
-/// The full player: a paged content area (artwork, show-notes placeholder), scrubber,
-/// transport controls, and the source/option rows. Presented as a full-screen cover
+/// The full player: a paged content area (artwork, and the episode's show notes when it
+/// has any), scrubber, transport controls, and the source/option rows. Presented as a full-screen cover
 /// from the root; "Hide" dismisses it back to the mini-player.
 struct PlayerScreen: View {
     @Environment(\.themeColors) private var themeColors
