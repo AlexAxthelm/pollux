@@ -1,4 +1,5 @@
 import App
+import AVFoundation
 import Foundation
 import Testing
 
@@ -54,11 +55,22 @@ private final class AudioSessionProbe: @unchecked Sendable {
     }
 }
 
+/// Collects what the engine reports to the core.
+@MainActor
+private final class EventLog {
+    private(set) var events: [Event] = []
+
+    func record(_ event: Event) {
+        events.append(event)
+    }
+}
+
 @MainActor
 private struct Rig {
     let manager: PlaybackManager
     let root: URL
     let audio: AudioSessionProbe
+    let log: EventLog
 
     /// A relative path (as the core stores them) to a real, playable file under the root.
     func installAudio(named name: String = "silence.wav") throws -> String {
@@ -74,8 +86,47 @@ private func makeRig() -> Rig {
     let root = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
     let audio = AudioSessionProbe()
-    let manager = PlaybackManager(storageRoot: root, activateAudioSession: audio.claim) { _ in }
-    return Rig(manager: manager, root: root, audio: audio)
+    let log = EventLog()
+    let manager = PlaybackManager(storageRoot: root, activateAudioSession: audio.claim) { log.record($0) }
+    return Rig(manager: manager, root: root, audio: audio, log: log)
+}
+
+/// Posts what the system posts when the audio session is interrupted or its route changes.
+@MainActor
+private func postInterruption(
+    _ type: AVAudioSession.InterruptionType, options: AVAudioSession.InterruptionOptions = [],
+) {
+    NotificationCenter.default.post(
+        name: AVAudioSession.interruptionNotification,
+        object: AVAudioSession.sharedInstance(),
+        userInfo: [
+            AVAudioSessionInterruptionTypeKey: type.rawValue,
+            AVAudioSessionInterruptionOptionKey: options.rawValue,
+        ],
+    )
+}
+
+@MainActor
+private func postRouteChange(_ reason: AVAudioSession.RouteChangeReason) {
+    NotificationCenter.default.post(
+        name: AVAudioSession.routeChangeNotification,
+        object: AVAudioSession.sharedInstance(),
+        userInfo: [AVAudioSessionRouteChangeReasonKey: reason.rawValue],
+    )
+}
+
+/// Polls (on the main actor) until `condition` holds, failing the test if it doesn't within
+/// `timeout` seconds. Engine news arrives asynchronously.
+@MainActor
+private func waitUntil(timeout: Double = 5, _ condition: @MainActor () -> Bool) async throws {
+    let deadline = Date().addingTimeInterval(timeout)
+    while !condition() {
+        guard Date() < deadline else {
+            Issue.record("timed out waiting for the engine")
+            return
+        }
+        try await Task.sleep(for: .milliseconds(20))
+    }
 }
 
 @Suite @MainActor struct PlaybackManagerTests {
@@ -236,5 +287,85 @@ private func makeRig() -> Rig {
         #expect(result == .ok)
         #expect(rig.manager.hasLoadedItem)
         #expect(rig.manager.currentSession == 2)
+    }
+
+    // MARK: - System notifications → core events
+
+    @Test func anInterruptionBeginningIsReportedAsResumable() {
+        let rig = makeRig()
+        postInterruption(.began)
+        #expect(rig.log.events == [.interrupted(resumable: true)])
+    }
+
+    @Test func anInterruptionEndingReportsWhetherTheSystemAllowsResuming() {
+        let rig = makeRig()
+        postInterruption(.ended, options: [.shouldResume])
+        postInterruption(.ended)
+        #expect(rig.log.events == [
+            .interruptionEnded(shouldResume: true),
+            .interruptionEnded(shouldResume: false),
+        ])
+    }
+
+    @Test func unpluggingHeadphonesIsAnInterruptionThatNeverResumes() {
+        let rig = makeRig()
+        postRouteChange(.oldDeviceUnavailable)
+        #expect(rig.log.events == [.interrupted(resumable: false)])
+    }
+
+    @Test func otherRouteChangesAreNotReported() {
+        let rig = makeRig()
+        postRouteChange(.newDeviceAvailable)
+        postRouteChange(.categoryChange)
+        postRouteChange(.override)
+        #expect(rig.log.events.isEmpty)
+    }
+
+    @Test func notificationsFromOtherObjectsAreIgnored() {
+        let rig = makeRig()
+        NotificationCenter.default.post(
+            name: AVAudioSession.interruptionNotification,
+            object: NSObject(),
+            userInfo: [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.began.rawValue],
+        )
+        #expect(rig.log.events.isEmpty)
+    }
+
+    // MARK: - Session tagging
+
+    @Test func engineNewsCarriesTheSessionOfTheLoadThatProducedIt() async throws {
+        let rig = makeRig()
+        let path = try rig.installAudio()
+
+        _ = rig.manager.perform(
+            .load(session: 7, media: .local(localPath: path), startSecs: 0, autoplay: false),
+        )
+        try await waitUntil { rig.log.events.contains(.playerDuration(session: 7, durationSecs: 1)) }
+
+        // A newer load replaces it; its news must carry the new session.
+        _ = rig.manager.perform(
+            .load(session: 8, media: .local(localPath: path), startSecs: 0, autoplay: false),
+        )
+        try await waitUntil { rig.log.events.contains(.playerDuration(session: 8, durationSecs: 1)) }
+    }
+
+    @Test func aLoadReplacedBeforeItIsReadyReportsNothingForTheOldSession() async throws {
+        let rig = makeRig()
+        let path = try rig.installAudio()
+
+        // Replaced in the same turn, before the first item can report anything.
+        _ = rig.manager.perform(
+            .load(session: 1, media: .local(localPath: path), startSecs: 0, autoplay: false),
+        )
+        _ = rig.manager.perform(
+            .load(session: 2, media: .local(localPath: path), startSecs: 0, autoplay: false),
+        )
+        try await waitUntil { rig.log.events.contains(.playerDuration(session: 2, durationSecs: 1)) }
+
+        let stale = rig.log.events.filter {
+            if case let .playerDuration(session, _) = $0 { return session == 1 }
+            return false
+        }
+        #expect(stale.isEmpty)
     }
 }
