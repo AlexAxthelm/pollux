@@ -12,21 +12,42 @@ final class NowPlayingController {
     private let send: (Event) -> Void
     private var artworkURL: String?
     private var artwork: MPMediaItemArtwork?
+    /// What the card currently shows, so an unchanged state isn't rewritten (see
+    /// `NowPlayingPolicy`). Nil while the card is empty.
+    private var published: NowPlayingPublication?
+    /// The latest state seen, published or not, for republishing when artwork arrives.
+    private var latest: PlayerView?
 
     init(send: @escaping (Event) -> Void) {
         self.send = send
         registerCommands()
     }
 
-    func update(_ player: PlayerView?) {
-        let center = MPNowPlayingInfoCenter.default()
+    /// Called on every render; writes the card only when `NowPlayingPolicy` says it is out
+    /// of date. `now` is injectable for tests.
+    func update(_ player: PlayerView?, now: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         guard let player else {
-            center.nowPlayingInfo = nil
-            center.playbackState = .stopped
+            clear()
             return
         }
+        latest = player
         loadArtworkIfNeeded(player.artworkUrl)
+        guard NowPlayingPolicy.needsPublishing(player, since: published, now: now) else { return }
+        publish(player, now: now)
+    }
 
+    private func clear() {
+        latest = nil
+        // Renders with nothing playing are frequent; only touch the card if it has content.
+        guard published != nil else { return }
+        published = nil
+        let center = MPNowPlayingInfoCenter.default()
+        center.nowPlayingInfo = nil
+        center.playbackState = .stopped
+    }
+
+    private func publish(_ player: PlayerView, now: TimeInterval) {
+        let center = MPNowPlayingInfoCenter.default()
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: player.episodeTitle,
             MPMediaItemPropertyArtist: player.feedTitle,
@@ -43,7 +64,18 @@ final class NowPlayingController {
         }
         center.nowPlayingInfo = info
         center.playbackState = player.isPlaying ? .playing : .paused
-        updateSkipIntervals(forward: player.skipForwardSecs, back: player.skipBackSecs)
+
+        let snapshot = NowPlayingSnapshot(player)
+        let skipChanged = published.map {
+            $0.snapshot.skipForwardSecs != snapshot.skipForwardSecs
+                || $0.snapshot.skipBackSecs != snapshot.skipBackSecs
+        } ?? true
+        if skipChanged {
+            updateSkipIntervals(forward: player.skipForwardSecs, back: player.skipBackSecs)
+        }
+        published = NowPlayingPublication(
+            snapshot: snapshot, elapsed: Double(player.positionSecs), publishedAt: now,
+        )
     }
 
     // MARK: - Remote commands
@@ -103,10 +135,12 @@ final class NowPlayingController {
     private func applyArtwork(_ image: UIImage, for urlString: String) {
         // The episode may have changed while the image downloaded.
         guard artworkURL == urlString else { return }
-        let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-        self.artwork = artwork
-        var info = MPNowPlayingInfoCenter.default().nowPlayingInfo
-        info?[MPMediaItemPropertyArtwork] = artwork
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+        // Republish from the latest state rather than patching the card in place: the card
+        // holds an elapsed time from when it was last written, which may be many seconds
+        // old now, and rewriting it would set the system's clock back to that.
+        if let latest {
+            publish(latest, now: ProcessInfo.processInfo.systemUptime)
+        }
     }
 }
