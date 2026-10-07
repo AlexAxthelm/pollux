@@ -168,3 +168,44 @@ engine.
   in for them, per podcast convention).
 - **Errors.** A playback failure leaves playback paused with a transient banner
   in the player and mini-player; pressing play retries.
+
+## Known limitations and follow-ups
+
+### Audible stream-to-local swap
+
+When a download finishes while its episode is streaming, playback moves onto the
+local file with a `Load` at the playhead. That is audible: the load itself leaves a
+brief gap, and because the core's position is the last whole-second tick, up to
+about a second of audio repeats. (User story: `user_stories/player/playback.md`,
+"carry on seamlessly when it finishes downloading".)
+
+Options, cheapest first:
+
+1. **Continue from the engine's exact time.** A `Swap` operation meaning "carry on
+   from wherever you are", instead of a `Load` at the last tick. This removes the
+   repeated second. Prepare (preroll) the local item before replacing the current
+   one, so the load gap shrinks too.
+2. **Cue and swap at a point just ahead.** On download completion the core sends a
+   `Cue` for the local file about 2 to 3 seconds ahead. The shell prepares the local
+   item, seeked to that point, while the stream keeps playing, then hands over there
+   (an `AVQueuePlayer`, ending the stream item with `forwardPlaybackEndTime`). The
+   lead is only preparation time: the hand-over is meant to be seamless, so it needs
+   no silence detection and no chapters. If the item isn't ready in time, fall back
+   to an immediate swap.
+3. **Swap at a natural break.** A pause or a seek is already a discontinuity, so if
+   either arrives while a cue is pending the shell swaps then, which is inaudible.
+
+Notes for whoever builds this:
+
+- The session scheme already supports it: the core adopts the new session when it
+  cues, and the stream item's late end-of-file event carries the old session and is
+  ignored.
+- Option 2 means converting the engine from `AVPlayer` to `AVQueuePlayer`, which
+  touches seeking, ticks and end-of-file handling. Budget for that.
+- Whether it is audibly gapless can only be judged by listening on a device (MP3
+  decoder priming can leave a small gap even when the hand-over is gapless on paper).
+  The simulator can confirm the playhead continues through the swap, not how it sounds.
+- Hosts that insert ads dynamically can serve different audio per request, so the
+  download may not match what was streamed. At a given timestamp the swap would then
+  land in different content. No swap strategy fixes that; it applies to today's swap
+  too. Worth knowing before judging a swap by ear on such a feed.
