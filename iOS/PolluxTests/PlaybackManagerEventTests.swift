@@ -210,7 +210,7 @@ private func failureNotification(for item: AVPlayerItem?, message: String?) {
         endNotification(for: item)
         failureNotification(for: item, message: "late")
 
-        #expect(rig.log.events.isEmpty || !rig.log.events.contains(.playerEnded(session: 5)))
+        #expect(!rig.log.events.contains(.playerEnded(session: 5)))
         #expect(!rig.log.events.contains(.playerFailed(session: 5, message: "late")))
     }
 

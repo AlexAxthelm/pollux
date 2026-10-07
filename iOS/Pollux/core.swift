@@ -209,12 +209,15 @@ class Core: ObservableObject {
     /// card is published (so a restored, paused episode isn't on the lock screen until
     /// it is played).
     private func startPlaybackIfNeeded() {
-        guard playback == nil else { return }
-        if let root = StorageRoot.applicationSupport() {
+        // Each is created once, on its own: if the engine can't be (no storage root), the
+        // controller must not be built again on every later request, which would register
+        // another set of handlers on the shared remote command center.
+        if playback == nil, let root = StorageRoot.applicationSupport() {
             playback = PlaybackManager(storageRoot: root) { [weak self] event in
                 self?.update(event)
             }
         }
+        guard nowPlaying == nil else { return }
         nowPlaying = NowPlayingController { [weak self] event in
             self?.update(event)
         }

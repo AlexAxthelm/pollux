@@ -79,13 +79,23 @@ Fixed:
 
 From the cross-check:
 - **Playback downloads its episode without its feed open.** `enqueue_download` also finds the active episode; `play()` starts or retries the download when the episode is streaming with no file coming. This fixes the missing-file fallback after a cold start.
-- **A failed play-context save is retried** at each checkpoint until storage confirms it (`ActivePlayback::context_saved`, `PlayContextSaved`).
+- **A failed play-context save is retried** at each checkpoint until storage confirms it (`ActivePlayback::context_saved`, `PlayContextSaved`), at most `CONTEXT_SAVE_ATTEMPTS` (5) times in all.
+- **A pause or headphone removal during an interruption disarms the auto-resume** (the sibling of item 1: the early returns for already-paused playback used to leave it armed).
+- **A refresh updates the active episode's details and stream URL** from the reloaded list (`refresh_active_from_list`), so retrying a failed stream loads the renewed URL. Only when that episode's feed is the open one.
+
+From a second full review:
+- **A bad download no longer loops.** A file the engine can't use is replaced by a fresh download once; if the fresh file is unusable too the download is marked failed and playback streams (`ActivePlayback::local_unusable`, `fail_download`), and pressing play doesn't fetch it again.
+- **Playback doesn't revive downloads the listener turned away.** Cancelling or deleting a download is remembered for the session (`declined_downloads`); starting, resuming, and the lost-file fallback skip those. Only the Download action lifts it.
+- **A bad position can't crash the app.** `PlayerFormatting.wholeSeconds` refuses NaN, infinite and out-of-range values; the lock-screen scrub, the engine's ticks and its duration use it.
+- **Two stale comments fixed**, and a removed item's end and failure observers are now unregistered.
 
 Partly done:
 - **Per-tick render cost (5).** The player state is split from the episode list so ticks do not re-evaluate the list. In the simulator (debug core, 375 episodes) app CPU while playing with the list open fell from 5.4% to 4.1%, against a 1.0% floor. Still to do: measure on a device with a release build. If it is not fine, render less per tick. See "Known limitations and follow-ups" in `player.md`.
-- **Shell tests (10).** The interruption and route-change mapping and session tagging are tested. Not covered: tick suppression while a seek is pending, and the natural-end and failure notifications (they need the engine's private item or real playback).
+- **Shell tests (10).** The interruption and route-change mapping, session tagging, the tick gate, and the end and failure notifications are tested (small seams on `PlaybackManager`). What can't be observed in tests is the timing of a real seek: the test host's AVPlayer completes seeks at once, so the pending-seek window is checked by setting the count and by checking it always returns to zero.
 
 Still open:
+- A refresh reaches the active episode only when its feed is the open one; a mini-player retry with another feed open uses the old URL until relaunch.
+- Declined downloads and the bad-file memory last for the session only; after a relaunch the cycles are bounded but can run a couple of times.
 - Lock-screen controls render invisibly (item 5 above); needs a device.
 - The stream-to-local swap gap (item 6 above).
 - Unverified without a device: background audio, the AirPlay picker, interruptions, the error banner, lock-screen rendering.
