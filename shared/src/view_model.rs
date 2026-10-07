@@ -1,16 +1,49 @@
 use facet::Facet;
 use serde::{Deserialize, Serialize};
 
-use crate::domain::{DownloadStatus, EpisodeSortOrder, PlaybackStatus};
+use crate::domain::{DownloadStatus, EpisodeSortOrder, EpisodeSource, PlaybackStatus};
 use crate::theme::ThemeView;
 
 #[derive(Facet, Serialize, Deserialize, Clone, Default)]
 pub struct ViewModel {
     pub library: LibraryView,
     pub subscription_detail: SubscriptionDetailView,
+    /// The active player, if any (see `PlayerView`).
+    pub player: Option<PlayerView>,
     /// Active theme, resolved by the shell into platform colors. Present on every
     /// render so the shell can apply it globally without a separate query.
     pub theme: ThemeView,
+}
+
+/// The active episode's transport state, present whenever the mini-player should show
+/// (playing or paused) and absent when nothing is active. The shell derives the
+/// full-player and lock-screen presentation from this alone.
+#[derive(Facet, Serialize, Deserialize, Clone)]
+pub struct PlayerView {
+    pub episode_id: String,
+    pub episode_title: String,
+    /// The episode's own feed (the Now Playing "artist"), distinct from `source`.
+    pub feed_title: String,
+    /// What playback was started from; the "From:" row names `source_title` and
+    /// navigates back to `source`.
+    pub source: EpisodeSource,
+    pub source_title: String,
+    /// Episode art, falling back to the feed's; the shell supplies the placeholder.
+    pub artwork_url: Option<String>,
+    pub position_secs: u32,
+    pub duration_secs: Option<u32>,
+    pub is_playing: bool,
+    /// True while playing from the network rather than a downloaded file.
+    pub is_streaming: bool,
+    pub skip_forward_secs: u32,
+    pub skip_back_secs: u32,
+    /// The episode's show notes (raw HTML from the feed) for the player's show-notes
+    /// page, or `None` when it has none (the page is then not shown). Plain-text
+    /// `description_text` is the fallback shown until the shell has rendered the HTML.
+    pub description: Option<String>,
+    pub description_text: Option<String>,
+    /// Why playback failed, shown as a transient banner; playback stays paused.
+    pub error: Option<String>,
 }
 
 #[derive(Facet, Serialize, Deserialize, Clone, Default)]

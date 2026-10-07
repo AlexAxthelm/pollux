@@ -171,6 +171,10 @@ user-facing copy until this is resolved.
 Relationships: references a Playlist or Subscription (via EpisodeSource), and
 an Episode.
 
+Stored in the single-row `play_context` table as the episode id plus the source as
+a kind and an id (`Subscription` today). Position is not stored here: it lives on
+the episode row, so the two can never disagree.
+
 ---
 
 ## Deferred Entities
@@ -208,6 +212,14 @@ on both without caring which kind they have.
 This is a Rust trait or enum, not a database entity. The name is a placeholder —
 the final name will be settled during implementation. Do not use in
 user-facing copy.
+
+Implemented as the `EpisodeSource` enum (`shared/src/domain/episode_source.rs`),
+with one variant today, `Subscription { id }`, since a subscription is an implicit
+single-feed playlist. A `Playlist { id }` variant joins when playlists exist. The
+player already carries an `EpisodeSource` (not a bare subscription id) through its
+state, the saved play context, and the "From:" row, so adding the variant needs no
+schema or event change; only the places that resolve a source (its title, its
+episode order) gain a case. The name is kept for now.
 
 See also: `GLOSSARY.md` — EpisodeSource.
 

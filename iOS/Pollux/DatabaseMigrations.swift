@@ -68,6 +68,18 @@ extension DatabaseManager {
                 on: "episodes",
                 columns: ["subscription_id"],
             )
+            // The episode the player was on and where it was started from, so the
+            // mini-player can be restored at launch. Single row (id pinned to 1); position
+            // lives on the episode itself. Deleting the episode (via its subscription)
+            // drops the row with it. The source is stored as a kind plus an id, so a
+            // playlist is a new kind rather than a new column.
+            try db.create(table: "play_context") { t in
+                t.column("id", .integer).primaryKey().check(sql: "id = 1")
+                t.column("episode_id", .text).notNull()
+                    .references("episodes", column: "id", onDelete: .cascade)
+                t.column("source_kind", .text).notNull()
+                t.column("source_id", .text).notNull()
+            }
         }
     }
 }

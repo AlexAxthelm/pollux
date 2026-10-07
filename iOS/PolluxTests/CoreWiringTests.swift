@@ -250,3 +250,97 @@ struct CoreWiringTests {
         #expect(rig.server.requestCount(for: "/e1.mp3") == 1)
     }
 }
+
+// MARK: - Playback is created on demand
+
+/// Saves an episode (with an unusable, empty enclosure URL, so a play attempt fails
+/// before any audio is touched) as the active play context.
+private func seedPlayContext(_ db: DatabaseManager) async throws {
+    let sub = Subscription(
+        id: "sub", feedUrl: "https://example.com/sub.rss", title: "Feed", artworkUrl: nil,
+        description: nil, lastRefreshed: longAgo, createdAt: longAgo, etag: nil, lastModified: nil,
+        lastRefreshError: nil, retryAfterUntil: nil,
+    )
+    try await db.execute(.upsertSubscription(sub))
+    let episode = Episode(
+        id: "ep", feedGuid: "ep-guid", subscriptionId: "sub", title: "Episode", description: nil,
+        pubDate: 1, durationSecs: 600, enclosureUrl: "", artworkUrl: nil,
+        playbackStatus: .inProgress, playbackPositionSecs: 30, downloadStatus: .notDownloaded,
+        isFlagged: false, fileSizeBytes: nil, localPath: nil,
+    )
+    try await db.execute(.upsertEpisode(episode))
+    try await db.execute(.savePlayContext(episodeId: "ep", source: .subscription(id: "sub")))
+}
+
+@Test @MainActor func restoringTheSavedEpisodeDoesNotCreateTheAudioEngine() async throws {
+    let rig = try await makeRig { db, _ in try await seedPlayContext(db) }
+
+    // The mini-player comes back (this is also what a background-refresh launch does)…
+    try await waitUntil { rig.core.playerState.player != nil }
+
+    // …without an audio engine or lock-screen integration behind it.
+    #expect(rig.core.playerState.player?.isPlaying == false)
+    #expect(!rig.core.hasPlaybackEngine)
+}
+
+@Test @MainActor func theFirstPlayRequestCreatesTheAudioEngine() async throws {
+    let rig = try await makeRig { db, _ in try await seedPlayContext(db) }
+    try await waitUntil { rig.core.playerState.player != nil }
+    #expect(!rig.core.hasPlaybackEngine)
+
+    rig.core.update(.togglePlay)
+
+    #expect(rig.core.hasPlaybackEngine)
+}
+
+// MARK: - The player changes without disturbing the list
+
+@Test @MainActor func aPositionTickRepublishesThePlayerButNotTheListView() async throws {
+    let rig = try await makeRig { db, _ in try await seedPlayContext(db) }
+    try await waitUntil { rig.core.playerState.player != nil }
+    let viewPublishes = Publishes(rig.core.$view)
+    let playerPublishes = Publishes(rig.core.playerState.$player)
+
+    // A restored episode is session 0. Playing moves the position once a second.
+    for second in 31 ... 40 {
+        rig.core.update(.playerTick(session: 0, positionSecs: UInt32(second)))
+    }
+
+    #expect(rig.core.playerState.player?.positionSecs == 40)
+    #expect(playerPublishes.count == 10)
+    // What the episode list and library read from did not change, so it was not republished:
+    // SwiftUI would otherwise re-evaluate the whole list on every tick.
+    #expect(viewPublishes.count == 0)
+}
+
+@Test @MainActor func aRepeatedIdenticalPlayerIsNotRepublished() async throws {
+    let rig = try await makeRig { db, _ in try await seedPlayContext(db) }
+    try await waitUntil { rig.core.playerState.player != nil }
+    rig.core.update(.playerTick(session: 0, positionSecs: 50))
+    let playerPublishes = Publishes(rig.core.playerState.$player)
+
+    rig.core.update(.playerTick(session: 0, positionSecs: 50))
+    rig.core.update(.playerTick(session: 0, positionSecs: 50))
+
+    #expect(playerPublishes.count == 0)
+}
+
+@Test @MainActor func aRealChangeToTheListStillRepublishesTheView() async throws {
+    let rig = try await makeRig { db, _ in try await seedPlayContext(db) }
+    try await waitUntil { rig.core.playerState.player != nil }
+    let viewPublishes = Publishes(rig.core.$view)
+
+    // Not a position tick: the library/list data itself changes.
+    rig.core.update(.setTheme(id: .nord, mode: .dark))
+
+    #expect(viewPublishes.count == 1)
+    #expect(rig.core.view.theme.id == .nord)
+}
+
+@Test @MainActor func theViewModelKeptForTheListNeverCarriesAPlayer() async throws {
+    let rig = try await makeRig { db, _ in try await seedPlayContext(db) }
+    try await waitUntil { rig.core.playerState.player != nil }
+
+    // The player lives only in `playerState`; nothing should read a stale copy from `view`.
+    #expect(rig.core.view.player == nil)
+}
