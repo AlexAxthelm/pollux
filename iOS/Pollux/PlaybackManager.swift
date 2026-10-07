@@ -23,11 +23,27 @@ final class PlaybackManager {
     private var statusObservation: NSKeyValueObservation?
     private var notificationTokens: [NSObjectProtocol] = []
 
-    init(storageRoot: URL, send: @escaping (Event) -> Void) {
+    /// Claims the audio session for playback. Injectable so tests can see when it is
+    /// claimed: doing so takes audio focus from other apps, so it must only happen when
+    /// audio is about to play.
+    private let activateAudioSession: () throws -> Void
+
+    init(
+        storageRoot: URL,
+        activateAudioSession: @escaping () throws -> Void = PlaybackManager.activatePlaybackSession,
+        send: @escaping (Event) -> Void,
+    ) {
         self.storageRoot = storageRoot
+        self.activateAudioSession = activateAudioSession
         self.send = send
         observeTime()
         observeSession()
+    }
+
+    nonisolated static func activatePlaybackSession() throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playback, mode: .spokenAudio)
+        try session.setActive(true)
     }
 
     /// Whether the engine has an item loaded. Exposed so tests can tell a failed load that
@@ -44,6 +60,11 @@ final class PlaybackManager {
         case let .load(session, media, startSecs, autoplay):
             return load(session: session, media: media, startSecs: startSecs, autoplay: autoplay)
         case .play:
+            // The session may not be active: a paused load (a source swap, a scrub of a
+            // restored episode) deliberately doesn't claim it.
+            if let failure = claimAudioSession() {
+                return failure
+            }
             player.play()
         case .pause:
             player.pause()
@@ -86,12 +107,10 @@ final class PlaybackManager {
             }
         }
 
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .spokenAudio)
-            try session.setActive(true)
-        } catch {
-            return .error("Couldn't start audio: \(error.localizedDescription)")
+        // A paused load must not take audio focus: the listener may have switched to another
+        // app's music, and a source swap finishing in the background would cut it off.
+        if autoplay, let failure = claimAudioSession() {
+            return failure
         }
 
         currentSession = session
@@ -104,6 +123,16 @@ final class PlaybackManager {
             player.play()
         }
         return .ok
+    }
+
+    /// Claims the audio session, or returns the error to report.
+    private func claimAudioSession() -> PlayerResult? {
+        do {
+            try activateAudioSession()
+            return nil
+        } catch {
+            return .error("Couldn't start audio: \(error.localizedDescription)")
+        }
     }
 
     private func seek(to secs: UInt32) {

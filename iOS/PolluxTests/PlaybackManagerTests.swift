@@ -36,10 +36,29 @@ private func silentWAV() -> Data {
     return wav
 }
 
+/// Stands in for claiming the audio session, so tests can see when it is claimed (which
+/// takes audio focus from other apps) and make it fail.
+private final class AudioSessionProbe: @unchecked Sendable {
+    struct Refused: Error, LocalizedError {
+        var errorDescription: String? {
+            "audio is busy"
+        }
+    }
+
+    var claims = 0
+    var refuse = false
+
+    func claim() throws {
+        claims += 1
+        if refuse { throw Refused() }
+    }
+}
+
 @MainActor
 private struct Rig {
     let manager: PlaybackManager
     let root: URL
+    let audio: AudioSessionProbe
 
     /// A relative path (as the core stores them) to a real, playable file under the root.
     func installAudio(named name: String = "silence.wav") throws -> String {
@@ -54,7 +73,9 @@ private struct Rig {
 private func makeRig() -> Rig {
     let root = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
-    return Rig(manager: PlaybackManager(storageRoot: root) { _ in }, root: root)
+    let audio = AudioSessionProbe()
+    let manager = PlaybackManager(storageRoot: root, activateAudioSession: audio.claim) { _ in }
+    return Rig(manager: manager, root: root, audio: audio)
 }
 
 @Suite @MainActor struct PlaybackManagerTests {
@@ -115,6 +136,89 @@ private func makeRig() -> Rig {
 
         #expect(result == .error("The downloaded file is missing"))
         #expect(!rig.manager.hasLoadedItem)
+    }
+
+    // MARK: - Audio focus
+
+    @Test func aPausedLoadDoesNotClaimTheAudioSession() throws {
+        // A source swap that finishes while the listener has paused (and moved on to another
+        // app's music) must not cut that audio off.
+        let rig = makeRig()
+        let path = try rig.installAudio()
+
+        let result = rig.manager.perform(
+            .load(session: 1, media: .local(localPath: path), startSecs: 0, autoplay: false),
+        )
+
+        #expect(result == .ok)
+        #expect(rig.audio.claims == 0)
+    }
+
+    @Test func aLoadThatWillPlayClaimsTheAudioSession() throws {
+        let rig = makeRig()
+        let path = try rig.installAudio()
+
+        let result = rig.manager.perform(
+            .load(session: 1, media: .local(localPath: path), startSecs: 0, autoplay: true),
+        )
+
+        #expect(result == .ok)
+        #expect(rig.audio.claims == 1)
+    }
+
+    @Test func playingAfterAPausedLoadClaimsTheAudioSessionThen() throws {
+        let rig = makeRig()
+        let path = try rig.installAudio()
+        _ = rig.manager.perform(
+            .load(session: 1, media: .local(localPath: path), startSecs: 0, autoplay: false),
+        )
+        #expect(rig.audio.claims == 0)
+
+        let result = rig.manager.perform(.play)
+
+        #expect(result == .ok)
+        #expect(rig.audio.claims == 1)
+    }
+
+    @Test func pausingAndSeekingDoNotClaimTheAudioSession() throws {
+        let rig = makeRig()
+        let path = try rig.installAudio()
+        _ = rig.manager.perform(
+            .load(session: 1, media: .local(localPath: path), startSecs: 0, autoplay: false),
+        )
+
+        _ = rig.manager.perform(.seek(secs: 0))
+        _ = rig.manager.perform(.pause)
+
+        #expect(rig.audio.claims == 0)
+    }
+
+    @Test func aRefusedSessionFailsAPlayingLoadAndUnloadsTheItem() throws {
+        let rig = makeRig()
+        let path = try rig.installAudio()
+        rig.audio.refuse = true
+
+        let result = rig.manager.perform(
+            .load(session: 1, media: .local(localPath: path), startSecs: 0, autoplay: true),
+        )
+
+        #expect(result == .error("Couldn't start audio: audio is busy"))
+        #expect(!rig.manager.hasLoadedItem)
+    }
+
+    @Test func aRefusedSessionFailsPlayButKeepsTheLoadedItem() throws {
+        let rig = makeRig()
+        let path = try rig.installAudio()
+        _ = rig.manager.perform(
+            .load(session: 1, media: .local(localPath: path), startSecs: 0, autoplay: false),
+        )
+        rig.audio.refuse = true
+
+        let result = rig.manager.perform(.play)
+
+        #expect(result == .error("Couldn't start audio: audio is busy"))
+        // Nothing is wrong with the item; a later play (once audio is free) can use it.
+        #expect(rig.manager.hasLoadedItem)
     }
 
     @Test func aSuccessfulLoadAfterAFailedOneWorks() throws {
