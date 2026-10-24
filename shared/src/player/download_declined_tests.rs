@@ -58,15 +58,12 @@ fn starting_the_episode_again_does_not_restart_it_either() {
     // e2's download is the one running; e1's must not be waiting behind it.
     assert_eq!(downloads_started(&effects), 0);
     assert!(model.download_queue.is_empty());
-    assert_eq!(
-        model
-            .episodes
-            .iter()
-            .find(|e| e.id == "e1")
-            .unwrap()
-            .download_status,
-        DownloadStatus::NotDownloaded
-    );
+    let e1 = model
+        .episodes
+        .iter()
+        .find(|e| e.id == "e1")
+        .expect("e1 is in the list");
+    assert_eq!(e1.download_status, DownloadStatus::NotDownloaded);
 }
 
 #[test]

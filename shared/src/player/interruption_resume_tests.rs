@@ -2,7 +2,7 @@
 //! the listener (or a route change) has paused it, nothing may resume it behind their back.
 //! See the module docs in `player.rs`.
 
-use super::tests::{episode, model_with, player_ops, send};
+use super::tests::{active, episode, model_with, player_ops, send};
 use super::*;
 
 fn playing() -> Model {
@@ -32,7 +32,7 @@ fn a_pause_during_the_interruption_cancels_the_auto_resume() {
         call_ends(&mut model).is_empty(),
         "the listener paused: the call ending must not restart audio"
     );
-    assert!(!model.active_playback.as_ref().unwrap().is_playing);
+    assert!(!active(&model).is_playing);
 }
 
 #[test]
@@ -66,7 +66,7 @@ fn an_interruption_still_resumes_playback_it_paused() {
     assert!(call_ends(&mut model)
         .iter()
         .any(|op| matches!(op, PlayerOperation::Seek { .. } | PlayerOperation::Play)));
-    assert!(model.active_playback.as_ref().unwrap().is_playing);
+    assert!(active(&model).is_playing);
 }
 
 #[test]
