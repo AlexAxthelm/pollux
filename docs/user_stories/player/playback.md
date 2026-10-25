@@ -104,3 +104,25 @@ so that I can match it to how much outro I tolerate
 As a listener
 I want an episode I'm streaming to carry on seamlessly when it finishes downloading
 so that I don't hear a repeated second or a gap when playback moves to the local file
+
+As a listener
+I want a stream that failed to be retried with the episode's up-to-date address
+so that a renewed link in the feed doesn't leave me stuck on a dead one, whichever
+podcast I happen to have open
+
+As a listener
+I want Pollux to remember downloads I cancelled or deleted, and files it found
+unplayable, even after I restart the app
+so that it doesn't download them again behind my back or keep retrying a bad file
+
+As a listener
+I want playback to stop cleanly if I unsubscribe from the podcast I'm listening to
+so that I'm not left with a player for an episode that no longer exists
+
+As a listener
+I want playback to be light on battery and CPU, even with a long episode list open
+so that I can listen all day without noticing it
+
+As a listener
+I want the lock-screen and Control Center controls to be clearly visible
+so that I can see what I'm pressing without unlocking the phone

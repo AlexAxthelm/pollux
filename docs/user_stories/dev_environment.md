@@ -19,7 +19,18 @@ I want the tool check to live in one place (e.g. a `check-tools` target the iOS
 targets depend on) rather than scattered guards on individual recipe lines
 so that adding or removing a tool dependency is a single edit and stays consistent
 
+As a developer
+I want `make check` to run the same forbidden-patterns scan CI runs
+so that I find out about a banned pattern (a force unwrap or force cast, a lint
+suppression, unsafe code; the full list is in `docs/HACKING.md`) before I push, not from
+a failed PR check
+
 ## Notes / context
+
+- The forbidden-patterns scan (`.github/workflows/admin-forbidden-patterns.yml`) runs only
+  in CI, so PR #23 failed on three forced unwraps in tests that `make check` had passed.
+  Until a local equivalent exists (for example a `git grep` with the same patterns wired
+  into `make check`), run the search in `docs/HACKING.md` before pushing.
 
 - Prompted by PR #9 review: `make package` now depends on `cargo-run-bin`, and a
   missing install surfaces as `error: no such command: bin`, which does not name

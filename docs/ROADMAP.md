@@ -111,7 +111,9 @@ Rounding out MVP to a complete, shippable state.
   chapter navigation in player, chapter title in player title area
 - **Storage UI**: usage breakdown by subscription, limit configuration
 - **Subscription unsubscribe**: warning with episode count, hard delete,
-  playlist re-evaluation on removal
+  playlist re-evaluation on removal; the player must stop and clear its saved play
+  context if its episode's show is removed (see `features/player.md`, "Unsubscribing
+  from the show that is playing")
 - **Download queue management**: downloads page, user re-ordering, and a
   persisted enqueue order so the serial queue restores FIFO across relaunch
   (today it rebuilds by pub date); groundwork for parallel downloads

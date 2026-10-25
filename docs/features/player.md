@@ -301,3 +301,54 @@ app's process id with `pgrep -f "Pollux.app/Pollux"`, then `top -l 5 -s 3 -pid <
 pid,cpu`. Compare with playback on the library screen and with playback paused. For the Rust
 side, time `Pollux::view` and the bincode serialization for the same feed in `cargo test
 --release` against plain `cargo test`.
+
+### Lock-screen controls render invisibly (seen on a device)
+
+On the author's iPhone the lock-screen and Control Center play, skip and scrub controls
+are drawn invisibly, although they work. The simulator can't confirm or rule it out (it
+shows `--:--` for the time regardless). Check on a device first. If it persists, the
+candidates are setting `MPNowPlayingInfoPropertyMediaType` to audio and setting the skip
+`preferredIntervals` before the first Now Playing update (`NowPlayingController`). The card
+is rewritten only when out of date (`NowPlayingPolicy`), so rewriting too often is not the
+cause. A restored, paused episode is not on the lock screen until it has been played once
+(the audio engine and remote commands are created lazily, so a background-refresh launch
+stays metadata-only).
+
+### Not yet verified on a device
+
+Verified in the simulator: streaming, skip, pause and resume with rewind, restore at launch,
+"From:" navigation, show notes, the interruption and route-change mapping (by posting the
+system's notifications), and the engine's end, failure and tick behavior. Needs a real
+iPhone: lock-screen rendering (above), background audio with the screen locked, the AirPlay
+picker, real interruptions (a call, Siri), the error banner when offline, how audible the
+stream-to-local swap is, and the render cost (above). The test host's AVPlayer completes
+seeks at once, so the timing of a real seek is not covered by tests.
+
+### A refresh reaches the active episode only when its feed is open
+
+The player keeps its own copy of its episode. When a refresh renews or corrects the audio
+URL, that copy is updated when the open feed's episode list reloads
+(`refresh_active_from_list`), so retrying a failed stream loads the new address. If a
+different feed is open, the copy keeps the old URL until relaunch, and a retry from the
+mini-player loads the old address. Fix: update the active episode when a refresh is
+stored, whichever feed is open. (User story: `user_stories/player/playback.md`, "retry a
+failed stream with the episode's up-to-date address".)
+
+### Declined downloads and the bad-file memory last for the session
+
+Cancelling or deleting an episode's download is remembered so playback doesn't bring it
+back (`declined_downloads`), and a file the engine couldn't use is remembered so it isn't
+downloaded again and again (`ActivePlayback::local_unusable`). Both are kept for the
+session only. After a relaunch the download-and-fail cycle is still bounded (a file that
+proves bad twice is marked failed) but can run a couple of times, and a declined download
+may start again. Persisting them needs a column or table. (User story:
+`user_stories/player/playback.md`, "remember downloads I turned away".)
+
+### Unsubscribing from the show that is playing
+
+There is no unsubscribe flow yet (see ROADMAP Phase 5). When it is built, the player has to
+handle its episode's show disappearing: the saved play context is deleted with the episode
+(`ON DELETE CASCADE`), but the in-memory player would carry on, "From:" would navigate to a
+subscription that no longer exists, and a context save would fail (it is capped at 5
+attempts). The player should stop and clear when its episode's subscription is removed.
+(User story: `user_stories/player/playback.md`, "stop cleanly if I unsubscribe".)
