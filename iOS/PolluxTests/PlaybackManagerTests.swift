@@ -77,12 +77,31 @@ final class EventLog {
     }
 }
 
+/// A temporary storage root that removes itself when the last reference to it goes, so test
+/// runs don't leave directories (and the audio files in them) behind.
+final class TempStorageRoot {
+    let url: URL
+
+    init() {
+        url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    }
+
+    deinit {
+        try? FileManager.default.removeItem(at: url)
+    }
+}
+
 @MainActor
 struct EngineRig {
     let manager: PlaybackManager
-    let root: URL
+    let storage: TempStorageRoot
     let audio: AudioSessionProbe
     let log: EventLog
+
+    var root: URL {
+        storage.url
+    }
 
     /// A relative path (as the core stores them) to a real, playable file under the root.
     func installAudio(named name: String = "silence.wav") throws -> String {
@@ -95,17 +114,16 @@ struct EngineRig {
 
 @MainActor
 func makeEngineRig() -> EngineRig {
-    let root = FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let storage = TempStorageRoot()
     let audio = AudioSessionProbe()
     let log = EventLog()
     let manager = PlaybackManager(
-        storageRoot: root,
+        storageRoot: storage.url,
         activateAudioSession: audio.claim,
         deactivateAudioSession: audio.release,
         deactivationRetryDelay: .milliseconds(5),
     ) { log.record($0) }
-    return EngineRig(manager: manager, root: root, audio: audio, log: log)
+    return EngineRig(manager: manager, storage: storage, audio: audio, log: log)
 }
 
 /// Posts what the system posts when the audio session is interrupted or its route changes.
@@ -204,6 +222,19 @@ func waitUntil(timeout: Double = 5, _ condition: @MainActor () -> Bool) async th
 
         #expect(result == .mediaUnusable("The downloaded file is missing"))
         #expect(!rig.manager.hasLoadedItem)
+    }
+
+    // MARK: - Test housekeeping
+
+    @Test func aRigRemovesItsStorageRootWhenItIsReleased() throws {
+        let location: URL
+        do {
+            let rig = makeEngineRig()
+            _ = try rig.installAudio()
+            location = rig.root
+            #expect(FileManager.default.fileExists(atPath: location.path))
+        }
+        #expect(!FileManager.default.fileExists(atPath: location.path))
     }
 
     // MARK: - Releasing the audio session
