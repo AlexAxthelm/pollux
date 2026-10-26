@@ -55,6 +55,12 @@ final class PlaybackManager {
         player.currentItem != nil
     }
 
+    /// Whether the engine has been asked to play (its rate is not zero). Exposed so tests can
+    /// tell a paused load from one that left the player running.
+    var isPlayRequested: Bool {
+        player.rate != 0
+    }
+
     /// The item the engine has loaded. Exposed so tests can post the notifications the
     /// system would post for it (the end of the file, a failure) without playing it.
     var loadedItem: AVPlayerItem? {
@@ -133,6 +139,10 @@ final class PlaybackManager {
         seek(to: startSecs)
         if autoplay {
             player.play()
+        } else {
+            // AVPlayer keeps its rate across `replaceCurrentItem`: a paused load while the
+            // player is still running would start the new item playing.
+            player.pause()
         }
         return .ok
     }

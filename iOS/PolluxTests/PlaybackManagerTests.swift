@@ -189,6 +189,46 @@ func waitUntil(timeout: Double = 5, _ condition: @MainActor () -> Bool) async th
         #expect(!rig.manager.hasLoadedItem)
     }
 
+    // MARK: - Paused loads
+
+    @Test func aPausedLoadLeavesThePlayerPausedEvenIfItWasRunning() throws {
+        // AVPlayer keeps its rate when the item is replaced, so a paused load that arrived
+        // while the player was running would otherwise start playing the new item.
+        let rig = makeEngineRig()
+        let path = try rig.installAudio()
+        _ = rig.manager.perform(
+            .load(session: 1, media: .local(localPath: path), startSecs: 0, autoplay: true),
+        )
+        #expect(rig.manager.isPlayRequested)
+
+        _ = rig.manager.perform(
+            .load(session: 2, media: .local(localPath: path), startSecs: 0, autoplay: false),
+        )
+
+        #expect(!rig.manager.isPlayRequested)
+    }
+
+    @Test func aPlayingLoadStartsThePlayer() throws {
+        let rig = makeEngineRig()
+        let path = try rig.installAudio()
+
+        _ = rig.manager.perform(
+            .load(session: 1, media: .local(localPath: path), startSecs: 0, autoplay: true),
+        )
+
+        #expect(rig.manager.isPlayRequested)
+    }
+
+    @Test func aPausedLoadFromIdleStaysPaused() throws {
+        let rig = makeEngineRig()
+
+        _ = rig.manager.perform(
+            .load(session: 1, media: .local(localPath: try rig.installAudio()), startSecs: 0, autoplay: false),
+        )
+
+        #expect(!rig.manager.isPlayRequested)
+    }
+
     // MARK: - Audio focus
 
     @Test func aPausedLoadDoesNotClaimTheAudioSession() throws {
