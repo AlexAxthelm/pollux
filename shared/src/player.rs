@@ -708,7 +708,8 @@ pub(crate) fn on_context_loaded(model: &mut Model, result: StorageResult) -> Cmd
 /// Only what the feed owns changes: title, description, artwork, duration, publication date
 /// and the audio URL, and the engine is not reloaded (the new URL is for the next load, not a
 /// reason to interrupt playback). Position, status and download state are the player's own
-/// and stay. A downloaded file keeps playing from the file.
+/// and stay. A downloaded file keeps playing from the file. The list's row for the episode
+/// takes the player's live position and status in return.
 pub(crate) fn refresh_active_from_list(model: &mut Model) {
     let Some(active) = model.active_playback.as_mut() else {
         return;
@@ -725,6 +726,11 @@ pub(crate) fn refresh_active_from_list(model: &mut Model) {
     if let MediaSource::Stream { url } = &mut active.media {
         url.clone_from(&fresh.enclosure_url);
     }
+    // The list was just read from storage, which can be a checkpoint behind what is playing
+    // (and may not yet know the episode was started): show the live position and status on
+    // its row so it doesn't step back until the next checkpoint.
+    let (id, position) = (active.episode.id.clone(), active.position_secs);
+    sync_episode_row(model, &id, &PlaybackStatus::InProgress, Some(position));
 }
 
 /// Flushes position when the app leaves the foreground. Never decides "played": the

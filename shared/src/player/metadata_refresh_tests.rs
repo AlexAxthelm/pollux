@@ -133,6 +133,73 @@ fn a_downloaded_file_is_not_swapped_for_the_streams_new_url() {
     ));
 }
 
+fn row<'a>(model: &'a Model, id: &str) -> &'a Episode {
+    model
+        .episodes
+        .iter()
+        .find(|e| e.id == id)
+        .expect("the episode is in the list")
+}
+
+#[test]
+fn a_reload_shows_the_live_position_not_the_stored_one() {
+    let mut model = model_with(vec![episode("e1")]);
+    send(&mut model, Event::PlayEpisode("e1".into()));
+    super::tests::tick(&mut model, 120);
+    // Storage is up to a checkpoint behind what is playing: it last wrote 105.
+    let mut stored = refreshed();
+    stored.playback_status = PlaybackStatus::InProgress;
+    stored.playback_position_secs = Some(105);
+
+    reload_list(&mut model, vec![stored]);
+
+    assert_eq!(row(&model, "e1").playback_position_secs, Some(120));
+    assert_eq!(
+        row(&model, "e1").playback_status,
+        PlaybackStatus::InProgress
+    );
+}
+
+#[test]
+fn a_reload_marks_the_playing_episode_in_progress_even_if_storage_has_not_yet() {
+    let mut model = model_with(vec![episode("e1")]);
+    send(&mut model, Event::PlayEpisode("e1".into()));
+
+    // The reload raced ahead of the first write: storage still says unplayed, no position.
+    reload_list(&mut model, vec![refreshed()]);
+
+    assert_eq!(
+        row(&model, "e1").playback_status,
+        PlaybackStatus::InProgress
+    );
+    assert!(row(&model, "e1").playback_position_secs.is_some());
+}
+
+#[test]
+fn a_reload_leaves_the_stored_state_of_other_episodes_alone() {
+    let mut model = model_with(vec![episode("e1"), episode("e2")]);
+    send(&mut model, Event::PlayEpisode("e1".into()));
+    let mut other = episode("e2");
+    other.playback_status = PlaybackStatus::Played;
+    other.playback_position_secs = Some(0);
+
+    reload_list(&mut model, vec![refreshed(), other]);
+
+    assert_eq!(row(&model, "e2").playback_status, PlaybackStatus::Played);
+}
+
+#[test]
+fn a_reload_with_nothing_playing_shows_what_is_stored() {
+    let mut model = model_with(vec![]);
+    let mut stored = episode("e1");
+    stored.playback_status = PlaybackStatus::InProgress;
+    stored.playback_position_secs = Some(77);
+
+    reload_list(&mut model, vec![stored]);
+
+    assert_eq!(row(&model, "e1").playback_position_secs, Some(77));
+}
+
 #[test]
 fn other_episodes_in_the_reloaded_list_do_not_touch_the_active_one() {
     let mut model = model_with(vec![episode("e1"), episode("e2")]);
