@@ -48,10 +48,22 @@ final class AudioSessionProbe: @unchecked Sendable {
 
     var claims = 0
     var refuse = false
+    /// How many releases have been attempted, and how many of the coming ones are refused
+    /// (the system does this while the stopped item's I/O is still winding down).
+    var releases = 0
+    var releasesToRefuse = 0
 
     func claim() throws {
         claims += 1
         if refuse { throw Refused() }
+    }
+
+    func release() throws {
+        releases += 1
+        if releasesToRefuse > 0 {
+            releasesToRefuse -= 1
+            throw Refused()
+        }
     }
 }
 
@@ -87,7 +99,12 @@ func makeEngineRig() -> EngineRig {
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
     let audio = AudioSessionProbe()
     let log = EventLog()
-    let manager = PlaybackManager(storageRoot: root, activateAudioSession: audio.claim) { log.record($0) }
+    let manager = PlaybackManager(
+        storageRoot: root,
+        activateAudioSession: audio.claim,
+        deactivateAudioSession: audio.release,
+        deactivationRetryDelay: .milliseconds(5),
+    ) { log.record($0) }
     return EngineRig(manager: manager, root: root, audio: audio, log: log)
 }
 
@@ -187,6 +204,72 @@ func waitUntil(timeout: Double = 5, _ condition: @MainActor () -> Bool) async th
 
         #expect(result == .mediaUnusable("The downloaded file is missing"))
         #expect(!rig.manager.hasLoadedItem)
+    }
+
+    // MARK: - Releasing the audio session
+
+    @Test func stoppingReleasesTheAudioSession() throws {
+        let rig = makeEngineRig()
+        _ = rig.manager.perform(
+            .load(session: 1, media: .local(localPath: try rig.installAudio()), startSecs: 0, autoplay: true),
+        )
+
+        _ = rig.manager.perform(.stop)
+
+        #expect(rig.audio.releases == 1)
+    }
+
+    @Test func aRefusedReleaseIsTriedAgainUntilItWorks() async throws {
+        // The system refuses to deactivate while the stopped item's I/O is winding down; if the
+        // refusal were dropped, other apps would never be told they may resume.
+        let rig = makeEngineRig()
+        rig.audio.releasesToRefuse = 2
+
+        _ = rig.manager.perform(.stop)
+        try await waitUntil { rig.audio.releases == 3 }
+
+        // It worked on the third try, so it stops there.
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(rig.audio.releases == 3)
+    }
+
+    @Test func aReleaseThatKeepsFailingIsGivenUpOn() async throws {
+        let rig = makeEngineRig()
+        rig.audio.releasesToRefuse = .max
+
+        _ = rig.manager.perform(.stop)
+        try await waitUntil { rig.audio.releases == PlaybackManager.deactivationAttempts }
+
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(rig.audio.releases == PlaybackManager.deactivationAttempts)
+    }
+
+    @Test func playingAgainCancelsATryToReleaseTheSession() async throws {
+        // Releasing the session after the listener has started something else would cut the
+        // new audio off.
+        let rig = makeEngineRig()
+        rig.audio.releasesToRefuse = .max
+        let path = try rig.installAudio()
+        _ = rig.manager.perform(.stop)
+
+        _ = rig.manager.perform(
+            .load(session: 2, media: .local(localPath: path), startSecs: 0, autoplay: true),
+        )
+        let releasesWhenPlayingResumed = rig.audio.releases
+        try await Task.sleep(for: .milliseconds(150))
+
+        #expect(rig.audio.releases == releasesWhenPlayingResumed)
+    }
+
+    @Test func aNewStopStartsTheTriesAfresh() async throws {
+        let rig = makeEngineRig()
+        rig.audio.releasesToRefuse = .max
+        _ = rig.manager.perform(.stop)
+        try await waitUntil { rig.audio.releases == PlaybackManager.deactivationAttempts }
+
+        _ = rig.manager.perform(.stop)
+
+        try await waitUntil { rig.audio.releases == 2 * PlaybackManager.deactivationAttempts }
     }
 
     // MARK: - Paused loads

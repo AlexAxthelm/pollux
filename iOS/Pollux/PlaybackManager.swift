@@ -1,6 +1,7 @@
 import App
 import AVFoundation
 import Foundation
+import os
 
 /// The audio engine for the `Player` capability: owns the `AVPlayer`, the audio
 /// session and its interruptions, and reports engine news back to the core as events.
@@ -31,16 +32,35 @@ final class PlaybackManager {
     /// audio is about to play.
     private let activateAudioSession: () throws -> Void
 
+    /// Releases the audio session when playback stops, telling other apps they may resume.
+    /// Injectable for the same reason as activation: tests need to see it, and make it fail.
+    private let deactivateAudioSession: () throws -> Void
+    /// How long to wait before trying to release the session again after it was refused.
+    private let deactivationRetryDelay: Duration
+    /// How many times releasing the session is tried in all before giving up.
+    static let deactivationAttempts = 5
+    /// The pending retry of a refused release, if any.
+    private var deactivationTask: Task<Void, Never>?
+    private static let log = Logger(subsystem: "com.example.pollux", category: "PlaybackManager")
+
     init(
         storageRoot: URL,
         activateAudioSession: @escaping () throws -> Void = PlaybackManager.activatePlaybackSession,
+        deactivateAudioSession: @escaping () throws -> Void = PlaybackManager.deactivatePlaybackSession,
+        deactivationRetryDelay: Duration = .milliseconds(150),
         send: @escaping (Event) -> Void,
     ) {
         self.storageRoot = storageRoot
         self.activateAudioSession = activateAudioSession
+        self.deactivateAudioSession = deactivateAudioSession
+        self.deactivationRetryDelay = deactivationRetryDelay
         self.send = send
         observeTime()
         observeSession()
+    }
+
+    nonisolated static func deactivatePlaybackSession() throws {
+        try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     nonisolated static func activatePlaybackSession() throws {
@@ -149,6 +169,9 @@ final class PlaybackManager {
 
     /// Claims the audio session, or returns the error to report.
     private func claimAudioSession() -> PlayerResult? {
+        // Playing again: a try to release the session from an earlier stop must not cut it off.
+        deactivationTask?.cancel()
+        deactivationTask = nil
         do {
             try activateAudioSession()
             return nil
@@ -168,7 +191,7 @@ final class PlaybackManager {
 
     private func stop() {
         unloadCurrentItem()
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        releaseAudioSession()
     }
 
     /// Drops the current item and stops reporting for it. Leaves the audio session alone:
@@ -289,6 +312,43 @@ final class PlaybackManager {
                     self?.send(.interrupted(resumable: false))
                 }
             }
+        }
+    }
+}
+
+// MARK: - Releasing the audio session
+
+extension PlaybackManager {
+    /// Hands the audio session back so other apps (music the listener paused to play this) are
+    /// told they may resume. The system often refuses while the item that was just removed
+    /// still has I/O winding down, and a dropped refusal would leave the session held for good,
+    /// so a refused release is tried again shortly, a few times. Claiming the session again
+    /// (the listener started something) cancels any pending try.
+    private func releaseAudioSession() {
+        deactivationTask?.cancel()
+        deactivationTask = nil
+        guard !tryDeactivating() else { return }
+        deactivationTask = Task { @MainActor [weak self] in
+            for _ in 1 ..< Self.deactivationAttempts {
+                guard let self else { return }
+                try? await Task.sleep(for: deactivationRetryDelay)
+                if Task.isCancelled {
+                    return
+                }
+                if tryDeactivating() {
+                    return
+                }
+            }
+            Self.log.error("Couldn't release the audio session after \(Self.deactivationAttempts) tries")
+        }
+    }
+
+    private func tryDeactivating() -> Bool {
+        do {
+            try deactivateAudioSession()
+            return true
+        } catch {
+            return false
         }
     }
 }
