@@ -142,6 +142,86 @@ private func failureNotification(for item: AVPlayerItem?, message: String?) {
         #expect(ticks(rig).isEmpty)
     }
 
+    // MARK: - Durations
+
+    /// The (session, seconds) durations the core was sent.
+    private func durations(_ rig: EngineRig) -> [[UInt32]] {
+        rig.log.events.compactMap {
+            if case let .playerDuration(session, secs) = $0 { return [session, secs] }
+            return nil
+        }
+    }
+
+    @Test func aDurationThatBecomesKnownLaterIsReported() async throws {
+        // A stream can be ready to play while its length is still unknown, and learn it
+        // without another status change.
+        let rig = makeEngineRig()
+        load(rig, session: 3, path: try rig.installAudio())
+        try await waitUntil { durations(rig).contains([3, 1]) }
+
+        rig.manager.reportDuration(95.4, session: 3)
+
+        #expect(durations(rig).contains([3, 95]))
+    }
+
+    @Test func aDurationThatChangesIsReportedAgain() async throws {
+        let rig = makeEngineRig()
+        load(rig, session: 3, path: try rig.installAudio())
+        try await waitUntil { durations(rig).contains([3, 1]) }
+
+        rig.manager.reportDuration(60, session: 3)
+        rig.manager.reportDuration(61, session: 3)
+
+        #expect(durations(rig).filter { $0 == [3, 60] || $0 == [3, 61] }.count == 2)
+    }
+
+    @Test func theSameDurationIsNotSentTwice() async throws {
+        let rig = makeEngineRig()
+        load(rig, session: 3, path: try rig.installAudio())
+        try await waitUntil { durations(rig).contains([3, 1]) }
+
+        rig.manager.reportDuration(60, session: 3)
+        rig.manager.reportDuration(60.4, session: 3)
+        rig.manager.reportDuration(60, session: 3)
+
+        #expect(durations(rig).filter { $0 == [3, 60] }.count == 1)
+    }
+
+    @Test func aDurationTheEngineDoesNotYetKnowIsNotReported() async throws {
+        let rig = makeEngineRig()
+        load(rig, session: 3, path: try rig.installAudio())
+        try await waitUntil { durations(rig).contains([3, 1]) }
+        let before = durations(rig).count
+
+        for unknown in [Double.nan, .infinity, 0, -1, 1e300] {
+            rig.manager.reportDuration(unknown, session: 3)
+        }
+
+        #expect(durations(rig).count == before)
+    }
+
+    @Test func aDurationForAReplacedLoadIsIgnored() throws {
+        let rig = makeEngineRig()
+        let path = try rig.installAudio()
+        load(rig, session: 1, path: path)
+        load(rig, session: 2, path: path)
+
+        rig.manager.reportDuration(77, session: 1)
+
+        #expect(!durations(rig).contains([1, 77]))
+    }
+
+    @Test func aNewLoadMayReportTheSameDurationAgain() async throws {
+        let rig = makeEngineRig()
+        let path = try rig.installAudio()
+        load(rig, session: 1, path: path)
+        try await waitUntil { durations(rig).contains([1, 1]) }
+
+        load(rig, session: 2, path: path)
+
+        try await waitUntil { durations(rig).contains([2, 1]) }
+    }
+
     // MARK: - End of the file and failures
 
     @Test func theEndOfTheFileIsReportedWithItsSession() throws {

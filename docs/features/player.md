@@ -205,6 +205,10 @@ engine.
   logged if it never works), and claiming the session again cancels a pending try.
   The retry's effect on real iOS is only checked on a device: play an episode to
   the end with music paused in another app, and see that the music resumes.
+- **Duration.** The engine's duration is read when the item becomes ready and again whenever
+  it changes: a stream can be ready while its length is still unknown, and learn it later
+  with no further status change. It beats the feed's, which may be missing or wrong, for the
+  scrubber, seek limits and played detection.
 - **Errors.** A playback failure leaves playback paused with a transient banner
   in the player and mini-player; pressing play retries.
 

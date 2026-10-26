@@ -25,6 +25,11 @@ final class PlaybackManager {
     var pendingSeeks = 0
     private var timeObserver: Any?
     private var statusObservation: NSKeyValueObservation?
+    /// A stream can be ready to play while its duration is still unknown, and learn it later
+    /// without another status change, so the duration is watched on its own.
+    private var durationObservation: NSKeyValueObservation?
+    /// The last duration sent for the current load, so the two observers don't repeat it.
+    private var reportedDuration: UInt32?
     private var notificationTokens: [NSObjectProtocol] = []
 
     /// Claims the audio session for playback. Injectable so tests can see when it is
@@ -34,14 +39,14 @@ final class PlaybackManager {
 
     /// Releases the audio session when playback stops, telling other apps they may resume.
     /// Injectable for the same reason as activation: tests need to see it, and make it fail.
-    private let deactivateAudioSession: () throws -> Void
+    let deactivateAudioSession: () throws -> Void
     /// How long to wait before trying to release the session again after it was refused.
-    private let deactivationRetryDelay: Duration
+    let deactivationRetryDelay: Duration
     /// How many times releasing the session is tried in all before giving up.
     static let deactivationAttempts = 5
     /// The pending retry of a refused release, if any.
-    private var deactivationTask: Task<Void, Never>?
-    private static let log = Logger(subsystem: "com.example.pollux", category: "PlaybackManager")
+    var deactivationTask: Task<Void, Never>?
+    static let log = Logger(subsystem: "com.example.pollux", category: "PlaybackManager")
 
     init(
         storageRoot: URL,
@@ -202,6 +207,8 @@ final class PlaybackManager {
         player.pause()
         player.replaceCurrentItem(with: nil)
         statusObservation = nil
+        durationObservation = nil
+        reportedDuration = nil
         // The removed item must not report any more (its end or failure would arrive tagged
         // with a session the core may still think is current).
         notificationTokens.forEach(NotificationCenter.default.removeObserver)
@@ -212,6 +219,7 @@ final class PlaybackManager {
     // MARK: - Engine → core
 
     private func observe(_ item: AVPlayerItem, session: UInt32) {
+        reportedDuration = nil
         statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             let status = item.status
             let duration = item.duration.seconds
@@ -220,14 +228,18 @@ final class PlaybackManager {
                 guard let self, currentSession == session else { return }
                 switch status {
                 case .readyToPlay:
-                    if duration > 0, let secs = PlayerFormatting.wholeSeconds(duration) {
-                        send(.playerDuration(session: session, durationSecs: secs))
-                    }
+                    reportDuration(duration, session: session)
                 case .failed:
                     send(.playerMediaUnusable(session: session, message: message ?? "Playback failed"))
                 default:
                     break
                 }
+            }
+        }
+        durationObservation = item.observe(\.duration, options: [.new]) { [weak self] item, _ in
+            let duration = item.duration.seconds
+            Task { @MainActor [weak self] in
+                self?.reportDuration(duration, session: session)
             }
         }
         notificationTokens.forEach(NotificationCenter.default.removeObserver)
@@ -316,39 +328,18 @@ final class PlaybackManager {
     }
 }
 
-// MARK: - Releasing the audio session
+// MARK: - Duration
 
 extension PlaybackManager {
-    /// Hands the audio session back so other apps (music the listener paused to play this) are
-    /// told they may resume. The system often refuses while the item that was just removed
-    /// still has I/O winding down, and a dropped refusal would leave the session held for good,
-    /// so a refused release is tried again shortly, a few times. Claiming the session again
-    /// (the listener started something) cancels any pending try.
-    private func releaseAudioSession() {
-        deactivationTask?.cancel()
-        deactivationTask = nil
-        guard !tryDeactivating() else { return }
-        deactivationTask = Task { @MainActor [weak self] in
-            for _ in 1 ..< Self.deactivationAttempts {
-                guard let self else { return }
-                try? await Task.sleep(for: deactivationRetryDelay)
-                if Task.isCancelled {
-                    return
-                }
-                if tryDeactivating() {
-                    return
-                }
-            }
-            Self.log.error("Couldn't release the audio session after \(Self.deactivationAttempts) tries")
-        }
-    }
-
-    private func tryDeactivating() -> Bool {
-        do {
-            try deactivateAudioSession()
-            return true
-        } catch {
-            return false
-        }
+    /// Tells the core the engine's duration for `session`'s item once it is a usable number
+    /// (the engine reports an indefinite one until it knows), and again if it changes. News
+    /// for a load that has since been replaced is dropped. Internal so tests can drive it.
+    func reportDuration(_ seconds: Double, session: UInt32) {
+        guard currentSession == session,
+              seconds > 0,
+              let secs = PlayerFormatting.wholeSeconds(seconds),
+              secs != reportedDuration else { return }
+        reportedDuration = secs
+        send(.playerDuration(session: session, durationSecs: secs))
     }
 }
