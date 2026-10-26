@@ -131,3 +131,12 @@ so that I can listen all day without noticing it
 As a listener
 I want the lock-screen and Control Center controls to be clearly visible
 so that I can see what I'm pressing without unlocking the phone
+
+As a listener
+I want the lock-screen position to stop while a stream is waiting for data, and carry on
+when it resumes
+so that it doesn't run ahead through audio I haven't heard and then jump back
+
+As a listener
+I want to see when playback is waiting for data
+so that I know the app hasn't frozen, and that the pause is the connection and not me

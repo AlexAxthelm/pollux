@@ -390,6 +390,35 @@ proves bad twice is marked failed) but can run a couple of times, and a declined
 may start again. Persisting them needs a column or table. (User story:
 `user_stories/player/playback.md`, "remember downloads I turned away".)
 
+### The lock-screen clock keeps running while a stream stalls
+
+When a stream stalls (the engine waits for data), playback is still wanted but the audio is
+not advancing, and the engine reports no position ticks. Nothing tells the core, which still
+says "playing", so the lock-screen card keeps its rate of 1 and the system runs its clock on:
+the playhead creeps forward through audio that has not been heard, then jumps back when the
+stream recovers. The card's drift check does not catch it, because nothing re-renders in the
+meantime. Reported in review (Copilot and Codex).
+
+Fix, when it matters, in four parts:
+
+1. The engine watches whether the player is waiting for data (`timeControlStatus` is
+   `waitingToPlayAtSpecifiedRate`) and reports when that starts and stops, with the load's
+   session, only on a change. A new load starts afresh (the engine forgets what it reported
+   and the core forgets the stall).
+2. The core records it apart from play/pause intent (`is_buffering`, a `PlayerBuffering`
+   event): the listener has not paused, so `is_playing` must not change. The view shows it
+   only while playing.
+3. The lock-screen card's rate is 0 while stalled (1 only when playing and not stalled), the
+   card is rewritten as soon as the stall starts or ends, and the drift check does not
+   predict the playhead advancing during a stall.
+4. A test that drives the real core with a stall and no download or refresh event, and checks
+   the card's rate goes 1, then 0, then 1. (A test of the card's policy alone is not enough:
+   it supplies the update that this path never produces.)
+
+The app's own controls do not show a stall either; a spinner on the play button would be the
+natural companion. (User story: `user_stories/player/playback.md`, "see when playback is
+waiting for data".)
+
 ### A replacement download that failed is not retried on play
 
 When the engine can't use a downloaded file, playback streams instead and fetches a
