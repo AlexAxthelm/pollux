@@ -239,12 +239,23 @@ Notes for whoever builds this:
   land in different content. No swap strategy fixes that; it applies to today's swap
   too. Worth knowing before judging a swap by ear on such a feed.
 
-### Cost of the once-a-second render (needs a device measurement)
+### Cost of the once-a-second render (measured on a device: no follow-up needed)
 
 While playing, the engine reports the position about once a second and the core renders
-on each report, so the shell re-reads the whole view model every second. Nothing is wrong
-with that in principle, but how much it costs on a real device has **not been measured**,
-and the simulator numbers below are from debug builds, which overstate it.
+on each report, so the shell re-reads the whole view model every second.
+
+**Measured on an iPhone 14 Pro Max** (release core and release app, a 592-episode feed, Time
+Profiler, 30 s each, over USB): paused with the list open 0.03% CPU; playing on the library
+screen 0.13%; playing with the list open 0.12%. Scrolling the list, as a control to show
+the sampler works, was about 42%. The simulator's debug-build numbers below (4.1 to 5.4%)
+overstated the cost by more than 30 times. So the render does not need reducing, and the
+options below are kept only in case that changes (a much larger feed, say). The Energy Log
+was not run. Scrolling a long list is the cost worth a look, in the library work: continuous
+flicking of the 592-row list cost about 42% CPU, 28% of it on the main thread (see also
+issue #14, artwork refetching on scroll).
+
+The rest of this section is the simulator investigation. The simulator numbers are from
+debug builds, which overstate it.
 
 What was done: the player state lives in its own object (`PlayerState`), and `Core` only
 republishes `view` (what the library and the episode list read) when something other than
@@ -302,27 +313,48 @@ pid,cpu`. Compare with playback on the library screen and with playback paused. 
 side, time `Pollux::view` and the bincode serialization for the same feed in `cargo test
 --release` against plain `cargo test`.
 
-### Lock-screen controls render invisibly (seen on a device)
+### Lock-screen controls (an earlier report of invisible controls did not reproduce)
 
-On the author's iPhone the lock-screen and Control Center play, skip and scrub controls
-are drawn invisibly, although they work. The simulator can't confirm or rule it out (it
-shows `--:--` for the time regardless). Check on a device first. If it persists, the
-candidates are setting `MPNowPlayingInfoPropertyMediaType` to audio and setting the skip
-`preferredIntervals` before the first Now Playing update (`NowPlayingController`). The card
-is rewritten only when out of date (`NowPlayingPolicy`), so rewriting too often is not the
-cause. A restored, paused episode is not on the lock screen until it has been played once
-(the audio engine and remote commands are created lazily, so a background-refresh launch
-stays metadata-only).
+An earlier build showed the lock-screen and Control Center controls invisibly on the
+author's iPhone, although they worked. On an iPhone 14 Pro Max (iOS 26.6.2) the title,
+artist, artwork, 15 and 30 second skip buttons, scrubber and times all render and work,
+and the scrubber does not jitter, so neither candidate fix (setting
+`MPNowPlayingInfoPropertyMediaType` to audio, and setting the skip `preferredIntervals`
+before the first Now Playing update) was applied. If it comes back, those are where to
+start. The card is rewritten only when out of date (`NowPlayingPolicy`), so rewriting too
+often is not the cause. A restored, paused episode is not on the lock screen until it has
+been played once (the audio engine and remote commands are created lazily, so a
+background-refresh launch stays metadata-only).
 
-### Not yet verified on a device
+### Device verification
 
 Verified in the simulator: streaming, skip, pause and resume with rewind, restore at launch,
 "From:" navigation, show notes, the interruption and route-change mapping (by posting the
-system's notifications), and the engine's end, failure and tick behavior. Needs a real
-iPhone: lock-screen rendering (above), background audio with the screen locked, the AirPlay
-picker, real interruptions (a call, Siri), the error banner when offline, how audible the
-stream-to-local swap is, and the render cost (above). The test host's AVPlayer completes
-seeks at once, so the timing of a real seek is not covered by tests.
+system's notifications), and the engine's end, failure and tick behavior.
+
+Verified on an iPhone 14 Pro Max (iOS 26.6.2): lock-screen rendering and controls; background
+audio with a long locked playback (the position is right on unlock), and a relaunch restores
+the mini-player paused, 3 s back; interruptions (Siri resumes, a call resumes if it was
+playing and does not after a manual pause, unplugging headphones pauses and stays paused); the
+route picker opens and works; the stream-to-local swap is audible but small and not jarring,
+with position and playback continuing; the offline error banner (it stays until the next
+successful action, which is accepted) with the failed-download triangle and Retry still on
+the row; and the render cost (above).
+
+Not verified: switching outputs through the route picker (Bluetooth or AirPlay), and the
+Energy Log. The test host's AVPlayer completes seeks at once, so the timing of a real seek is
+not covered by tests.
+
+### Deleting the active episode's download does not switch playback to the stream
+
+If the file of the episode playing from local is deleted mid-play, the engine keeps reading
+the already-open file, so playback continues (an offline seek ten minutes ahead still
+played), and the stream fallback only happens on the next real load. That is harmless for
+the listener, though the space is not freed until the item is released. The delete is
+remembered, so the fallback streams without downloading it again, but only for the session:
+after a relaunch, playing the episode re-queues the download (see "Declined downloads"
+below). Open question: reload from the stream as soon as the active episode's download is
+deleted? Doing so would cost a brief gap, to replace audio that is still playing fine.
 
 ### A refresh reaches the active episode only when its feed is open
 
