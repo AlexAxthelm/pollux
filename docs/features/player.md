@@ -386,6 +386,23 @@ proves bad twice is marked failed) but can run a couple of times, and a declined
 may start again. Persisting them needs a column or table. (User story:
 `user_stories/player/playback.md`, "remember downloads I turned away".)
 
+### A replacement download that failed is not retried on play
+
+When the engine can't use a downloaded file, playback streams instead and fetches a
+replacement once; if the replacement is unusable too, the file is marked bad and not
+fetched again (otherwise stream, download, swap, fail would repeat for as long as playback
+went on). The memory that stops that loop (`ActivePlayback::local_unusable`) is set at the
+*first* failure, before the replacement has arrived. So if the replacement download then
+fails for an unrelated reason (offline, say), pressing play no longer retries it for the
+rest of the session, although nothing has shown the file to be bad. The listener can still
+tap Download, and a relaunch clears the memory.
+
+Fix, when it matters: make the memory three states instead of a flag: trusted, suspect
+while a replacement is being fetched, and bad only once the replacement is unusable too.
+Only bad stops the retries on play, so a replacement that never arrived stays retryable and
+the loop stays closed. A local file that loads clears it, as now. (User story:
+`user_stories/player/playback.md`, "retry a download that failed".)
+
 ### Unsubscribing from the show that is playing
 
 There is no unsubscribe flow yet (see ROADMAP Phase 5). When it is built, the player has to
