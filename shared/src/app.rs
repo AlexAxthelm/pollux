@@ -838,6 +838,17 @@ fn sort_episodes(episodes: &mut [EpisodeSummary], order: EpisodeSortOrder) {
 /// or re-download a file we already have. Shared by the explicit download action and
 /// by playback, which downloads what it streams.
 pub(crate) fn enqueue_download(model: &mut Model, episode_id: &str) -> Command<Effect, Event> {
+    // Already running or waiting its turn: the model's own record of that wins over a row's
+    // stored status, which a list read made earlier can bring back stale ("not downloaded")
+    // after the download began, and which would otherwise queue it a second time.
+    if model.downloading.as_deref() == Some(episode_id)
+        || model
+            .download_queue
+            .iter()
+            .any(|q| q.episode_id == episode_id)
+    {
+        return Command::done();
+    }
     // The episode on the player counts even when its feed isn't on screen (after a cold
     // start the list is empty until a feed is opened): playback must be able to download
     // what it streams regardless of navigation.

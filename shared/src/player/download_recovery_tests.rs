@@ -172,3 +172,65 @@ fn a_failed_download_of_the_active_episode_is_recorded_so_a_resume_can_retry() {
     send(&mut model, Event::TogglePlay);
     assert_eq!(model.downloading.as_deref(), Some("e1"));
 }
+
+/// The open feed's list is read again: storage hands back every row as it was last written.
+fn reload_list(model: &mut Model, rows: Vec<Episode>) {
+    model.selected_subscription = model.subscriptions.first().cloned();
+    send(
+        model,
+        Event::EpisodesLoaded {
+            subscription_id: "sub".into(),
+            result: Box::new(StorageResult::Episodes(rows)),
+        },
+    );
+}
+
+#[test]
+fn a_stale_list_row_does_not_get_a_download_that_is_underway_started_again() {
+    let mut model = model_with(vec![episode("e1")]);
+    send(&mut model, Event::PlayEpisode("e1".into()));
+    assert_eq!(model.downloading.as_deref(), Some("e1"));
+
+    // A list read made before the download began resolves now, with the row still saying
+    // "not downloaded".
+    reload_list(&mut model, vec![episode("e1")]);
+    send(&mut model, Event::TogglePlay);
+    let effects = send(&mut model, Event::TogglePlay);
+
+    assert!(
+        download_state_writes(&effects).is_empty(),
+        "the download is already running; resuming must not queue it again"
+    );
+    assert!(model.download_queue.is_empty());
+}
+
+#[test]
+fn a_stale_list_row_does_not_queue_a_download_that_is_already_waiting() {
+    let mut model = model_with(vec![episode("e1"), episode("e2")]);
+    // e2 is downloading, so e1's download waits in the queue.
+    send(&mut model, Event::DownloadEpisode("e2".into()));
+    send(&mut model, Event::PlayEpisode("e1".into()));
+    assert_eq!(model.download_queue.len(), 1);
+
+    reload_list(&mut model, vec![episode("e1"), episode("e2")]);
+    send(&mut model, Event::TogglePlay);
+    send(&mut model, Event::TogglePlay);
+
+    assert_eq!(
+        model.download_queue.len(),
+        1,
+        "e1 is queued once, not twice"
+    );
+}
+
+#[test]
+fn asking_for_the_same_download_twice_still_queues_it_once() {
+    let mut model = model_with(vec![episode("e1"), episode("e2")]);
+    send(&mut model, Event::DownloadEpisode("e2".into()));
+
+    send(&mut model, Event::DownloadEpisode("e1".into()));
+    reload_list(&mut model, vec![episode("e1"), episode("e2")]);
+    send(&mut model, Event::DownloadEpisode("e1".into()));
+
+    assert_eq!(model.download_queue.len(), 1);
+}
