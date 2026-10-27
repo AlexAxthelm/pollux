@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use crate::domain::{Episode, EpisodeSortOrder, Subscription};
+use crate::capabilities::player::MediaSource;
+use crate::domain::{Episode, EpisodeSortOrder, EpisodeSource, Subscription};
 use crate::theme::{ThemeId, ThemeMode};
 use crate::view_model::DownloadNotice;
 
@@ -48,6 +49,10 @@ pub struct Model {
     // the episode leaves the Failed state; the persisted status is enough to know it
     // failed across a restart.
     pub download_errors: HashMap<String, String>,
+    // Episodes whose download the listener cancelled or deleted this session. Playback
+    // downloads what it streams, but skips these: it must not bring back what they just
+    // turned away. Asking for the download again (`DownloadEpisode`) removes the entry.
+    pub declined_downloads: HashSet<String>,
 
     // A transient, non-blocking notice for a download *operation* that failed without
     // changing the episode's state — a persistence write that didn't commit, or a file
@@ -56,6 +61,13 @@ pub struct Model {
     // `detail_error`, which replaces the whole episode list). Cleared when the user
     // starts another download action or switches feeds.
     pub download_notice: Option<DownloadNotice>,
+
+    // The episode the player is on (playing or paused), if any. Survives restarts via
+    // the stored play context; see `player.rs`.
+    pub active_playback: Option<ActivePlayback>,
+    // Last session id handed to the engine (see `player.rs`). Only ever increases, so an
+    // id is never reused across episodes or reloads.
+    pub player_sessions: u32,
 
     // Feed refresh. Serial like downloads: at most one feed is fetched at a time
     // (`refreshing` holds its subscription id), the rest wait in `refresh_queue`
@@ -75,6 +87,50 @@ pub struct Model {
     // appearance section lands and drives `Event::SetTheme`.
     pub theme_id: ThemeId,
     pub theme_mode: ThemeMode,
+}
+
+/// The player's current episode and transport state. Holds its own `Episode` copy so
+/// playback doesn't depend on `model.episodes` (which only holds the feed on screen,
+/// and is empty after a cold-start restore).
+#[derive(Clone, Debug)]
+pub struct ActivePlayback {
+    pub episode: Episode,
+    /// The engine load this state belongs to; engine news for any other is stale.
+    pub session: u32,
+    pub position_secs: u32,
+    /// The engine's duration, authoritative over the feed's `episode.duration_secs`.
+    pub duration_secs: Option<u32>,
+    pub is_playing: bool,
+    /// What the engine reads: the stream or the downloaded file.
+    pub media: MediaSource,
+    /// What playback was started from (a subscription today, a playlist later); named
+    /// by the player's "From:" row and navigated back to from it.
+    pub source: EpisodeSource,
+    /// Whether the shell's engine currently has this episode loaded. False right after
+    /// a cold-start restore (and after an error), so the next Play issues a `Load`.
+    pub loaded: bool,
+    /// Position at the last persisted checkpoint, to space periodic writes.
+    pub last_checkpoint_secs: u32,
+    /// Set when an audio-session interruption paused playback that was running, so the
+    /// end of that interruption may resume it. Cleared by any explicit play or seek, and
+    /// never set when playback was already paused (the listener's choice stands).
+    pub resume_after_interruption: bool,
+    /// Whether this episode is known to be saved as the play context a relaunch restores.
+    /// False from the moment playback starts until storage confirms the write; while it is
+    /// false every checkpoint re-sends it, so one failed write can't leave a relaunch
+    /// restoring the wrong episode (or none).
+    pub context_saved: bool,
+    /// How many writes of the play context have failed. Checkpoints retry only until
+    /// `CONTEXT_SAVE_ATTEMPTS` have, so a write that can never succeed isn't retried for as
+    /// long as playback goes on.
+    pub context_save_failures: u32,
+    /// A downloaded file for this episode was found unusable, and it has not played fine
+    /// since. The first time that is put down to a missing or damaged file and it is
+    /// downloaded again; if the fresh file is unusable too the file itself is bad, so it is
+    /// not downloaded again (that would loop for as long as playback goes on). Cleared when
+    /// a local file loads, which is proof it works.
+    pub local_unusable: bool,
+    pub error: Option<String>,
 }
 
 /// An episode waiting to be downloaded. Carries the enclosure URL so the download

@@ -188,6 +188,15 @@ The admin CI workflow scans for forbidden patterns. These will fail CI:
 - `try!`, `as!`, or force-unwrap operator in Swift (`!` at end of line)
 - `swiftlint:disable` — fix the lint instead
 
+`make check` does **not** run this scan (it only runs in CI, and also applies to test
+code), so check by hand before pushing:
+
+```bash
+git grep -n -i -E '\.unwrap\(\)|\.expect\(\s*""\s*\)|swiftlint:disable|try!|as!|\w!\s*$|#\[allow\(|unsafe\s*\{' -- '*.rs' '*.swift' '*.toml' '*.md' ':!docs/HACKING.md' ':!shared/src/effect.rs'
+```
+
+No output means clean.
+
 ---
 
 ## Workflow: adding a new feature to the core

@@ -19,7 +19,31 @@ I want the tool check to live in one place (e.g. a `check-tools` target the iOS
 targets depend on) rather than scattered guards on individual recipe lines
 so that adding or removing a tool dependency is a single edit and stays consistent
 
+As a developer
+I want `make check` to run the same forbidden-patterns scan CI runs
+so that I find out about a banned pattern (a force unwrap or force cast, a lint
+suppression, unsafe code; the full list is in `docs/HACKING.md`) before I push, not from
+a failed PR check
+
+As a developer
+I want `make` targets to build and run on a physical device, and to build the Rust core in
+release mode
+so that I can verify audio, lock-screen and performance behavior on hardware, with numbers
+that represent what ships
+
 ## Notes / context
+
+- The Makefile has no device target and no release option: the simulator builds use a
+  debug Rust core (`cargo swift package` with no `--release`), which overstated the
+  player's render cost by more than 30 times. The device run used raw `xcodebuild` with
+  `-xcconfig` and `cargo bin cargo-swift package --release`, with signing (a free Personal
+  Team, which expires after 7 days) in a git-excluded `iOS/Local.xcconfig`. Signing settings
+  must not be committed.
+
+- The forbidden-patterns scan (`.github/workflows/admin-forbidden-patterns.yml`) runs only
+  in CI, so PR #23 failed on three forced unwraps in tests that `make check` had passed.
+  Until a local equivalent exists (for example a `git grep` with the same patterns wired
+  into `make check`), run the search in `docs/HACKING.md` before pushing.
 
 - Prompted by PR #9 review: `make package` now depends on `cargo-run-bin`, and a
   missing install surfaces as `error: no such command: bin`, which does not name

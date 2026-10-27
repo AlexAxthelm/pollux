@@ -106,6 +106,7 @@ struct SubscriptionDetailScreen: View {
                     NavigationLink(value: episode) {
                         EpisodeRow(
                             episode: episode,
+                            onPlay: { core.update(.playEpisode($0)) },
                             onDownload: { core.update(.downloadEpisode($0)) },
                             onDeleteDownload: { core.update(.deleteDownload($0)) },
                             onCancelDownload: { core.update(.cancelDownload($0)) },

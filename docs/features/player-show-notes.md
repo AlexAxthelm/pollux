@@ -9,17 +9,17 @@ description / show notes.
 
 ## MVP State
 
-Show notes are **not in MVP**. The carousel slot is reserved with a placeholder
-page ("Show notes coming soon" or similar). The dot indicator for this page
-is still shown so users know it's coming.
+The page is built. It shows the episode's show notes rendered as rich text (HTML
+from the feed, via the same renderer as the episode detail page) in a scrollable
+area. If the episode has no show notes the page is not shown, and neither are the
+dot indicators. Timestamp detection (below) is not built yet.
 
 ## Full Implementation
 
 ### Content
 
 - Scrollable text area showing the episode description extracted from the feed
-- Rendered as plain text initially; HTML/rich text rendering is a later
-  enhancement
+- Rendered as rich text (built); timestamps are not yet links
 - If no show notes are available, the page is hidden (dot indicator removed)
 
 ### Timestamp Detection
@@ -44,6 +44,5 @@ This is the primary mechanism for shows that don't use embedded chapter formats.
 
 ## Future
 
-- HTML/rich text rendering of show notes
 - Chapter list as a separate carousel page
 - Link detection and handling in show notes (e.g. tappable URLs)

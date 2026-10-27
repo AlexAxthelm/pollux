@@ -16,16 +16,15 @@ enum DatabaseManagerError: Error, LocalizedError {
 }
 
 actor DatabaseManager {
-    private let db: DatabasePool
+    /// Internal (not private) so the play-context extension in its own file can use it.
+    let db: DatabasePool
     /// Wall clock, injectable so tests can move time (the removed-from-feed rule is
     /// time-based).
     private let now: @Sendable () -> Date
 
     init() throws {
         now = { Date() }
-        guard let support = FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask,
-        ).first else {
+        guard let support = StorageRoot.applicationSupport() else {
             fatalError("Application Support directory unavailable")
         }
         try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
@@ -58,6 +57,12 @@ actor DatabaseManager {
             try await deleteSubscription(id: id)
         case let .upsertFeedWithEpisodes(subscription, episodes):
             try await upsertFeedWithEpisodes(subscription: subscription, episodes: episodes)
+        case let .savePlayContext(episodeId, source):
+            try await savePlayContext(episodeId: episodeId, source: source)
+        case .loadPlayContext:
+            try loadPlayContext()
+        case .clearPlayContext:
+            try await clearPlayContext()
         case let .updateRefreshState(subscriptionId, lastRefreshed, lastRefreshError, retryAfterUntil):
             try await updateRefreshState(
                 subscriptionId: subscriptionId, lastRefreshed: lastRefreshed,

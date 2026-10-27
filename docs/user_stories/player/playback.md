@@ -96,3 +96,47 @@ so that I can quickly control playback
 As a listener
 I want to select the output device (Bluetooth, AirPlay, speaker, etc)
 so that I can listen how I want
+
+As a listener
+I want to choose how close to the end an episode must be to count as played
+so that I can match it to how much outro I tolerate
+
+As a listener
+I want an episode I'm streaming to carry on seamlessly when it finishes downloading
+so that I don't hear a repeated second or a gap when playback moves to the local file
+
+As a listener
+I want a stream that failed to be retried with the episode's up-to-date address
+so that a renewed link in the feed doesn't leave me stuck on a dead one, whichever
+podcast I happen to have open
+
+As a listener
+I want Pollux to remember downloads I cancelled or deleted, and files it found
+unplayable, even after I restart the app
+so that it doesn't download them again behind my back or keep retrying a bad file
+
+As a listener
+I want a download that failed (because I went offline, say) to be retried when I play the
+episode again, even if it was replacing a file that turned out to be missing
+so that the episode ends up downloaded without my having to find the Download button
+
+As a listener
+I want playback to stop cleanly if I unsubscribe from the podcast I'm listening to
+so that I'm not left with a player for an episode that no longer exists
+
+As a listener
+I want playback to be light on battery and CPU, even with a long episode list open
+so that I can listen all day without noticing it
+
+As a listener
+I want the lock-screen and Control Center controls to be clearly visible
+so that I can see what I'm pressing without unlocking the phone
+
+As a listener
+I want the lock-screen position to stop while a stream is waiting for data, and carry on
+when it resumes
+so that it doesn't run ahead through audio I haven't heard and then jump back
+
+As a listener
+I want to see when playback is waiting for data
+so that I know the app hasn't frozen, and that the pause is the connection and not me

@@ -1,3 +1,7 @@
+# Recipes run under bash so `set -o pipefail` is available (GNU Make 3.81, which macOS
+# ships, has no .SHELLFLAGS to set it globally).
+SHELL := /bin/bash
+
 check: rust-all-checks swift-all-checks
 test: rust-test ios-test
 lint: rust-lint swift-lint
@@ -113,7 +117,10 @@ generate-project: typegen package
 
 ios-build: generate-project
 
+# `pipefail`: without it the pipeline's exit status is xcbeautify's, so a failed build or
+# a failed test would still exit 0 (and `make check` / CI would pass).
 ios-xcodebuild: ios-build
+	set -o pipefail; \
 	xcodebuild \
 		-project $(XCODE_PROJECT) \
 		-scheme $(XCODE_SCHEME) \
@@ -141,7 +148,9 @@ ios-sim: ios-xcodebuild
 	xcrun simctl launch --console $(SIM_ID) \
 		$$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$(APP_PATH)/Info.plist")
 
+# `pipefail`: see ios-xcodebuild.
 ios-test: ios-build
+	set -o pipefail; \
 	xcodebuild test \
 		-project $(XCODE_PROJECT) \
 		-scheme PolluxTests \

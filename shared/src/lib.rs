@@ -7,6 +7,7 @@ mod feed_parser;
 pub mod ffi;
 mod html;
 pub mod model;
+mod player;
 pub mod theme;
 pub mod view_model;
 

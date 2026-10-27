@@ -4,11 +4,30 @@ import Shared
 
 @MainActor
 class Core: ObservableObject {
-    @Published var view: ViewModel
+    /// What the core last rendered, minus the player: `view.player` is always nil. The
+    /// player changes every second while playing, so it lives in `playerState`, and `view` is
+    /// republished only when something else (the library, the episode list, the theme)
+    /// changed. See `PlayerState`.
+    @Published private(set) var view: ViewModel
+    let playerState = PlayerState()
 
     private var core: CoreFfi
     private let db: DatabaseManager
     private let downloads: DownloadManager
+    /// The audio engine and the lock-screen integration. Created on the first playback
+    /// request, not at launch: the core is also created when iOS wakes the app in the
+    /// background to refresh feeds, and that launch must stay metadata-only (it restores
+    /// the saved episode for the mini-player, but touches neither audio nor the lock
+    /// screen). See `startPlaybackIfNeeded`.
+    private var playback: PlaybackManager?
+    private var nowPlaying: NowPlayingController?
+
+    /// Whether the audio engine has been created, i.e. whether playback has ever been
+    /// requested in this launch.
+    var hasPlaybackEngine: Bool {
+        playback != nil
+    }
+
     /// The session feed fetches go through. Injectable so tests can stub the network.
     private let feedSession: URLSession
     /// Asks the system for a future background-refresh wake-up. Injectable so tests can
@@ -59,7 +78,9 @@ class Core: ObservableObject {
         guard let view = try? ViewModel.bincodeDeserialize(input: [UInt8](core.view())) else {
             fatalError("Failed to deserialize initial ViewModel from core")
         }
-        self.view = view
+        let (rest, player) = Core.splittingPlayer(view)
+        self.view = rest
+        playerState.update(player)
         Task { @MainActor [weak self] in
             for await (operation, requestId) in storageStream {
                 guard let self else { return }
@@ -88,8 +109,10 @@ class Core: ObservableObject {
         update(.resumePendingDownloads)
     }
 
-    /// The app went to the background: queue the next best-effort wake-up.
+    /// The app went to the background: flush the playback position (the app may be
+    /// suspended or killed next) and queue the next best-effort wake-up.
     func appEnteredBackground() {
+        update(.appBackgrounded)
         scheduleBackgroundRefresh()
     }
 
@@ -143,7 +166,13 @@ class Core: ObservableObject {
             ) else {
                 fatalError("Failed to deserialize ViewModel during render")
             }
-            view = updatedView
+            let (rest, player) = Core.splittingPlayer(updatedView)
+            // Equality is far cheaper than SwiftUI re-evaluating an unchanged episode list.
+            if rest != view {
+                view = rest
+            }
+            playerState.update(player)
+            nowPlaying?.update(player)
 
         case let .storage(operation):
             // Enqueue for the serial consumer set up in init (preserves write order).
@@ -161,7 +190,46 @@ class Core: ObservableObject {
 
         case let .download(operation):
             handleDownload(operation, requestId: request.id)
+
+        case let .player(operation):
+            // The engine acts synchronously; resolve on the next turn so the result
+            // doesn't re-enter the core while it is still handing us this batch.
+            startPlaybackIfNeeded()
+            let result = playback?.perform(operation) ?? .error("Audio engine unavailable")
+            let requestId = request.id
+            Task { @MainActor [weak self] in
+                self?.resolveAndDispatch(requestId: requestId, result: result)
+            }
         }
+    }
+
+    /// Creates the audio engine and the lock-screen integration the first time playback
+    /// is requested. Until then a launch, including a background-refresh one, has neither:
+    /// nothing is registered with the system's remote-command center, and no Now Playing
+    /// card is published (so a restored, paused episode isn't on the lock screen until
+    /// it is played).
+    private func startPlaybackIfNeeded() {
+        // Each is created once, on its own: if the engine can't be (no storage root), the
+        // controller must not be built again on every later request, which would register
+        // another set of handlers on the shared remote command center.
+        if playback == nil, let root = StorageRoot.applicationSupport() {
+            playback = PlaybackManager(storageRoot: root) { [weak self] event in
+                self?.update(event)
+            }
+        }
+        guard nowPlaying == nil else { return }
+        nowPlaying = NowPlayingController { [weak self] event in
+            self?.update(event)
+        }
+        // Publish the current state now rather than at the next render.
+        nowPlaying?.update(playerState.player)
+    }
+
+    /// Separates the player from the rest of a rendered view model.
+    private static func splittingPlayer(_ rendered: ViewModel) -> (rest: ViewModel, player: PlayerView?) {
+        var rest = rendered
+        rest.player = nil
+        return (rest, rendered.player)
     }
 
     /// Runs a download-capability operation on the DownloadManager actor (so the UI
@@ -229,6 +297,13 @@ class Core: ObservableObject {
     private func resolveAndDispatch(requestId: UInt32, result: HttpResult) {
         guard let bytes = try? result.bincodeSerialize() else {
             fatalError("Failed to serialize HttpResult for request \(requestId)")
+        }
+        resolveBytes(requestId: requestId, bytes: bytes)
+    }
+
+    private func resolveAndDispatch(requestId: UInt32, result: PlayerResult) {
+        guard let bytes = try? result.bincodeSerialize() else {
+            fatalError("Failed to serialize PlayerResult for request \(requestId)")
         }
         resolveBytes(requestId: requestId, bytes: bytes)
     }

@@ -2,8 +2,8 @@ import App
 import SwiftUI
 
 /// Full-page view for a single episode. Renders the stored metadata, show notes,
-/// and a working download control; transport controls, chapters, and bookmarks are
-/// DEBUG-marked placeholders because their engines don't exist yet. Static metadata
+/// and working play and download controls; chapters and bookmarks are DEBUG-marked
+/// placeholders because their backends don't exist yet. Static metadata
 /// is taken from the `episode` snapshot passed in from the list, but the download
 /// state is read live from `core.view` so it updates while the page is open.
 struct EpisodeDetailView: View {
@@ -52,7 +52,7 @@ struct EpisodeDetailView: View {
                 )
                 PlaceholderSection(
                     title: "Bookmarks",
-                    note: "Bookmarks need the playback engine.",
+                    note: "Bookmarks aren't built yet.",
                 )
             }
             .padding()
@@ -84,33 +84,19 @@ struct EpisodeDetailView: View {
         }
     }
 
-    /// Transport controls with no engine behind them — inert placeholders.
+    /// Starts playback; the transport controls live in the player (mini-player and
+    /// full screen), which takes over from here.
     private var playbackControls: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 24) {
-                Image(systemName: "gobackward.15")
-                    .font(.title2)
-                    .stubbed()
-                Image(systemName: "play.circle.fill")
-                    .font(.system(size: 56))
-                    .stubbed()
-                Image(systemName: "goforward.30")
-                    .font(.title2)
-                    .stubbed()
-            }
-            ProgressView(value: 0)
-                .tint(.debug)
-                .disabled(true)
-            HStack(spacing: 6) {
-                Image(systemName: "nosign")
-                    .font(.caption)
-                    .foregroundStyle(Color.debug)
-                Text("No playback engine yet")
-                    .font(.caption2)
-                    .foregroundStyle(themeColors.secondaryText)
-            }
+        Button { core.update(.playEpisode(episode.id)) } label: {
+            Label(playButtonTitle, systemImage: "play.fill")
+                .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity)
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+    }
+
+    private var playButtonTitle: String {
+        liveEpisode.playbackStatus == .inProgress ? "Resume" : "Play"
     }
 
     /// Working download control, driven by the live download status.

@@ -2,7 +2,7 @@ use crux_core::capability::Operation;
 use facet::Facet;
 use serde::{Deserialize, Serialize};
 
-use crate::domain::{DownloadStatus, Episode, PlaybackStatus, Subscription};
+use crate::domain::{DownloadStatus, Episode, EpisodeSource, PlaybackStatus, Subscription};
 
 #[derive(Facet, Serialize, Deserialize, Clone, Debug)]
 #[repr(C)]
@@ -45,6 +45,16 @@ pub enum StorageOperation {
         local_path: Option<String>,
         size_bytes: Option<u64>,
     },
+    /// Records the active playback so the mini-player can be restored on cold start: the
+    /// episode, and the source it was started from. Position lives on the episode row
+    /// (`UpdatePlaybackStatus`). Single-row: saving replaces the previous value.
+    SavePlayContext {
+        episode_id: String,
+        source: EpisodeSource,
+    },
+    /// The playback last saved by `SavePlayContext`, as `PlayContext`, or `NotFound`.
+    LoadPlayContext,
+    ClearPlayContext,
     /// Records the outcome of a refresh that did not produce a new feed body (304,
     /// 429, or a failure). `last_refreshed` is left unchanged when `None`; the error
     /// and retry-after columns are written verbatim (NULL when `None`). A moved
@@ -71,6 +81,11 @@ pub enum StorageResult {
     Subscriptions(Vec<Subscription>),
     Episode(Episode),
     Episodes(Vec<Episode>),
+    /// Answer to `LoadPlayContext`: the saved active episode and where it was started from.
+    PlayContext {
+        episode: Episode,
+        source: EpisodeSource,
+    },
     /// Answer to `UpdateRefreshState`: how many episodes that write flagged
     /// `RemovedFromFeed` (a 304 confirms pending absences; nothing else flags any).
     EpisodesRemoved(u64),

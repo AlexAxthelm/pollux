@@ -227,6 +227,23 @@ extension DatabaseManager {
         }
     }
 
+    /// An `EpisodeSource` as the `(kind, id)` pair stored in `play_context`.
+    static func episodeSourceColumns(_ source: EpisodeSource) -> (kind: String, id: String) {
+        switch source {
+        case let .subscription(id): ("Subscription", id)
+        }
+    }
+
+    static func episodeSource(kind: String, id: String) -> EpisodeSource {
+        switch kind {
+        case "Subscription": .subscription(id: id)
+        default: fatalError(
+                "Unknown EpisodeSource kind in DB: '\(kind)' — add a case to "
+                    + "episodeSource(kind:id:) and episodeSourceColumns(_:)",
+            )
+        }
+    }
+
     static func downloadStatusString(_ status: DownloadStatus) -> String {
         switch status {
         case .notDownloaded: "NotDownloaded"
