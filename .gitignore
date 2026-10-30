@@ -38,3 +38,6 @@ DerivedData/
 
 # ── Misc ──────────────────────────────────────────────────────────────────────
 *.log
+
+# Obsidian per-user layout
+docs/.obsidian/workspace*.json
