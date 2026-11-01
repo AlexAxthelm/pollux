@@ -39,5 +39,7 @@ DerivedData/
 # ── Misc ──────────────────────────────────────────────────────────────────────
 *.log
 
-# Obsidian per-user layout
-docs/.obsidian/workspace*.json
+# Obsidian: only vault-level settings are shared; everything else is per-user
+docs/.obsidian/*
+!docs/.obsidian/templates.json
+!docs/.obsidian/types.json

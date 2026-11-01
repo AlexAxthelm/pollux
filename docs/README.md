@@ -107,9 +107,15 @@ when you do.
 
 ## Obsidian settings
 
-- Vault root is `docs/`.
-- Templates plugin folder: `_templates`.
-- Keep wikilinks on (Settings → Files & Links), and keep "Automatically update
-  internal links" on so renames rewrite links.
-- Commit shared settings only; leave workspace files (`.obsidian/workspace*.json`)
-  out of git.
+Open `docs/` as the vault. Only two files in `docs/.obsidian/` are in git, the
+ones the notes depend on; everything else (appearance, fonts, graph, layout,
+plugin choices) is yours and ignored.
+
+Shared (committed):
+- `templates.json`: the Templates plugin folder, `_templates`.
+- `types.json`: property types, e.g. `feature` and `related` are lists.
+
+Set these yourself if they aren't already (not committed):
+- Core plugins: Templates, Properties and Backlinks on. They are on by default.
+- Settings → Files & Links: wikilinks on, and "Automatically update internal
+  links" on so renames rewrite links.
