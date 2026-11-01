@@ -1,8 +1,14 @@
-# Feed Subscription & Library
 ---
+type: feature
+status: draft
 priority: MVP
-depends: episode, storage, settings
+area: subscription
+depends:
+  - "[[episode]]"
+  - "[[storage]]"
+  - "[[settings]]"
 ---
+# Feed Subscription & Library
 
 A subscription is a mapping between the app and an RSS/Atom/JSONFeed URI. It is
 the primary way users add content to Pollux.
@@ -325,3 +331,21 @@ Known per-feed settings:
 - Episode list preview
 - Prominent "Subscribe" button
 - If already subscribed: warning + "Go to subscription" button
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

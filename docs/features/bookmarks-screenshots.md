@@ -1,7 +1,11 @@
-# Screenshot bookmarks
 ---
+type: feature
+status: draft
 priority: low
+area: bookmarks
+parent: "[[bookmarks]]"
 ---
+# Screenshot bookmarks
 
 The user can allow the app to process screenshots that they have taken, which
 include player information, and if the app can identify the episode and timestamp, it creates a bookmark at the timestamp in the screenshot.
@@ -12,3 +16,20 @@ In general, that seems like sufficient information to be able to drop a bookmark
 
 This very much will tie into the bookmarking feature.
 
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

@@ -1,7 +1,11 @@
-# Library Grid view
 ---
+type: feature
+status: draft
 priority: mid
+area: library
+parent: "[[library]]"
 ---
+# Library Grid view
 
 The entries in the library (playlists and subscritpions) can be presented as
 lists (default) or in a grid view.
@@ -16,3 +20,21 @@ comparable functionality to the list entries, but is tall and narrow, rather
 than short and wide)
 
 In the grid view, the user can select the density (2, 3, 4 wide)
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

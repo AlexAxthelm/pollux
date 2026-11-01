@@ -1,8 +1,13 @@
-# Circular Dependencies in Playlists
 ---
+type: feature
+status: draft
 priority: high
-depends: playlists
+area: playlists
+parent: "[[playlists]]"
+depends:
+  - "[[playlists]]"
 ---
+# Circular Dependencies in Playlists
 
 By allowing playlists to include other playlists as sources, circular
 dependencies are possible — a playlist including itself directly, or more likely
@@ -38,3 +43,21 @@ the playlist source graph and a clear, non-alarming way to surface it.
 
 This is non-trivial to communicate well — defer until there's a clear UX
 approach.
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

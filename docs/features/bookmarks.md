@@ -1,8 +1,13 @@
-# Bookmarks
 ---
+type: feature
+status: draft
 priority: mid
-depends: episode, player
+area:
+depends:
+  - "[[episode]]"
+  - "[[player]]"
 ---
+# Bookmarks
 
 Allow user to mark specific timestamps (for later refernece).
 May optionally have a text note attached to the bookmark. 
@@ -29,3 +34,21 @@ controls?
 
 Would be good to have a view of bookmarks in an episode when seeing the episode
 view, but also have a way to organize/filter across episode-bookmarks
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

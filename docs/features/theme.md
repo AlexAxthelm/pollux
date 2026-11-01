@@ -1,8 +1,12 @@
-# Theme (colorscheme)
 ---
+type: feature
+status: draft
 priority: MVP
-depends: settings
+area: theme
+depends:
+  - "[[settings]]"
 ---
+# Theme (colorscheme)
 
 The app's color scheme is configurable via a theme selector in Settings. All
 colors are defined using the base16 nomenclature internally, giving access to
@@ -119,3 +123,21 @@ in the future
 - A semantic mapping document should be maintained alongside this spec, defining
   which base16 values are used for which UI elements
 - The base16 spec: https://github.com/chriskempson/base16
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

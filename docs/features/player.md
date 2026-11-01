@@ -1,8 +1,15 @@
-# Audio Playback
 ---
+type: feature
+status: draft
 priority: MVP
-depends: episode, mini-player, subscription, settings
+area: player
+depends:
+  - "[[episode]]"
+  - "[[mini-player]]"
+  - "[[subscription]]"
+  - "[[settings]]"
 ---
+# Audio Playback
 
 The player is the primary listening interface. It integrates with the OS media
 system where available, and surfaces controls for the currently active episode
@@ -444,3 +451,21 @@ handle its episode's show disappearing: the saved play context is deleted with t
 subscription that no longer exists, and a context save would fail (it is capped at 5
 attempts). The player should stop and clear when its episode's subscription is removed.
 (User story: `user_stories/player/playback.md`, "stop cleanly if I unsubscribe".)
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

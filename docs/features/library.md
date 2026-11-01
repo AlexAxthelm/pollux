@@ -1,8 +1,14 @@
-# Library
 ---
+type: feature
+status: draft
 priority: MVP
-depends: subscription, playlists, navigation
+area: library
+depends:
+  - "[[subscription]]"
+  - "[[playlists]]"
+  - "[[navigation]]"
 ---
+# Library
 
 The library is the home screen of Pollux and the primary navigation hub. It
 presents the user's subscriptions and playlists in a single scrollable view,
@@ -101,3 +107,21 @@ not MVP).
   library (button in toolbar).
 
 For MVP, these should all be buttons in a toolbar
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

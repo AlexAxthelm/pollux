@@ -1,8 +1,15 @@
-# Storage & Downloads
 ---
+type: feature
+status: draft
 priority: MVP
-depends: episode, subscription, settings, notifications
+area: storage
+depends:
+  - "[[episode]]"
+  - "[[subscription]]"
+  - "[[settings]]"
+  - "[[notifications]]"
 ---
+# Storage & Downloads
 
 Pollux downloads episode audio files for offline playback. Storage management is
 designed to be transparent and user-controlled, without silently deleting content.
@@ -161,3 +168,21 @@ For MVP, storage settings should not sync.
 ## Future: Eviction
 
 see storage-eviction.md
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

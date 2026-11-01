@@ -1,7 +1,10 @@
-# Listening Statistics
 ---
+type: feature
+status: draft
 priority: mid
+area:
 ---
+# Listening Statistics
 
 
 I'd like to be able to compile listening statistics about the podcasts that I've listened to.
@@ -18,3 +21,21 @@ stuff
 I'd like for this to also help me identify listening time (and habits)
 per-device (I listen to these podcasts on my phone, and these other ones on my
 laptop)
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

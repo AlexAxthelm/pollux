@@ -1,8 +1,13 @@
-# Playlist Rules
 ---
+type: feature
+status: draft
 priority: high
-depends: playlists
+area: playlists
+parent: "[[playlists]]"
+depends:
+  - "[[playlists]]"
 ---
+# Playlist Rules
 
 Rules are the filters and sorts applied to a playlist's sources to produce an ordered episode list. Rules are applied in sequence; order matters.
 
@@ -64,3 +69,21 @@ A rule applied to a populated source set acts only on that set.
 
 - The rule system is intentionally analogous to a SQL SELECT: sources = FROM, filters = WHERE, sorts = ORDER BY
 - Each new rule type can be added incrementally without changing the underlying data model
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

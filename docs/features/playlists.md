@@ -1,8 +1,15 @@
-# Playlists
 ---
+type: feature
+status: draft
 priority: MVP
-depends: episode, subscription, playlist-rules, playlists-circular-dependencies
+area: playlists
+depends:
+  - "[[episode]]"
+  - "[[subscription]]"
+  - "[[playlist-rules]]"
+  - "[[playlists-circular-dependencies]]"
 ---
+# Playlists
 
 Playlists are the primary way users organize and consume episodes in Pollux.
 
@@ -117,3 +124,21 @@ For use in menus and selection flows:
 - Playlist title
 - Episode count, playtime (ready / total)
 - Playlist type indicator
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```
