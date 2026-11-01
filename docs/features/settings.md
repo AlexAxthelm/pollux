@@ -1,8 +1,17 @@
-# Settings
 ---
+type: feature
+status: draft
 priority: MVP
-depends: storage, player, episode, playlists, subscription, notifications
+area: settings
+depends:
+  - "[[storage]]"
+  - "[[player]]"
+  - "[[episode]]"
+  - "[[playlists]]"
+  - "[[subscription]]"
+  - "[[notifications]]"
 ---
+# Settings
 
 A central location for user preferences that affect behavior.
 Accessible from a gear/settings icon in the library toolbar, or via contextual
@@ -97,3 +106,21 @@ Same as feed settings, but also refresh interval
 - Should settings be synced across devices, or are they per-device?
   Storage limit is clearly per-device. Skip increments could go either way.
   See `sync.md`.
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

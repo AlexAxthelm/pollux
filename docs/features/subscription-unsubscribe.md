@@ -1,8 +1,13 @@
-# Unsubscribing
 ---
+type: feature
+status: draft
 priority: MVP
-depends: subscription
+area: subscription
+parent: "[[subscription]]"
+depends:
+  - "[[subscription]]"
 ---
+# Unsubscribing
 
 Unsubscribe is a destructive action and should be protected accordingly:
 - Not in the primary UI — accessed via a menu or settings within the subscription
@@ -18,3 +23,21 @@ When a subscription is removed, playlists should have their rule re-evaluated,
 so that the removal is reflected in those too.
 
 see subscription-soft-delete.md for future unsubscribe improvements
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

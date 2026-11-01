@@ -1,8 +1,14 @@
-# Archive Binge Playlists
 ---
+type: feature
+status: draft
 priority: high
-depends: playlists, playlist-rules
+area: playlists
+parent: "[[playlists]]"
+depends:
+  - "[[playlists]]"
+  - "[[playlist-rules]]"
 ---
+# Archive Binge Playlists
 
 Archive binge is a primary use case that distinguishes Pollux from conventional podcast clients. It is not a separate feature, but a specific configuration of playlist rules that the app should make easy to discover and set up.
 
@@ -56,3 +62,21 @@ Desired behavior:
 3. Queue does not clump all 2016-era episodes together (later)
 
 This is achievable with MVP rules for steps 1–2. Step 3 requires an interleaved sort strategy.
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

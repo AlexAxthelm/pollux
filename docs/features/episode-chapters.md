@@ -1,8 +1,14 @@
-# Chapters
 ---
+type: feature
+status: draft
 priority: high
-depends: episode, player
+area: episode
+parent: "[[episode]]"
+depends:
+  - "[[episode]]"
+  - "[[player]]"
 ---
+# Chapters
 
 Chapter support is a progressive enhancement. Episodes without chapters behave
 normally; the UI adapts when chapter data is present. MVP includes chapter
@@ -67,3 +73,21 @@ See `player-show-notes.md` for show notes implementation.
 
 - On-device model to suggest chapter markers for episodes that have none
 - Scrubber chapter markers (see `player.md`)
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```
