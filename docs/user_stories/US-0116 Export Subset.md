@@ -3,7 +3,7 @@ type: user-story
 status: draft
 feature:
   - "[[subscription]]"
-  - "[[opml]]"
+  - "[[import-export]]"
 related: []
 ---
 As a user

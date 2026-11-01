@@ -3,7 +3,7 @@ type: user-story
 status: draft
 feature:
   - "[[playlists]]"
-  - "[[opml]]"
+  - "[[import-export]]"
 related:
   - "[[US-0114 Export subscriptions]]"
 ---

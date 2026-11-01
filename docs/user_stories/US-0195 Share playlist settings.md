@@ -5,6 +5,7 @@ feature:
   - "[[sharing]]"
   - "[[playlists]]"
   - "[[settings]]"
+  - "[[import-export]]"
 related: []
 ---
 As a user
