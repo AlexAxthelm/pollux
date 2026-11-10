@@ -33,10 +33,10 @@ Settings are organized into sections on a single scrollable screen.
   (default: total)
 
 ### Downloads & Storage
-- Storage limit (see `storage.md`)
-- Parallel downloads (default: 1 for MVP)
+- Storage limit (see `storage-limits.md`)
+- Parallel downloads (default: 1 for MVP; see `downloads-queue.md`)
 - Default download rule for new subscriptions (default: most recent episode,
-  if unplayed)
+  if unplayed; see `downloads-auto.md`)
 
 ### Feed Refresh
 - Global refresh interval (default: 12 hours)

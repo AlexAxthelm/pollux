@@ -3,8 +3,8 @@ type: user-story
 status: draft
 feature:
   - "[[sync]]"
-  - "[[downloads]]"
   - "[[storage-sync]]"
+  - "[[downloads]]"
 related:
   - "[[US-0035 Download control]]"
 ---

@@ -2,8 +2,8 @@
 type: user-story
 status: draft
 feature:
-  - "[[storage]]"
-  - "[[downloads]]"
+  - "[[storage-limits]]"
+  - "[[downloads-queue]]"
 related: []
 ---
 As a curator

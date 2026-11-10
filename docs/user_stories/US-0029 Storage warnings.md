@@ -2,7 +2,7 @@
 type: user-story
 status: draft
 feature:
-  - "[[storage]]"
+  - "[[storage-notifications]]"
 related: []
 ---
 As a user

@@ -2,7 +2,7 @@
 type: user-story
 status: draft
 feature:
-  - "[[downloads]]"
+  - "[[downloads-failures]]"
 related:
   - "[[US-0030 Download failure notifications]]"
   - "[[US-0031 Download failure notifications]]"

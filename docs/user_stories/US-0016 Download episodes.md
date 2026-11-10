@@ -2,8 +2,7 @@
 type: user-story
 status: draft
 feature:
-  - "[[storage]]"
-  - "[[downloads]]"
+  - "[[downloads-auto]]"
 related: []
 ---
 As a user

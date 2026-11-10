@@ -2,7 +2,8 @@
 type: user-story
 status: draft
 feature:
-  - "[[downloads]]"
+  - "[[storage-notifications]]"
+  - "[[downloads-failures]]"
   - "[[notifications]]"
 related: []
 ---

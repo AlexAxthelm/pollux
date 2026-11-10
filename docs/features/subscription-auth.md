@@ -16,7 +16,9 @@ subscription model to support these.
 ## Known Requirements
 
 - Store credentials or tokens securely (per-subscription)
-- Pass credentials when fetching feed URI and downloading episode files
+- Pass credentials when fetching feed URI and downloading episode files, so
+  subscribers can download episodes from access-controlled feeds (see
+  [[downloads]])
 - UI for entering / updating credentials within subscription settings
 - Handle auth failures gracefully (notify user, don't silently fail)
 

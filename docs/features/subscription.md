@@ -306,7 +306,7 @@ reset to default individually.
 
 Known per-feed settings:
 - Refresh interval
-- Download rules (see `storage.md`)
+- Download rules (see `downloads-auto.md`)
 - *(more to be defined)*
 
 

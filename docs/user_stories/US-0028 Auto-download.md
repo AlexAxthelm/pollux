@@ -2,7 +2,7 @@
 type: user-story
 status: draft
 feature:
-  - "[[downloads]]"
+  - "[[downloads-auto]]"
   - "[[subscription]]"
 related:
   - "[[US-0025 Auto-download]]"

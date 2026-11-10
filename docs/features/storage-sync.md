@@ -13,6 +13,10 @@ same, but not a strong suggestion). So I may want to have this feed downloaded
 on my phone, but not my laptop, or vice versa. When sync works, it would be good
 to have a way to see something like "available on phone" as a bonus feature
 
+For MVP, storage settings (including the limit; see [[storage-limits]]) should
+not sync. Per-device control over which episodes are downloaded is described in
+[[sync]].
+
 ## User stories
 
 ```base

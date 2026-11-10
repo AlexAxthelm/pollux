@@ -52,7 +52,7 @@ Tracks whether the episode audio file is available in local storage:
 
 A user-set marker to distinguish an episode. Used to influence playlist and
 download behavior (see `playlist-rules.md`), and to protect episodes from
-eviction (see `storage.md`). Additional flag types may be added later.
+eviction (see `storage-protection.md`). Additional flag types may be added later.
 
 ## Actions
 

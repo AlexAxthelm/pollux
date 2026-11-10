@@ -2,7 +2,7 @@
 type: user-story
 status: draft
 feature:
-  - "[[downloads]]"
+  - "[[downloads-auto]]"
 related: []
 ---
 As a listener

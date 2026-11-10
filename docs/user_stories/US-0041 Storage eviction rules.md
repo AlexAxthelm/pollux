@@ -2,7 +2,7 @@
 type: user-story
 status: draft
 feature:
-  - "[[storage]]"
+  - "[[storage-eviction]]"
   - "[[settings]]"
 related:
   - "[[US-0042 Storage retention rules]]"

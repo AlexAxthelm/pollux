@@ -2,7 +2,7 @@
 type: user-story
 status: draft
 feature:
-  - "[[storage]]"
+  - "[[storage-styles]]"
   - "[[playlists]]"
 related:
   - "[[US-0050 Storage style]]"

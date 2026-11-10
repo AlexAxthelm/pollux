@@ -13,10 +13,11 @@ Pollux should notify users of relevant events without being intrusive.
 
 ## Known Notification Types
 
-- **Storage nudge**: prompt user to set a storage limit when none is configured,
-  with increasing urgency as device free space decreases (see `storage.md`)
+- **Storage notifications**: limit nudge, nearing-the-limit warning, downloads
+  stopped by the limit, and "this file could be deleted" suggestions (see
+  [[storage-notifications]])
 - **Download failed**: notify when a download fails due to storage full or
-  network error
+  network error (see [[downloads-failures]])
 - *(more to be defined as features are specced)*
 
 ## Open Questions

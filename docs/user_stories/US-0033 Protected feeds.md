@@ -2,8 +2,8 @@
 type: user-story
 status: draft
 feature:
+  - "[[subscription-auth]]"
   - "[[downloads]]"
-  - "[[subscription]]"
 related: []
 ---
 As a subscriber

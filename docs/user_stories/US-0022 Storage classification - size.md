@@ -2,7 +2,7 @@
 type: user-story
 status: draft
 feature:
-  - "[[storage]]"
+  - "[[storage-ui]]"
 related:
   - "[[US-0021 Storage classification - show]]"
   - "[[US-0023 Storage classification - date]]"

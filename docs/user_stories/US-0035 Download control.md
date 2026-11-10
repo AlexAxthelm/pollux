@@ -2,6 +2,8 @@
 type: user-story
 status: draft
 feature:
+  - "[[sync]]"
+  - "[[storage-sync]]"
   - "[[downloads]]"
 related: []
 ---

@@ -2,7 +2,7 @@
 type: user-story
 status: draft
 feature:
-  - "[[storage]]"
+  - "[[storage-eviction]]"
 related:
   - "[[US-0044 Retention rules interactions]]"
 ---

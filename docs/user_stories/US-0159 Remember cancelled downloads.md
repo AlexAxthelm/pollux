@@ -2,7 +2,7 @@
 type: user-story
 status: draft
 feature:
-  - "[[downloads]]"
+  - "[[downloads-queue]]"
   - "[[episode]]"
 related:
   - "[[US-0158 Remember unplayable episodes]]"
