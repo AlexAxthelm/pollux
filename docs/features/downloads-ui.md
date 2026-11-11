@@ -1,6 +1,6 @@
 ---
 type: feature
-status: draft
+status: accepted
 priority: MVP
 area: downloads
 parent: "[[downloads]]"
@@ -17,7 +17,7 @@ depends:
 - Failed downloads with error message and retry button (see
   [[downloads-failures]])
 
-The screen is reachable from the library; see `library.md`.
+The screen is reachable from the [[library]]
 
 ## Download explanations
 
@@ -28,7 +28,7 @@ See [[downloads-auto]].
 ## Episode-level indicators
 
 Per-episode status (not downloaded, downloading, downloaded, failed) and the
-progress indicator are defined in `episode.md`.
+progress indicator are defined in [[episode]]
 
 ## Related
 

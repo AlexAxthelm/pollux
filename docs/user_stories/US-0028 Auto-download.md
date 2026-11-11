@@ -1,6 +1,6 @@
 ---
 type: user-story
-status: draft
+status: closed
 feature:
   - "[[downloads-auto]]"
   - "[[subscription]]"

@@ -1,6 +1,6 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
   - "[[storage-limits]]"
   - "[[downloads-queue]]"

@@ -1,6 +1,6 @@
 ---
 type: feature
-status: draft
+status: accepted
 priority: MVP
 area: downloads
 parent: "[[downloads]]"
@@ -17,12 +17,12 @@ What gets downloaded, and who decides.
 ## Subscription level (default)
 
 By default, the most recent episode of each show is downloaded automatically, if
-unplayed, so the user doesn't need to do it themselves. The default rule for new
-subscriptions is a setting (see `settings.md`).
+unplayed, so the user doesn't need to do it themselves. This default rule for new
+subscriptions is a setting (see [[settings]]), but can be adjusted per-subscription.
 
 New episodes are evaluated against the feed's download rules after a refresh;
 refreshing itself is metadata-only and does not trigger downloads directly (see
-`subscription.md`).
+[[subscription]]).
 
 ## Playlist level (later)
 
@@ -34,7 +34,7 @@ refreshing itself is metadata-only and does not trigger downloads directly (see
 ## Manual
 
 The user explicitly downloads any episode via context menu or swipe gesture (see
-`episode.md`).
+[[episode]]).
 
 ## Keeping the current episode ready
 

@@ -3,7 +3,6 @@ type: user-story
 status: draft
 feature:
   - "[[player]]"
-  - "[[downloads-auto]]"
 related: []
 ---
 As a user
