@@ -2,7 +2,7 @@
 type: user-story
 status: draft
 feature:
-  - "[[subscription]]"
+  - "[[subscription-subscribe]]"
 related:
   - "[[US-0104 Informative errors]]"
 ---

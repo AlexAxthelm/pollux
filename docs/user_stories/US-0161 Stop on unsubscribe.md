@@ -2,9 +2,8 @@
 type: user-story
 status: draft
 feature:
-  - "[[player]]"
-  - "[[subscription]]"
   - "[[subscription-unsubscribe]]"
+  - "[[player-progress]]"
 related: []
 ---
 As a listener

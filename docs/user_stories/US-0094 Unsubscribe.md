@@ -2,7 +2,6 @@
 type: user-story
 status: draft
 feature:
-  - "[[subscription]]"
   - "[[subscription-unsubscribe]]"
 related: []
 ---

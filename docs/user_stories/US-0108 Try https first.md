@@ -2,8 +2,8 @@
 type: user-story
 status: draft
 feature:
-  - "[[subscription]]"
   - "[[feed-parsing]]"
+  - "[[subscription-transport-security]]"
 related:
   - "[[US-0107 Allow http (unsecure)]]"
 ---

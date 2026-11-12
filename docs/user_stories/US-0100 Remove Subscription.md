@@ -2,7 +2,6 @@
 type: user-story
 status: accepted
 feature:
-  - "[[subscription]]"
   - "[[storage]]"
   - "[[subscription-soft-delete]]"
 related: []

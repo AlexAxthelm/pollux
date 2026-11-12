@@ -412,7 +412,7 @@ impl App for Pollux {
                 // NOTE: this makes re-selection a no-op even if the feed's stored
                 // episodes changed since the last load. A feed refresh therefore
                 // reloads the open feed's episodes explicitly (see `RefreshSaved`)
-                // rather than relying on re-selection. See docs/features/subscription.md.
+                // rather than relying on re-selection. See ADR-0014 in docs/decisions.
                 let same_feed = model
                     .selected_subscription
                     .as_ref()

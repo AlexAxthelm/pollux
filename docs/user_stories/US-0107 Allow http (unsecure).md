@@ -2,7 +2,7 @@
 type: user-story
 status: draft
 feature:
-  - "[[subscription]]"
+  - "[[subscription-transport-security]]"
 related: []
 ---
 As a subscriber

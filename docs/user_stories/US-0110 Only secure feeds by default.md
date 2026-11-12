@@ -2,7 +2,7 @@
 type: user-story
 status: draft
 feature:
-  - "[[subscription]]"
+  - "[[subscription-transport-security]]"
 related:
   - "[[US-0107 Allow http (unsecure)]]"
   - "[[US-0111 Scope security exceptions]]"

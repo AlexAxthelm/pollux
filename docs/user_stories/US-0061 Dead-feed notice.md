@@ -3,7 +3,7 @@ type: user-story
 status: draft
 feature:
   - "[[library]]"
-  - "[[subscription]]"
+  - "[[subscription-inactive]]"
 related: []
 ---
 As a subscriber

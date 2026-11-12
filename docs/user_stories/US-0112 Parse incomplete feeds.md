@@ -2,8 +2,8 @@
 type: user-story
 status: draft
 feature:
-  - "[[subscription]]"
   - "[[feed-parsing]]"
+  - "[[subscription-subscribe]]"
 related:
   - "[[US-0093 Subscribe from URL]]"
   - "[[US-0108 Try https first]]"
