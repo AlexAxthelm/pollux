@@ -1,6 +1,6 @@
 ---
 type: feature
-status: draft
+status: accepted
 priority: low
 area: storage
 parent: "[[storage]]"

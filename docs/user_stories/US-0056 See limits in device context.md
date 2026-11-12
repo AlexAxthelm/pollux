@@ -1,8 +1,9 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[storage]]"
+  - "[[storage-limits]]"
+  - "[[storage-ui]]"
 related:
   - "[[US-0018 Storage limits]]"
 ---

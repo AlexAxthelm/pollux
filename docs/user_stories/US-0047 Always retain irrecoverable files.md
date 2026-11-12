@@ -1,8 +1,8 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[storage]]"
+  - "[[storage-protection]]"
   - "[[subscription]]"
 related:
   - "[[US-0046 Always-retain episode]]"

@@ -33,13 +33,16 @@ device storage)**. At ~60 MB/hour (128kbps MP3), 4 GB ≈ 66 hours of content.
 
 ## Configuration
 
-The limit is set as a number in GB or hours (user picks unit; the other
-representations update live):
+The limit is set as a number in GB or hours (user picks unit). Whichever unit is
+used, the other representations update live, so the user can see a conversion
+between time and space and understand the consequences of their decision:
 
 - **GB**: direct storage size
 - **Hours**: approximate playback time (~60 MB/hour at 128kbps; shown as an
   estimate, not a guarantee)
-- **% of device**: read-only annotation, not an input mode
+- **% of device**: read-only annotation, not an input mode. It shows the limit
+  as a fraction of the device's total space, so the user can see how it will
+  impact their system overall (see also [[storage-ui]])
 
 The limit is per-device and does not sync for MVP (see [[storage-sync]]).
 

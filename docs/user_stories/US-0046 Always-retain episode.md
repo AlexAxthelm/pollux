@@ -1,8 +1,9 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[storage]]"
+  - "[[storage-protection]]"
+  - "[[episode]]"
 related:
   - "[[US-0047 Always retain irrecoverable files]]"
   - "[[US-0048 Always-retain bookmarks]]"
