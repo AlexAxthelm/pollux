@@ -1,6 +1,6 @@
 ---
 type: feature
-status: draft
+status: accepted
 priority: high
 area: player
 parent: "[[player]]"
