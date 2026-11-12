@@ -1,9 +1,8 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[player]]"
-  - "[[os-integration]]"
+  - "[[player-os-integration]]"
 related: []
 ---
 As a listener

@@ -2,8 +2,7 @@
 type: user-story
 status: draft
 feature:
-  - "[[player]]"
-  - "[[os-integration]]"
+  - "[[player-os-integration]]"
 related:
   - "[[US-0137 System control]]"
 ---

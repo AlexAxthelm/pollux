@@ -29,8 +29,9 @@ What happens when a download doesn't complete.
 - A download that failed is retried when the user plays the episode again, even
   if it was replacing a file that turned out to be missing, so the episode ends
   up downloaded without the user having to find the Download button. The playback
-  side of this is described in `player.md` ("A replacement download that failed
-  is not retried on play").
+  side of this is described in [[player-streaming]] ("A replacement download that
+  failed is not retried on play") and
+  [[ADR-0003 Streaming starts at once and swaps to the download]].
 - Downloads the user cancelled or deleted are not retried; see
   [[downloads-queue]].
 

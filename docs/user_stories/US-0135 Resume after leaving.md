@@ -1,9 +1,9 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[player]]"
   - "[[episode]]"
+  - "[[player-progress]]"
 related:
   - "[[US-0134 Resume from pause]]"
 ---

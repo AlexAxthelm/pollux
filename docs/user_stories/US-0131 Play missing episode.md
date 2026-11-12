@@ -2,10 +2,9 @@
 type: user-story
 status: accepted
 feature:
-  - "[[player]]"
-  - "[[streaming]]"
   - "[[downloads]]"
   - "[[episode]]"
+  - "[[player-streaming]]"
 related:
   - "[[US-0156 No gap when switching from streaming to local]]"
   - "[[US-0157 Renew links to streams]]"

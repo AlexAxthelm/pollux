@@ -12,6 +12,7 @@ docs/
   _templates/          note templates (Obsidian Templates plugin points here)
   features/            one note per feature
   user_stories/        one note per user story
+  decisions/           one note per decision (ADR)
   policies/            CODE_OF_CONDUCT, CONTRIBUTING
   (root)               ARCHITECTURE, DATA_MODEL, DESIGN_PRINCIPLES, GLOSSARY,
                        HACKING, ROADMAP
@@ -33,6 +34,10 @@ in the path.
   The filename prefix is the ID; there is no separate `id` property. Cite just
   the ID (`US-0004`) in commit messages, tests and code comments, not the full
   filename.
+- **Decisions:** `ADR-NNNN short title.md`, numbered the same way. Write the
+  title as the decision itself ("Played is decided when the listener leaves an
+  episode"), not the topic. A decision is superseded, not edited away: mark the
+  old one `superseded` and link the new one from `related`.
 
 ## Properties (frontmatter)
 
@@ -41,9 +46,10 @@ Properties that hold links must be quoted: `feature: ["[[bookmarks]]"]`.
 
 | Note type | Properties |
 |---|---|
-| all | `type`: `feature`, `user-story`, `policy` or `reference` |
+| all | `type`: `feature`, `user-story`, `decision`, `policy` or `reference` |
 | feature | `status`, `priority` (low/mid/high), `area`, `depends` (list of links), `parent` (link, for sub-features) |
 | user-story | `status`, `feature` (list of links), `related` (list of links) |
+| decision | `status` (`draft` → `accepted` → `superseded`), `feature` (list of links), `related` (list of links); body is Context, Decision, Consequences |
 | policy, reference | `type` only |
 
 **`status`** is the same for features and stories: `draft` → `accepted` →

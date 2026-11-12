@@ -1,9 +1,8 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[player]]"
-  - "[[streaming]]"
+  - "[[player-streaming]]"
 related: []
 ---
 As a listener

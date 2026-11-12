@@ -76,8 +76,8 @@ The core listening experience.
 - **Active playlist persistence**: restore on cold start
 
 *Status: the engine, player, mini-player and cold-start restore are built
-(subscription-as-playlist only, no auto-advance). See "Decisions (MVP
-implementation)" in `docs/features/player.md`.*
+(subscription-as-playlist only, no auto-advance). See "Decisions" in
+`docs/features/player.md` and the notes in `docs/decisions/`.*
 
 Milestone: can find an episode, play it, control it from lock screen, resume
 where you left off.
@@ -112,8 +112,8 @@ Rounding out MVP to a complete, shippable state.
 - **Storage UI**: usage breakdown by subscription, limit configuration
 - **Subscription unsubscribe**: warning with episode count, hard delete,
   playlist re-evaluation on removal; the player must stop and clear its saved play
-  context if its episode's show is removed (see `features/player.md`, "Unsubscribing
-  from the show that is playing")
+  context if its episode's show is removed (see `features/subscription-unsubscribe.md`,
+  "Effect on playback")
 - **Download queue management**: downloads page, user re-ordering, and a
   persisted enqueue order so the serial queue restores FIFO across relaunch
   (today it rebuilds by pub date); groundwork for parallel downloads

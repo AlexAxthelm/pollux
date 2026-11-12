@@ -24,6 +24,15 @@ so that the removal is reflected in those too.
 
 see subscription-soft-delete.md for future unsubscribe improvements
 
+## Effect on playback
+
+There is no unsubscribe flow yet (see ROADMAP Phase 5). When it is built, the player has to
+handle its episode's show disappearing: the saved play context is deleted with the episode
+(`ON DELETE CASCADE`), but the in-memory player would carry on, "From:" would navigate to a
+subscription that no longer exists, and a context save would fail (it is capped at 5
+attempts). The player should stop and clear when its episode's subscription is removed.
+(User story: [[US-0161 Stop on unsubscribe]].)
+
 ## User stories
 
 ```base

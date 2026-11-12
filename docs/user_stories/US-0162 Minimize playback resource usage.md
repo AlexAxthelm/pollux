@@ -1,8 +1,8 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[player]]"
+  - "[[player-performance]]"
 related: []
 tags:
   - performance

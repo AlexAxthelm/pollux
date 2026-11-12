@@ -2,9 +2,8 @@
 type: user-story
 status: accepted
 feature:
-  - "[[player]]"
   - "[[downloads]]"
-  - "[[streaming]]"
+  - "[[player-streaming]]"
 related: []
 ---
 As a listener

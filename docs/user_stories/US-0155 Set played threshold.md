@@ -1,10 +1,10 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[player]]"
   - "[[settings]]"
   - "[[episode]]"
+  - "[[player-progress]]"
 related: []
 ---
 As a listener

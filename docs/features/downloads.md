@@ -32,7 +32,7 @@ Related elsewhere:
 - Authenticated feeds (protected downloads): [[subscription-auth]]
 - Per-device download control: [[sync]] and [[storage-sync]]
 - Download status on an episode: `episode.md`
-- Streaming while a download is in flight: `player.md`
+- Streaming while a download is in flight: [[player-streaming]]
 
 ## Open questions
 

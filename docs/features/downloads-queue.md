@@ -33,9 +33,10 @@ retrying a bad file.
 
 Playback never downloads against the listener's wishes: once a download is
 cancelled or deleted, only the explicit Download action lifts that. Today this
-memory is kept for the session only; see `player.md` ("Declined downloads and the
-bad-file memory last for the session") for the current behavior and the open
-question about making it durable.
+memory is kept for the session only; see [[player-streaming]] ("Declined downloads
+and the bad-file memory last for the session") and
+[[ADR-0004 Playback never downloads against the listener's wishes]] for the
+current behavior and the open question about making it durable.
 
 ## Parallel downloads
 
