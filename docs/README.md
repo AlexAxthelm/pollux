@@ -13,7 +13,9 @@ docs/
   features/            one note per feature
   user_stories/        one note per user story
   decisions/           one note per decision (ADR)
+  bugs/                one note per bug
   policies/            CODE_OF_CONDUCT, CONTRIBUTING
+  *.base               saved queries over the notes (see Bases)
   (root)               ARCHITECTURE, DATA_MODEL, DESIGN_PRINCIPLES, GLOSSARY,
                        HACKING, ROADMAP
 ```
@@ -40,6 +42,8 @@ in the path.
   episode"), not the topic. For a choice that is still open, title it as the
   proposed decision and mark it `draft`. A decision is superseded, not edited
   away: mark the old one `superseded` and link the new one from `related`.
+- **Bugs:** `BUG-NNNN short title.md`, numbered the same way, in `bugs/`. Cite
+  just the ID (`BUG-0001`) in commits, tests and code comments.
 
 ## Properties (frontmatter)
 
@@ -48,15 +52,17 @@ Properties that hold links must be quoted: `feature: ["[[bookmarks]]"]`.
 
 | Note type | Properties |
 |---|---|
-| all | `type`: `feature`, `user-story`, `decision`, `policy` or `reference` |
+| all | `type`: `feature`, `user-story`, `decision`, `bug`, `policy` or `reference` |
 | feature | `status`, `priority` (low/mid/high), `area`, `depends` (list of links), `parent` (link, for sub-features) |
 | user-story | `status`, `feature` (list of links), `related` (list of links) |
 | decision | `status` (`draft` → `accepted` → `superseded`), `feature` (list of links), `related` (list of links); body is Context, Decision, Consequences |
+| bug | `status`, `feature` (list of links to the feature or features affected), `related` (list of links); body is a title, what happens, and steps to reproduce |
 | policy, reference | `type` only |
 
 **`status`** is the same for features and stories: `draft` → `accepted` →
-`done`. "Accepted" means agreed, not built. Decisions have their own sequence
-(see the table).
+`done`. "Accepted" means agreed, not built. `closed` marks a note set aside
+without being built, for example a story that duplicates another. Decisions have
+their own sequence (see the table). Bugs use the same `status` values as stories.
 
 **`area`** is for features only. It is a single value such as `player`, `library`, `subscription`,
 `playlists`, `storage`, `sync`, `settings` or `theme`. Use it to filter across
@@ -107,12 +113,43 @@ Context section. Add the real reason when you know it.
 - A story names its feature(s) with `feature:`, a list, so a story can belong to
   more than one feature. A feature never has to be edited
   to gain a story.
-- Each feature note ends with a `## User stories` list of plain links to its
-  stories. Keep this list as plain text so it reads without Obsidian.
+- Each feature note ends with a `## User stories` section holding a base: a
+  query that lists every story linking to that feature (see Bases). The query is
+  stored as plain text in the note, but the list itself only appears in Obsidian,
+  so use the `grep` recipes below to find stories without it. Decisions and bugs
+  tie to features through their own `feature:` property and are found the same way.
 - Use `[[links]]` in the body for anything else. Obsidian's Backlinks pane
   shows what points at a note.
 - Embeds (`![[note]]`) render only in Obsidian. Use them sparingly, and make
   sure the note still reads fine without them.
+
+## Bases
+
+A base is an Obsidian query over the notes' properties, shown as a table. Two
+kinds are used here:
+
+- **The stories table in each feature note.** It is a fenced `base` block copied
+  from `_templates/feature.md`. It filters on `file.hasLink(this.file)` and
+  `type == "user-story"`, so a story shows up in a feature's table as soon as its
+  `feature:` property links to it. Nothing in the feature needs editing.
+- **Saved queries as `.base` files at the root of `docs/`.** For example,
+  `clean_up_query.base` lists every note that is not yet `accepted` or `closed`,
+  grouped by status and ordered by priority (MVP first), then parent, then name.
+  Use it to see what still needs review.
+
+Bases read the properties described above, so they only work on notes that have
+them (see "Status of the conversion").
+
+With Obsidian open, the same queries run from a terminal through the Obsidian CLI:
+
+```bash
+obsidian bases                                              # list the .base files
+obsidian base:query path=clean_up_query.base format=md      # run one
+```
+
+On macOS the binary is `/Applications/Obsidian.app/Contents/MacOS/obsidian`; it is
+not on `PATH` by default. Formats are `json` (the default), `csv`, `tsv`, `md` and
+`paths`.
 
 ## Tags
 
@@ -151,6 +188,8 @@ Set these yourself if they aren't already (not committed):
 - Core plugins: Templates, Properties and Backlinks on. They are on by default.
 - Settings → Files & Links: wikilinks on, and "Automatically update internal
   links" on so renames rewrite links.
+- Core plugin Bases on, so the stories tables and `.base` files render. The
+  Obsidian CLI is optional; enable it in settings to run bases from a terminal.
 
 Optional, to see git status inside Obsidian: the community plugin Obsidian Git. The
 vault is a subfolder of the repository, so leave its "Repository folder within the
