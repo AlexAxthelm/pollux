@@ -1,0 +1,10 @@
+---
+type: user-story
+status: accepted
+feature:
+  - "[[downloads-ui]]"
+related: []
+---
+As a curator
+I want to know why a file is being downloaded
+so that I can understand app behavior

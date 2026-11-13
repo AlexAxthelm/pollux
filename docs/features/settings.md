@@ -1,8 +1,17 @@
-# Settings
 ---
+type: feature
+status: draft
 priority: MVP
-depends: storage, player, episode, playlists, subscription, notifications
+area: settings
+depends:
+  - "[[storage]]"
+  - "[[player]]"
+  - "[[episode]]"
+  - "[[playlists]]"
+  - "[[subscription]]"
+  - "[[notifications]]"
 ---
+# Settings
 
 A central location for user preferences that affect behavior.
 Accessible from a gear/settings icon in the library toolbar, or via contextual
@@ -24,10 +33,10 @@ Settings are organized into sections on a single scrollable screen.
   (default: total)
 
 ### Downloads & Storage
-- Storage limit (see `storage.md`)
-- Parallel downloads (default: 1 for MVP)
+- Storage limit (see `storage-limits.md`)
+- Parallel downloads (default: 1 for MVP; see `downloads-queue.md`)
 - Default download rule for new subscriptions (default: most recent episode,
-  if unplayed)
+  if unplayed; see `downloads-auto.md`)
 
 ### Feed Refresh
 - Global refresh interval (default: 12 hours)
@@ -97,3 +106,21 @@ Same as feed settings, but also refresh interval
 - Should settings be synced across devices, or are they per-device?
   Storage limit is clearly per-device. Skip increments could go either way.
   See `sync.md`.
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

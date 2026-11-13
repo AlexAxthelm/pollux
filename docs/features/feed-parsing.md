@@ -1,7 +1,10 @@
-# Feed parsing
 ---
+type: feature
+status: draft
 priority: low
+area: subscription
 ---
+# Feed parsing
 
 Beyond RSS (2.0), the app should suppor Atom and JSONFeed files as sources for
 subscriptions. If there are other formats in common use, they should also be
@@ -36,3 +39,21 @@ rather than after.
 
 Episode identity across refreshes is a related open problem and is tracked in
 `DATA_MODEL.md` under Episode → Identity across refreshes.
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

@@ -35,7 +35,7 @@ See also: `GLOSSARY.md` — Subscription.
 #### Refresh state
 
 Besides its identity and feed metadata, a Subscription carries the bookkeeping
-feed refresh needs (see `features/subscription.md`, "Refresh as built"):
+feed refresh needs (see `features/subscription-refresh.md`, "As built"):
 
 - `last_refreshed` — when the feed was last successfully fetched (a 304 counts).
 - `etag`, `last_modified` — validators from the last successful fetch, replayed
@@ -71,7 +71,7 @@ need care:
 - `download_status` — an episode flagged `RemovedFromFeed` that reappears in the
   feed returns to `NotDownloaded`. Episodes that drop out of the feed are flagged
   only after being absent for 48 hours, and only if they are `NotDownloaded` or
-  `Failed`; see `features/subscription.md`, "De-listed Episodes".
+  `Failed`; see `features/subscription-delisted-episodes.md`.
 - `missing_since` — storage-only (the core never sees it): the unix time an
   episode was first missed by a refresh, or NULL while it is present. Every
   refresh with a non-empty feed starts a clock for each of the subscription's

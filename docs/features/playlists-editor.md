@@ -1,8 +1,16 @@
-# Playlist Editor
 ---
+type: feature
+status: draft
 priority: high
-depends: playlists, playlist-rules, subscription, library
+area: playlists
+parent: "[[playlists]]"
+depends:
+  - "[[playlists]]"
+  - "[[playlist-rules]]"
+  - "[[subscription]]"
+  - "[[library]]"
 ---
+# Playlist Editor
 
 The playlist editor is the interface for creating and editing playlists. It
 combines a rules builder with a live preview of the resulting episode list.
@@ -137,3 +145,21 @@ pre-checked on open. Feeds that are in the playlist sources are floated to the
 top
 
 ---
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

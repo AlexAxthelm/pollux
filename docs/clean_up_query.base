@@ -1,0 +1,27 @@
+formulas:
+  priority_rank: if(priority == "MVP", 0, if(priority == "high", 1, if(priority == "mid", 2, if(priority == "low", 3, 4))))
+views:
+  - type: table
+    name: View
+    filters:
+      and:
+        - status != "accepted"
+        - status != "closed"
+    groupBy:
+      property: status
+      direction: ASC
+    order:
+      - file.name
+      - type
+      - priority
+      - status
+      - parent
+    sort:
+      - property: formula.priority_rank
+        direction: ASC
+      - property: parent
+        direction: ASC
+      - property: file.name
+        direction: ASC
+    cardSize: 200
+    indentProperties: false

@@ -1,8 +1,12 @@
-# Episodes
 ---
+type: feature
+status: draft
 priority: MVP
-depends: subscription
+area: episode
+depends:
+  - "[[subscription]]"
 ---
+# Episodes
 
 Episodes are the atomic unit of content in Pollux.
 
@@ -48,7 +52,7 @@ Tracks whether the episode audio file is available in local storage:
 
 A user-set marker to distinguish an episode. Used to influence playlist and
 download behavior (see `playlist-rules.md`), and to protect episodes from
-eviction (see `storage.md`). Additional flag types may be added later.
+eviction (see `storage-protection.md`). Additional flag types may be added later.
 
 ## Actions
 
@@ -112,3 +116,21 @@ see chapters.md
 
 - Can the app check if an episode is still available on the server without
   downloading it? (Relevant for eviction and archive protection in storage.)
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

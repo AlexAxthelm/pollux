@@ -1,8 +1,15 @@
-# Player: Show Notes
 ---
+type: feature
+status: accepted
 priority: high
-depends: player, episode, episode-chapters
+area: player
+parent: "[[player]]"
+depends:
+  - "[[player]]"
+  - "[[episode]]"
+  - "[[episode-chapters]]"
 ---
+# Player: Show Notes
 
 A page in the player's paged content area (carousel) showing the episode's
 description / show notes.
@@ -46,3 +53,21 @@ This is the primary mechanism for shows that don't use embedded chapter formats.
 
 - Chapter list as a separate carousel page
 - Link detection and handling in show notes (e.g. tappable URLs)
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

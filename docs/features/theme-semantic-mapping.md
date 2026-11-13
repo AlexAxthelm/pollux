@@ -1,3 +1,9 @@
+---
+type: feature
+status: draft
+area: theme
+parent: "[[theme]]"
+---
 # Theme — semantic mapping
 
 Companion to [theme.md](theme.md). The theme spec mandates that UI code reference
@@ -95,3 +101,21 @@ base00 background · base01 lighter background · base02 selection · base03 com
 foreground · base07 light background · base08 red · base09 orange · base0A yellow
 · base0B green · base0C cyan · base0D blue · base0E magenta · base0F brown.
 See <https://github.com/chriskempson/base16>.
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

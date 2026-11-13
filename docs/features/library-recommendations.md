@@ -1,8 +1,16 @@
-# Library Recommendations
 ---
+type: feature
+status: draft
 priority: mid
-depends: subscription, playlists, listening-stats, sync
+area: library
+parent: "[[library]]"
+depends:
+  - "[[subscription]]"
+  - "[[playlists]]"
+  - "[[listening-stats]]"
+  - "[[sync]]"
 ---
+# Library Recommendations
 
 A recommendations section at the top of the library view, surfacing contextually
 useful playlists and content to resume.
@@ -27,3 +35,21 @@ useful playlists and content to resume.
 - Should recommendations be dismissible / hideable?
 - How many recommendations to surface at once?
 - Should there be a way to pin a playlist to always appear here?
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```
