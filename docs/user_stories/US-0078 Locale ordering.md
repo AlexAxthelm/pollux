@@ -2,8 +2,8 @@
 type: user-story
 status: draft
 feature:
-  - "[[library]]"
   - "[[settings]]"
+  - "[[library-ordering]]"
 related: []
 ---
 As a subscriber whose shows aren't all in English

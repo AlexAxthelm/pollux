@@ -1,8 +1,9 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
   - "[[library]]"
+  - "[[subscription-delisted-episodes]]"
 related:
   - "[[US-0063 Access removed episodes]]"
 ---

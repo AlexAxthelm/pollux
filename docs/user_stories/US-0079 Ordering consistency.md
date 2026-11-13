@@ -1,9 +1,9 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[library]]"
   - "[[settings]]"
+  - "[[library-ordering]]"
 related:
   - "[[US-0078 Locale ordering]]"
 ---

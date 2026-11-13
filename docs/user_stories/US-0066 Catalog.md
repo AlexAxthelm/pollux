@@ -1,8 +1,9 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
   - "[[library]]"
+  - "[[search-discovery]]"
 related: []
 ---
 As a user
