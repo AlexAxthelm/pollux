@@ -38,18 +38,14 @@ should be able to subscribe to them without weakening security for everything el
 
 ## Unresolved
 
-The per-feed override is in tension with how ATS works. `NSExceptionDomains` entries
-are static Info.plist values fixed at build time, and there is no runtime API to add a
-domain, but subscription URLs are supplied by the user long after we ship, so the
-hosts needing an exception are unknowable in advance. A genuinely per-feed opt-in
-therefore cannot be expressed through ATS scoping.
+The per-feed override is in tension with how ATS works, and enforcing it probably
+means moving the https-only default into our own code. The reasoning and the open
+decision are in
+[[ADR-0026 Feed transport security is enforced by the app, not scoped through ATS]].
 
-The realistic implementation is the inverse: declare `NSAllowsArbitraryLoads` and
-enforce the https-only default in our own code, with the per-feed opt-in as our gate
-rather than the OS's. Same behavior for the user, but the OS stops being the backstop
-and a bug in our gating fails open. So this needs a deliberate decision (a good fit
-for an ADR once made), and the maintainer story about scoping exceptions should be
-rewritten once it is.
+## Decisions
+
+- [[ADR-0026 Feed transport security is enforced by the app, not scoped through ATS]] (draft)
 
 ## User stories
 

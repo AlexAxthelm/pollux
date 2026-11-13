@@ -31,29 +31,14 @@ depending on which screen the user came from.
 
 A listener whose shows aren't all in English should see the library sorted the way
 their language sorts, so a show starting with "Ä" or "É" appears where they expect
-it rather than after everything else.
-
-**Current behavior** is naive code-point ordering, not locale-aware collation. The
-core sorts with `title.to_lowercase()`, which folds `Ä` to U+00E4, past ASCII `z` at
-U+007A. For a mixed list the measured output is `["apple", "Banana", "eagle",
-"Zebra", "Ärger", "Ångström", "Émile"]`. That matches no real locale: German sorts
-`Ä` with `A`, Swedish places it after `Z` but ordered `Å < Ä < Ö`, and we emit
-`Ärger` before `Ångström`.
-
-A real fix means locale-aware collation (e.g. the `icu_collator` crate) plus a
-decision about where the locale comes from. That is a dependency and architecture
-call, so per [[CONTRIBUTING]] it wants discussion before implementation rather than
-being folded into a feature PR.
-
-This is deliberately **not** covered by a test: asserting the current order would pin
-behavior no locale actually wants, and would make a correct implementation later look
-like a regression.
-
-Whatever collation lands here should also apply to the later ordering options above.
+it rather than after everything else. Today it is naive code-point ordering. The
+findings and the open decision are in
+[[ADR-0025 Library sorting uses locale-aware collation]].
 
 ## Decisions
 
 - [[ADR-0024 The order the library shows is decided by the core]]
+- [[ADR-0025 Library sorting uses locale-aware collation]] (draft)
 
 ## User stories
 
