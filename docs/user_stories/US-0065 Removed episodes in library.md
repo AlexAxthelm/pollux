@@ -4,6 +4,7 @@ status: accepted
 feature:
   - "[[library]]"
   - "[[subscription-delisted-episodes]]"
+  - "[[episode-ui]]"
 related:
   - "[[US-0063 Access removed episodes]]"
 ---

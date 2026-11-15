@@ -5,6 +5,7 @@ feature:
   - "[[library]]"
   - "[[player]]"
   - "[[episode]]"
+  - "[[episode-ui]]"
 related:
   - "[[US-0058 View details without downloading]]"
 ---

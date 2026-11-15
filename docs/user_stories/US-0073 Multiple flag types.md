@@ -4,6 +4,7 @@ status: draft
 feature:
   - "[[library]]"
   - "[[bookmarks]]"
+  - "[[episode-ui]]"
 related:
   - "[[US-0072 Star episodes]]"
 ---

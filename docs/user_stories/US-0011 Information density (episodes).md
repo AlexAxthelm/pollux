@@ -4,6 +4,7 @@ status: draft
 feature:
   - "[[library]]"
   - "[[settings]]"
+  - "[[episode-ui]]"
 related:
   - "[[US-0012 Information density (subscriptions)]]"
 ---
