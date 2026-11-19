@@ -3,7 +3,6 @@ type: user-story
 status: accepted
 feature:
   - "[[settings]]"
-  - "[[theme]]"
   - "[[library-grid]]"
 related: []
 ---
