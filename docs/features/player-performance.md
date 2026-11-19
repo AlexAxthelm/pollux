@@ -1,6 +1,6 @@
 ---
 type: feature
-status: accepted
+status: done
 priority: mid
 area: player
 parent: "[[player]]"

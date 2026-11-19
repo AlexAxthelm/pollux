@@ -1,6 +1,6 @@
 ---
 type: user-story
-status: accepted
+status: done
 feature:
   - "[[player-performance]]"
 related: []

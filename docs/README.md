@@ -78,7 +78,8 @@ Properties that hold links must be quoted: `feature: ["[[bookmarks]]"]`.
 | policy, reference | `type` only |
 
 **`status`** is the same for features and stories: `draft` → `accepted` →
-`done`. "Accepted" means agreed, not built. `closed` marks a note set aside
+`done`. "Accepted" means agreed, not built. "Done" means built and checked in the
+app, not just implemented. `closed` marks a note set aside
 without being built, for example a story that duplicates another. Decisions have
 their own sequence (see the table). Bugs use the same `status` values as stories.
 

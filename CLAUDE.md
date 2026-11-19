@@ -17,7 +17,9 @@ Read it before adding or restructuring notes.
   "Not built yet" note. A feature note that no longer matches the app is a bug in the docs.
 - **User stories are cheap and welcome.** Adding them should be frequent. When you notice a
   need the stories don't cover, suggest one (or write it) as `status: draft`. Don't mark a
-  story or feature `accepted`; the user decides that.
+  story or feature `accepted` or `done`; the user decides that. `done` means built and
+  checked in the app, so you can say what you built and what you checked, and leave the
+  status to them.
 - **ADRs are not to be relitigated lightly, and are not set in stone.** Follow an accepted
   ADR. Don't quietly work against one. If there is a compelling reason to change it (new
   evidence, a changed constraint), say so and propose a new ADR that supersedes it: mark the
