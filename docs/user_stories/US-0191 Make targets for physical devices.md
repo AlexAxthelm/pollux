@@ -20,3 +20,7 @@ Notes:
   `-xcconfig` and `cargo bin cargo-swift package --release`, with signing (a free Personal
   Team, which expires after 7 days) in a git-excluded `iOS/Local.xcconfig`. Signing settings
   must not be committed.
+* `iOS/Local.xcconfig` is excluded through `.git/info/exclude` in the main checkout, not `.gitignore`.
+  Worktrees share that file, but a fresh clone does not, so the device target should add the
+  entry to `.gitignore` to keep signing settings out of commits. The file itself no longer
+  exists in the main checkout, so the signing setup has to be recreated.
