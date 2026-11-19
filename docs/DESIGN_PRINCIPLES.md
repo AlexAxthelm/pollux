@@ -8,7 +8,7 @@ as a reference when designing new features or evaluating tradeoffs. It is not a
 rigid ruleset, but as a guide to make implicit decisions explicit so that the app
 stays coherent as it grows.
 
-Read this alongside `docs/ARCHITECTURE.md` (technical) and `docs/ROADMAP.md`
+Read this alongside [[ARCHITECTURE]] (technical) and [[ROADMAP]]
 (implementation order).
 
 ---
@@ -63,6 +63,9 @@ whether it can be expressed as a configuration of an existing one. Introduce
 new primitives only when the existing ones genuinely cannot express the
 requirement.
 
+See [[ADR-0027 A playlist is a query over sources]] and
+[[ADR-0028 A subscription is an implicit single-feed playlist]].
+
 ---
 
 ## 3. Cascading defaults
@@ -84,6 +87,13 @@ but override locally.
 setting that only exists at one level is the exception, not the rule. The UI
 treatment (show current value, show whether it's default or overridden, offer
 reset) should be consistent everywhere.
+
+- #needs-decision **What is the cascade chain?** The first paragraph above reads "global →
+  feed → episode (or global → feed → feed → ... → subscription → episode, for nested
+  playlist cases)", and uses "feed" where [[GLOSSARY]] says to use "subscription". The
+  glossary says global → subscription → episode, and [[DATA_MODEL]] adds playlist
+  between global and episode. Where playlist and show settings rank is already open in
+  [[settings-cascade]]. All are kept as written.
 
 ---
 
@@ -162,6 +172,14 @@ never "should we delete the metadata?" (probably not) but "can this file be
 recovered if we delete it?" (sometimes yes, sometimes no — the app must find
 out before acting).
 
+See [[ADR-0023 An episode is marked removed only after 48 hours of continuous absence]].
+
+- #needs-decision **Is metadata kept permanently after unsubscribing?** This principle
+  says metadata is retained "even when ... a subscription is unsubscribed".
+  [[subscription-soft-delete]] keeps it for 30 days and then hard-deletes it, and
+  [[subscription-unsubscribe]] (the MVP) says the episodes "will be deleted", as does
+  [[ROADMAP]] ("hard delete for MVP"). All are kept as written.
+
 ---
 
 ## 8. Progressive enhancement from platform primitives
@@ -183,3 +201,6 @@ a worse experience.
 platform already does it. The bar for reinventing a platform primitive is high:
 the platform version must be genuinely inadequate for the use case, not merely
 customizable in ways we haven't explored yet.
+
+See [[ADR-0017 Feed requests use conditional GET and bypass the URLSession cache]] and
+[[ADR-0022 Background refresh is requested every 3 hours and persists before it ends]].

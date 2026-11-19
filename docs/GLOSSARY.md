@@ -11,7 +11,7 @@ Terms will be added as the data model and feature set are defined. If a term
 is not in this glossary, that is a signal it needs to be discussed and added,
 not that it can be used freely.
 
-For code-facing definitions and entity relationships, see `DATA_MODEL.md`.
+For code-facing definitions and entity relationships, see [[DATA_MODEL]].
 
 ---
 
@@ -28,7 +28,9 @@ For code-facing definitions and entity relationships, see `DATA_MODEL.md`.
       RSS/Atom/JSONFeed document that the app fetches. A subscription is the
       app's record of tracking that feed. Do not use "feed" as a synonym for
       subscription in documentation or code.
-  - See also: `DATA_MODEL.md` — Subscription.
+      - #needs-decision Several notes still say "per-feed" for subscription-level settings,
+        for example [[settings-cascade]] and [[subscription]]. Kept as written.
+  - See also: [[DATA_MODEL]] — Subscription.
 
 - **Playlist**: a user-created query over one or more sources, with optional
   filters and sorts applied. Produces an ordered episode list.
@@ -38,7 +40,7 @@ For code-facing definitions and entity relationships, see `DATA_MODEL.md`.
     - **Convenience playlist**: internal/doc term for system-provided playlists
       that require no configuration ("All Subscriptions", "Downloaded"). Not a
       user-facing distinction — these appear in the UI simply as playlists.
-  - See also: `DATA_MODEL.md` — Playlist, PlaylistSource, PlaylistFilter,
+  - See also: [[DATA_MODEL]] — Playlist, PlaylistSource, PlaylistFilter,
     PlaylistSort.
 
 - **EpisodeSource** *(placeholder — not a finalized term)*: the internal
@@ -47,7 +49,7 @@ For code-facing definitions and entity relationships, see `DATA_MODEL.md`.
   both without caring which kind they have. This term should not appear in
   user-facing copy. The right name for this concept will be settled when the
   data model is defined.
-  - See also: `DATA_MODEL.md` — EpisodeSource.
+  - See also: [[DATA_MODEL]] — EpisodeSource.
 
 ---
 
@@ -66,7 +68,7 @@ For code-facing definitions and entity relationships, see `DATA_MODEL.md`.
 
 - **Episode**: the atomic unit of content. A single audio file with associated
   metadata, belonging to a subscription.
-  - See also: `DATA_MODEL.md` — Episode.
+  - See also: [[DATA_MODEL]] — Episode.
 
 - **Playback status**: the user's current relationship with an episode.
   Valid values: **unplayed**, **in-progress**, **played**. Use these exact
@@ -96,7 +98,10 @@ For code-facing definitions and entity relationships, see `DATA_MODEL.md`.
 
 - **Cascading default**: a setting value inherited from a higher level in the
   hierarchy (global → subscription → episode) unless explicitly overridden at
-  a lower level. See `DESIGN_PRINCIPLES.md` §3 for the full pattern.
+  a lower level. See [[DESIGN_PRINCIPLES]] §3 for the full pattern.
   - In user-facing copy, cascading defaults are surfaced as:
     `[value] (default)` when inherited, `[value]` with a reset affordance
     when overridden.
+  - #needs-decision **Is playlist in the chain?** The definition above reads "(global →
+    subscription → episode)". [[DATA_MODEL]] adds playlist between global and episode, and
+    where playlist and show settings rank is open in [[settings-cascade]]. Kept as written.
