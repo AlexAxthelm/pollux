@@ -881,7 +881,7 @@ pub(crate) fn enqueue_download(model: &mut Model, episode_id: &str) -> Command<E
 }
 
 /// Pre-download storage check. Unlimited today — the user-configurable soft cap
-/// arrives with the Settings screen (see ROADMAP follow-ups). Device-full is not
+/// arrives with the Settings screen (see `docs/features/storage-limits.md`). Device-full is not
 /// predicted here; it surfaces as the shell's write failing (`DownloadResult::Error`
 /// → `Failed`), which is the fail-on-full behavior the storage spec calls for.
 fn download_allowed(_model: &Model) -> bool {
@@ -1336,7 +1336,7 @@ pub enum Event {
         result: Box<StorageResult>,
     },
     /// Change the active theme. Not yet emitted by any UI — the seam for the
-    /// Settings appearance section (see `docs/features/theme.md`).
+    /// Settings appearance section (see `docs/features/theme-ui.md`).
     SetTheme {
         id: ThemeId,
         mode: ThemeMode,

@@ -1,10 +1,9 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
   - "[[subscription]]"
   - "[[player]]"
-  - "[[subscription-inactive]]"
 related: []
 ---
 As a user

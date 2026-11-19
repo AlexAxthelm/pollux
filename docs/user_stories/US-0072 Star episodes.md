@@ -3,8 +3,8 @@ type: user-story
 status: draft
 feature:
   - "[[library]]"
-  - "[[bookmarks]]"
   - "[[episode-ui]]"
+  - "[[episode]]"
 related: []
 ---
 As a curator

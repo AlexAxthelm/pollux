@@ -3,7 +3,7 @@ type: user-story
 status: draft
 feature:
   - "[[player]]"
-  - "[[sync]]"
+  - "[[sync-playback]]"
 related:
   - "[[US-0088 Sync playback]]"
 ---

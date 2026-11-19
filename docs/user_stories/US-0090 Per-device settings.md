@@ -3,7 +3,7 @@ type: user-story
 status: accepted
 feature:
   - "[[settings]]"
-  - "[[sync]]"
+  - "[[sync-settings]]"
 related:
   - "[[US-0087 Sync settings]]"
 ---

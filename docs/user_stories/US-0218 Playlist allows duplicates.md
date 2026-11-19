@@ -2,7 +2,7 @@
 type: user-story
 status: accepted
 feature:
-  - "[[playlists]]"
+  - "[[playlists-playback]]"
 related:
   - "[[US-0217 Playlist deduplication]]"
 ---

@@ -4,7 +4,7 @@ status: accepted
 feature:
   - "[[downloads-queue]]"
   - "[[player]]"
-  - "[[playlists]]"
+  - "[[playlists-playback]]"
 related: []
 ---
 As a user

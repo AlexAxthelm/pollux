@@ -2,12 +2,12 @@
 type: feature
 status: draft
 priority: low
-area:
+area: subscription
 ---
 # Search & Discovery
 
 Allow user to find podcasts by searching, rather than requiring url (through
-opml import, or raw "add feed"
+opml import ([[import-export-opml]]), or raw "add feed"
 
 Need to find sources/directories that I can use.
 

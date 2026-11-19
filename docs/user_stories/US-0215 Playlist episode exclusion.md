@@ -1,8 +1,8 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[playlists]]"
+  - "[[playlists-rules]]"
   - "[[episode]]"
 related: []
 ---

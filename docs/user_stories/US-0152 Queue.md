@@ -1,9 +1,9 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
   - "[[player]]"
-  - "[[playlists]]"
+  - "[[playlists-playback]]"
 related: []
 ---
 As a listener

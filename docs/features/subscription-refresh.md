@@ -68,7 +68,7 @@ automatic triggers, is decided as described in [[ADR-0016 A feed is due after 12
 
 | Result | Effect |
 |---|---|
-| 200 | Parse, carry over any title, artwork or description the response lacks (below), upsert (see `DATA_MODEL.md`), store new validators, clear the error and backoff, reload the open feed's episodes |
+| 200 | Parse, carry over any title, artwork or description the response lacks (below), upsert (see [[DATA_MODEL]]), store new validators, clear the error and backoff, reload the open feed's episodes |
 | 304 | `last_refreshed` moves; error and backoff cleared; no episode is rewritten. It also finishes pending removals: episodes already absent for 48 hours are flagged (see [[subscription-delisted-episodes]]), and the open list reloads if any were |
 | 429 | `retry_after_until` = now + `Retry-After` (a delay in seconds or an HTTP-date in any of the three formats RFC 9110 requires; the shell forwards the header verbatim and the core parses it, so every platform shares one parser), or 1 hour (`RATE_LIMIT_BACKOFF_SECS`) if absent. Capped at 24 hours (`MAX_RETRY_AFTER_SECS`), so a host asking for a year (or a typo) can't silence auto-refresh for that feed indefinitely; a value too large to represent clamps to the cap rather than falling back to the 1 hour default |
 | Device can't reach the network (`HttpResult::Unreachable`: offline, cellular data off, roaming off, on a call, connection lost mid-request) | `last_refresh_error` recorded; **no backoff** and any existing one is left as it was. Nothing is wrong with the feed, and backing it off would keep auto-refresh away for 15 minutes after connectivity returns, for every feed at once |

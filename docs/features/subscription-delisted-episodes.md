@@ -41,7 +41,7 @@ The full rules and the reasons are in
 
 - Protection of removed episodes from automatic cleanup: [[storage-protection]]
 - Episode status: [[episode]]
-- Stored fields (`missing_since`): `DATA_MODEL.md`
+- Stored fields (`missing_since`): [[DATA_MODEL]]
 
 ## Not yet
 

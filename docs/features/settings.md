@@ -1,6 +1,6 @@
 ---
 type: feature
-status: draft
+status: accepted
 priority: MVP
 area: settings
 depends:
@@ -56,7 +56,7 @@ Settings are organized into sections on a single scrollable screen.
   user to the feed-specific settings page.
 
 ### Notifications
-- *(to be defined — see [[notifications]])*
+- *(to be defined — see [[notifications]] and [[notifications-settings]])*
 
 ### Appearance
 - *(to be defined)*
@@ -71,7 +71,7 @@ Settings for power-users. Should be hidden by default, but can be shown
 
 - Should settings be synced across devices, or are they per-device?
   Storage limit is clearly per-device. Skip increments could go either way.
-  See [[sync]].
+  See [[sync-settings]].
 
 ## User stories
 

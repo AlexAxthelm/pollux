@@ -2,7 +2,7 @@
 type: feature
 status: draft
 priority: low
-area:
+area: playlists
 ---
 # Random
 

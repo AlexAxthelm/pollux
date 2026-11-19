@@ -7,6 +7,8 @@ views:
       and:
         - status != "accepted"
         - status != "closed"
+        - type != "reference"
+        - type != "policy"
     groupBy:
       property: status
       direction: ASC

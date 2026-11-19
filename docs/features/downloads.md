@@ -30,7 +30,7 @@ How much *space* downloads may use, and what happens to files afterwards, is the
 Related elsewhere:
 
 - Authenticated feeds (protected downloads): [[subscription-auth]]
-- Per-device download control: [[sync]] and [[storage-sync]]
+- Per-device download control: [[sync-downloads]] and [[storage-sync]]
 - Download status on an episode: `episode.md`
 - Streaming while a download is in flight: [[player-streaming]]
 

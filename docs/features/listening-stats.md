@@ -2,7 +2,7 @@
 type: feature
 status: draft
 priority: mid
-area:
+area: stats
 ---
 # Listening Statistics
 

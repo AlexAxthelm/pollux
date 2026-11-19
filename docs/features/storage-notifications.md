@@ -12,7 +12,7 @@ depends:
 # Storage notifications
 
 How Pollux tells the user about storage events. Delivery mechanics (platforms,
-preferences) are in `notifications.md`; this file defines which storage events
+preferences) are in [[notifications]] and [[notifications-settings]]; this file defines which storage events
 produce a message and what each says.
 
 ## Notification types

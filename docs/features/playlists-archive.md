@@ -1,12 +1,12 @@
 ---
 type: feature
-status: draft
+status: accepted
 priority: high
 area: playlists
 parent: "[[playlists]]"
 depends:
   - "[[playlists]]"
-  - "[[playlist-rules]]"
+  - "[[playlists-rules]]"
 ---
 # Archive Binge Playlists
 

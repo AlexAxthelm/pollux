@@ -2,7 +2,7 @@
 type: user-story
 status: accepted
 feature:
-  - "[[sync]]"
+  - "[[sync-downloads]]"
   - "[[storage-sync]]"
   - "[[downloads]]"
 related:
@@ -12,4 +12,4 @@ As a user with multiple devices
 I want to control which episodes get downloaded to each device
 so that I can manage listening on each
 
-possible duplicate of [[US-0035 Download control]]
+Related but distinct from [[US-0035 Download control]], that is about general control, this is about control when multiple devices come into play

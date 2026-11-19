@@ -20,11 +20,21 @@ Pollux should notify users of relevant events without being intrusive.
   network error (see [[downloads-failures]])
 - *(more to be defined as features are specced)*
 
+## Parts
+
+- [[notifications-settings]]: which notifications, when, and the OS controls
+- [[notifications-new-episodes]]: new-episode notifications and the daily summary
+
 ## Open Questions
 
 - Which platforms / notification systems need to be supported?
 - Should there be a global notification preference in settings?
 - What is the right escalation model for the storage nudge?
+
+- #needs-decision **How are the new-setting and changed-default notices delivered?**
+  [[US-0172 New settings notification]] and [[US-0181 Notifications for changes in default]]
+  are tagged here, and [[settings-ui]] asks how they are delivered and points back to this
+  note. Nothing here answers it. Both stories stay as written.
 
 ## User stories
 

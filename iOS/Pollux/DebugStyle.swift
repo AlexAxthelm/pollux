@@ -3,9 +3,9 @@ import SwiftUI
 /// A deliberately loud, non-semantic color reserved for UI that is wired to
 /// nothing yet (play, download, chapters, bookmarks — engines that don't exist).
 ///
-/// This is a stopgap until the base16 theming system lands (see docs/features/
-/// theme.md); real UI must use semantic roles (`.primary`/`.secondary`/`.tint`),
-/// never this. Anything tinted `.debug` is a promise that it does nothing.
+/// It is deliberately not a theme color (see ADR-0031 in docs/decisions); real UI must
+/// use the semantic roles in `ThemeColors`, never this. Anything tinted `.debug` is a
+/// promise that it does nothing.
 extension Color {
     static let debug = Color(red: 0.85, green: 0.1, blue: 0.55)
 }

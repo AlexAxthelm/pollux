@@ -2,7 +2,7 @@
 type: user-story
 status: draft
 feature:
-  - "[[notifications]]"
+  - "[[notifications-new-episodes]]"
   - "[[library]]"
   - "[[playlists]]"
 related: []

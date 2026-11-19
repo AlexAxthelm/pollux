@@ -1,8 +1,26 @@
+---
+type: reference
+---
 # Pollux docs
 
 These docs are plain Markdown in the repo, and `docs/` is also an Obsidian
 vault. Everything here must stay readable as ordinary text (GitHub, an editor,
 or an agent reading the files); Obsidian only adds navigation on top.
+
+## Living docs
+
+This vault is a primary way of working on Pollux, not an archive. It is meant to stay true
+as the app changes, for the user and for agents working alongside them.
+
+- **Features** are kept up to date with everything: when something is built, changed or
+  found out, the feature note says so.
+- **User stories** are added often. Anyone, including an agent, can suggest one; a new story
+  starts as `draft`, and the maintainer accepts it.
+- **Decisions (ADRs)** are not relitigated lightly, but they are not set in stone. If there is a
+  compelling reason to change one, write a new ADR that supersedes it and say why.
+- **Contradictions** are flagged with `#needs-decision`, not quietly resolved.
+
+`CLAUDE.md` at the repository root tells agents the same.
 
 ## Layout
 
@@ -60,7 +78,8 @@ Properties that hold links must be quoted: `feature: ["[[bookmarks]]"]`.
 | policy, reference | `type` only |
 
 **`status`** is the same for features and stories: `draft` → `accepted` →
-`done`. "Accepted" means agreed, not built. `closed` marks a note set aside
+`done`. "Accepted" means agreed, not built. "Done" means built and checked in the
+app, not just implemented. `closed` marks a note set aside
 without being built, for example a story that duplicates another. Decisions have
 their own sequence (see the table). Bugs use the same `status` values as stories.
 
@@ -138,7 +157,8 @@ kinds are used here:
   Use it to see what still needs review.
 
 Bases read the properties described above, so they only work on notes that have
-them (see "Status of the conversion").
+them. Every note has `type`; the saved query leaves out `reference` and `policy` notes,
+which have no `status`.
 
 With Obsidian open, the same queries run from a terminal through the Obsidian CLI:
 
@@ -156,6 +176,10 @@ not on `PATH` by default. Formats are `json` (the default), `csv`, `tsv`, `md` a
 Tags are only for cross-cutting flags that don't fit a property, e.g.
 `#needs-decision` or `#blocked`. Use properties for everything else.
 
+`#needs-decision` marks a contradiction or an open question. Flag it where it appears
+and keep both original statements as written; don't pick one. The decision itself is
+made later, and a draft ADR can hold the options (see "What goes where").
+
 ## Finding things without Obsidian
 
 ```bash
@@ -163,16 +187,20 @@ grep -rl '"\[\[bookmarks\]\]"' docs/user_stories   # stories for a feature
 grep -rl 'status: draft' docs                                # everything still draft
 grep -rl 'status: draft' docs/decisions                      # open decisions
 grep -rl '"\[\[player-streaming\]\]"' docs/decisions         # decisions for a feature
-ls docs/user_stories/*/ | grep US-0004                       # a story by ID
+ls docs/user_stories | grep US-0004                          # a story by ID
+grep -rl '#needs-decision' docs                              # open contradictions and questions
 ```
 
-## Status of the conversion
+## Status of the notes
 
-Only notes converted to this format have the properties above. Older notes
-(including most feature notes and the multi-story files in `user_stories/`)
-have none, or have frontmatter under the title that Obsidian ignores. Convert
-a feature and its stories together, and move frontmatter to the top of the file
-when you do.
+Every feature, story, decision and bug note has the properties above, and the
+frontmatter is the first thing in the file. Root documents (`ARCHITECTURE`,
+`DATA_MODEL`, `DESIGN_PRINCIPLES`, `GLOSSARY`, `HACKING`, `ROADMAP`, and this file) are
+`type: reference`; the files in `policies/` are `type: policy`. Neither has a `status`.
+
+A few feature notes describe planned work that has no note yet, so some `[[links]]`
+(for example `[[sharing]]` and `[[directory]]`) do not resolve. They are placeholders
+for features that are planned but not specced.
 
 ## Obsidian settings
 

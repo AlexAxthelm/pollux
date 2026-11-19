@@ -1,12 +1,12 @@
 ---
 type: feature
-status: draft
+status: accepted
 priority: high
 area: playlists
 parent: "[[playlists]]"
 depends:
   - "[[playlists]]"
-  - "[[playlist-rules]]"
+  - "[[playlists-rules]]"
   - "[[subscription]]"
   - "[[library]]"
 ---
@@ -117,7 +117,7 @@ Sort rows are applied in order (primary → secondary → tertiary, etc.).
 ### Settings
 
 A collapsed section at the bottom of Component 1, using the standard feed
-settings interface (see `settings.md`). Expanded on tap. Not distracting in
+settings interface (see [[settings-cascade]]). Expanded on tap. Not distracting in
 the default collapsed state.
 
 ---
@@ -129,7 +129,7 @@ playlist were saved now. Updates in real-time as rules are added, removed,
 reordered, or changed.
 
 The episode rows in the preview are the same format as in the full playlist
-view (see `playlists.md`) — this is not a simplified list, it's the real thing.
+view (see [[playlists-ui]]) — this is not a simplified list, it's the real thing.
 
 If the rule set produces no episodes, show an empty state explaining why
 (e.g. "No unplayed episodes match these filters").

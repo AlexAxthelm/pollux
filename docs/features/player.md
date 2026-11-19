@@ -132,7 +132,8 @@ Restore details are in [[player-progress]].
 ## Presentation
 
 The full player is a full-screen cover from the root; the mini-player is a bottom
-inset on the root. Tapping "From: …" dismisses the cover and shows the podcast.
+inset on the root. Tapping "From: …" dismisses the cover and shows the podcast. See
+[[ADR-0036 The library is the only top-level destination, and the player is a cover over it]].
 
 ## Errors
 

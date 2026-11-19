@@ -2,7 +2,7 @@
 type: feature
 status: draft
 priority: MVP
-area:
+area: navigation
 depends:
   - "[[library]]"
   - "[[player]]"
@@ -17,6 +17,26 @@ Pollux has a minimal top-level navigation model:
 - **Settings** — accessible from contextual menus throughout the app, not a
   top-level destination
 - **Downloads** — accessible from the library view, not a top-level destination
+
+## As built
+
+- The library is the root of a single navigation stack. Subscription details and episode
+  details are pushed onto it.
+- The full player is a full-screen cover from the root, and the mini-player is a bottom
+  inset on the root. See [[ADR-0036 The library is the only top-level destination, and the player is a cover over it]].
+- **Not built yet:** there is no Settings screen and no Downloads screen.
+
+## Open questions
+
+- #needs-decision **Where is Settings reached from?** This note says "accessible from
+  contextual menus throughout the app, not a top-level destination". [[settings]] says
+  "accessible from a gear/settings icon in the library toolbar, or via contextual entry
+  points". The library toolbar in [[library]] lists no Settings button. All three are kept
+  as written.
+
+## Decisions
+
+- [[ADR-0036 The library is the only top-level destination, and the player is a cover over it]]
 
 ## User stories
 

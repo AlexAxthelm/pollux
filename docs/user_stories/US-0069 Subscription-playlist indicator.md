@@ -1,10 +1,11 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
   - "[[library]]"
   - "[[subscription]]"
   - "[[playlists]]"
+  - "[[playlists-ui]]"
 related: []
 ---
 As a user

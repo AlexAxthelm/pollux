@@ -1,8 +1,11 @@
+---
+type: policy
+---
 # Contributing to Pollux
 
 Thanks for your interest in contributing to Pollux.
 
-This guide covers how to open issues and pull requests. For local setup, commands, and development workflows, see [`HACKING.md`](./HACKING.md).
+This guide covers how to open issues and pull requests. For local setup, commands, and development workflows, see [`HACKING.md`](../HACKING.md).
 
 **Please note that unexpected PRs are likely to be disregarded. To have a PR evaluated, it should be related to an existing discussion.**
 

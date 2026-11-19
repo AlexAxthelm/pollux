@@ -1,6 +1,6 @@
 ---
 type: feature
-status: draft
+status: accepted
 priority: high
 area: storage
 parent: "[[storage]]"
@@ -15,7 +15,7 @@ to have a way to see something like "available on phone" as a bonus feature
 
 For MVP, storage settings (including the limit; see [[storage-limits]]) should
 not sync. Per-device control over which episodes are downloaded is described in
-[[sync]].
+[[sync-downloads]].
 
 ## User stories
 

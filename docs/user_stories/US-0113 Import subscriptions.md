@@ -1,9 +1,9 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
   - "[[subscription]]"
-  - "[[import-export]]"
+  - "[[import-export-opml]]"
 related: []
 ---
 As a user

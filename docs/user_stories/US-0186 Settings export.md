@@ -3,7 +3,6 @@ type: user-story
 status: accepted
 feature:
   - "[[settings-ui]]"
-  - "[[import-export]]"
 related: []
 ---
 As a developer

@@ -4,8 +4,9 @@ import UIKit
 
 // Resolves the core's active `ThemeView` into the concrete colors the UI reads.
 //
-// The core owns palette *data* (base16 tokens; see `docs/features/theme.md` and
-// `docs/features/theme-semantic-mapping.md`); this layer is the shell's half:
+// The core owns palette *data* (base16 tokens; see ADR-0032 in docs/decisions,
+// `docs/features/theme.md` and `docs/features/theme-semantic-mapping.md`); this layer
+// is the shell's half:
 // it maps base16 tokens to SwiftUI `Color`s, exposes them as a semantic set via
 // the environment (`\.themeColors`), and is injected once at the app root.
 //

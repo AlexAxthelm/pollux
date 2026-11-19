@@ -2,7 +2,7 @@
 type: user-story
 status: accepted
 feature:
-  - "[[notifications]]"
+  - "[[notifications-settings]]"
   - "[[settings]]"
 related: []
 ---

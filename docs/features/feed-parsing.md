@@ -38,7 +38,8 @@ episodes" to the user is worth building alongside the first format expansion,
 rather than after.
 
 Episode identity across refreshes is a related open problem and is tracked in
-`DATA_MODEL.md` under Episode → Identity across refreshes.
+[[DATA_MODEL]] under Episode → Identity across refreshes. The missing-guid case is resolved for RSS: see
+[[ADR-0038 A missing guid is replaced by an id derived from the enclosure URL and title]].
 
 ## User stories
 
