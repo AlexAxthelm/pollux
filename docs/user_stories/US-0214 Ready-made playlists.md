@@ -1,8 +1,8 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[playlists]]"
+  - "[[playlists-convenience]]"
 related:
   - "[[US-0209 Playlist quickstarts]]"
 ---

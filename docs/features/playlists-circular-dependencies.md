@@ -15,13 +15,9 @@ via indirection through other playlists.
 
 ## Why It's Usually Fine
 
-Circular deps don't necessarily cause infinite loops in practice. The finite set
-of subscribed episodes acts as a natural bound — filters further reduce the set.
-In most cases, an episode appears only at its first position in the resolution
-order, and subsequent circular inclusions add nothing new.
-
-Some users may intentionally create circular playlists (e.g. a never-ending
-shuffle of everything).
+Circular dependencies don't usually cause infinite loops in practice, and some users
+may create them on purpose. The reasoning is in
+[[ADR-0030 Playlist resolution is capped at 1,000 episodes instead of detecting cycles]].
 
 ## MVP Behavior
 
@@ -43,6 +39,10 @@ the playlist source graph and a clear, non-alarming way to surface it.
 
 This is non-trivial to communicate well — defer until there's a clear UX
 approach.
+
+## Decisions
+
+- [[ADR-0030 Playlist resolution is capped at 1,000 episodes instead of detecting cycles]] (draft)
 
 ## User stories
 

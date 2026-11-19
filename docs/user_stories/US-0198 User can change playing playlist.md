@@ -1,9 +1,9 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
   - "[[player]]"
-  - "[[playlists]]"
+  - "[[playlists-playback]]"
 related:
   - "[[US-0197 Playlist can play]]"
 ---

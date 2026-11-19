@@ -13,7 +13,7 @@ Rules are the filters and sorts applied to a playlist's sources to produce an or
 
 ## UI
 
-see `playlist-editor.md`
+see [[playlists-editor]]
 
 ## Filters
 
@@ -52,7 +52,7 @@ Sorts define the order of the filtered episode list.
 
 | Rule | Parameters | Notes |
 |---|---|---|
-| By source (interleaved) | strategy: round-robin / proportional / date-normalized | Solves the archive-clumping problem; see `playlists-archive.md` |
+| By source (interleaved) | strategy: round-robin / proportional / date-normalized | Solves the archive-clumping problem; see [[playlists-archive]] |
 | By duration | asc / desc | |
 | By play count | asc / desc | Surfaces favorites or finds unlistened gems |
 | Random | - | - |
@@ -69,6 +69,23 @@ A rule applied to a populated source set acts only on that set.
 
 - The rule system is intentionally analogous to a SQL SELECT: sources = FROM, filters = WHERE, sorts = ORDER BY
 - Each new rule type can be added incrementally without changing the underlying data model
+
+## Open questions
+
+- #needs-decision **Include and exclude.** The filter tables above have no include or
+  exclude. The editor spec puts an include/exclude toggle on every filter
+  ([[playlists-editor]]), and the stories ask to include or exclude by starred status,
+  date, duration, title and listened status
+  ([[US-0221 Playlist filter for stars]], [[US-0222 Playlist filter for date]],
+  [[US-0223 Playlist filter for duration]], [[US-0224 Playlist filter on titles]],
+  [[US-0225 Playlist filter for status]]) and to exclude episodes that match some criteria
+  ([[US-0215 Playlist episode exclusion]]).
+- #needs-decision **Title filter.** [[US-0224 Playlist filter on titles]] asks for a title
+  filter. It is not in the MVP or Later filter tables.
+- Specific episodes can be added or included by hand
+  ([[US-0202 Add episodes to playlists]], [[US-0216 Include episodes in playlist]]). How
+  that relates to rules is not specified here; see the reordering question in
+  [[playlists-playback]].
 
 ## User stories
 

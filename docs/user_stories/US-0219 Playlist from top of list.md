@@ -2,7 +2,7 @@
 type: user-story
 status: accepted
 feature:
-  - "[[playlists]]"
+  - "[[playlists-playback]]"
   - "[[player]]"
   - "[[settings]]"
 related: []
