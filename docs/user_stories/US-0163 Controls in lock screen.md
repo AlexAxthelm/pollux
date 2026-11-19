@@ -1,6 +1,6 @@
 ---
 type: user-story
-status: draft
+status: closed
 feature:
   - "[[player-os-integration]]"
 related:
@@ -10,4 +10,4 @@ As a listener
 I want the lock-screen and Control Center controls to be clearly visible
 so that I can see what I'm pressing without unlocking the phone
 
-possible duplicate of [[US-0137 System control]]
+Closed as duplicate of [[US-0137 System control]]

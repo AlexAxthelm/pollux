@@ -1,6 +1,6 @@
 ---
 type: user-story
-status: accepted
+status: closed
 feature:
   - "[[playlists-rules]]"
   - "[[episode]]"
@@ -11,4 +11,4 @@ As a curator
 I want to include episodes in a playlist
 so that I can listen to things I want
 
-possible duplicate of [[US-0202 Add episodes to playlists]]
+Closed as duplicate of [[US-0202 Add episodes to playlists]]
