@@ -35,6 +35,10 @@ controls?
 Would be good to have a view of bookmarks in an episode when seeing the episode
 view, but also have a way to organize/filter across episode-bookmarks
 
+## Parts
+
+- [[bookmarks-screenshots]]: creating a bookmark from a screenshot of the player
+
 ## User stories
 
 ```base

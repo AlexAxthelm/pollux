@@ -6,7 +6,7 @@ parent: "[[theme]]"
 ---
 # Theme — semantic mapping
 
-Companion to [theme.md](theme.md). The theme spec mandates that UI code reference
+Companion to [[theme]]. The theme spec mandates that UI code reference
 **semantic roles**, never raw hex or ad-hoc system colors, and that the base16
 token behind each role be documented here. This is that document.
 
