@@ -3,7 +3,9 @@ type: user-story
 status: draft
 feature:
   - "[[dev-environment]]"
-related: []
+related:
+  - "[[US-0226 Reinstall device builds easily]]"
+  - "[[US-0228 See when a device build expires]]"
 ---
 As a developer
 I want `make` targets to build and run on a physical device, and to build the Rust core in
