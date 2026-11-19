@@ -1,6 +1,7 @@
 ---
 type: feature
 status: draft
+priority: MVP
 area: theme
 parent: "[[theme]]"
 ---

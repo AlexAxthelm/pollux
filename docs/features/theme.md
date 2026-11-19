@@ -17,9 +17,14 @@ a broad library of existing palettes and a clear framework for custom themes.
 > projected through `ViewModel.theme`; the shell resolves it into semantic colors
 > (`iOS/Pollux/Theme.swift`, injected at the app root). Built-in palettes: System
 > (default), Solarized, Nord. Views paint with the semantic roles documented in
-> [theme-semantic-mapping.md](theme-semantic-mapping.md). Still to build: the
+> [[theme-semantic-mapping]]. Still to build: the
 > Settings **Appearance** selector UI (which drives `Event::SetTheme`),
 > persistence, the Custom theme, and the live preview described below.
+
+## Parts
+
+- [[theme-semantic-mapping]]: the semantic color roles that views paint with, and
+  which base16 value each one uses
 
 ## Settings Entry Point
 

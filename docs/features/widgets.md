@@ -2,7 +2,7 @@
 type: feature
 status: draft
 priority: very low
-area:
+area: widgets
 ---
 # Widgets
 

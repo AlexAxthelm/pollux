@@ -2,7 +2,7 @@
 type: feature
 status: draft
 priority: low
-area:
+area: subscription
 ---
 # Search & Discovery
 
