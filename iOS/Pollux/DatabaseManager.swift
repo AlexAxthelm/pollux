@@ -214,7 +214,8 @@ actor DatabaseManager {
         // previously-Queued item before the one that was actively Downloading). Fine for
         // the serial MVP; revisit when the download queue gains explicit ordering — a
         // persisted sequence column, restoring the active item first — alongside the
-        // downloads page / re-ordering / parallel-downloads work (see ROADMAP Phase 5).
+        // downloads page / re-ordering / parallel-downloads work (see docs/features/downloads-queue.md
+        // and ROADMAP Phase 5).
         let rows = try db.read { db -> [Row] in
             try Row.fetchAll(
                 db,
