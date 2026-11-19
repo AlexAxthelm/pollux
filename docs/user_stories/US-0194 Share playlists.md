@@ -1,10 +1,10 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
   - "[[sharing]]"
   - "[[playlists]]"
-  - "[[import-export]]"
+  - "[[import-export-playlists]]"
 related: []
 ---
 As a user

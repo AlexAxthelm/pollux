@@ -31,7 +31,7 @@ permanent opt-in. Which settings count as advanced is in the Advanced section of
 - A setting the user sets is persisted, and generally followed.
 - The user can easily undo a settings change.
 - Settings can be exported, so they can be included in bug reports. See
-  [[import-export]].
+  [[US-0186 Settings export]].
 
 ## New settings and changed defaults
 
