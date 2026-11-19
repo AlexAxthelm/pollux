@@ -56,7 +56,7 @@ Settings are organized into sections on a single scrollable screen.
   user to the feed-specific settings page.
 
 ### Notifications
-- *(to be defined — see [[notifications]])*
+- *(to be defined — see [[notifications]] and [[notifications-settings]])*
 
 ### Appearance
 - *(to be defined)*
