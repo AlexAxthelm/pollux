@@ -1,10 +1,10 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
   - "[[dev-environment]]"
 related:
-  - "[[US-0226 Reinstall device builds easily]]"
+  - "[[US-0230 Reinstall device builds easily]]"
 ---
 As a developer
 I want reinstalling a development build to replace the app in place

@@ -1,12 +1,12 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
   - "[[dev-environment]]"
 related:
   - "[[US-0191 Make targets for physical devices]]"
-  - "[[US-0227 Reinstall keeps app data]]"
-  - "[[US-0228 See when a device build expires]]"
+  - "[[US-0231 Reinstall keeps app data]]"
+  - "[[US-0232 See when a device build expires]]"
 ---
 As a developer
 I want to rebuild and reinstall the development build on my phone with one command

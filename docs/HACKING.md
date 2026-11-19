@@ -140,7 +140,7 @@ make ios-sim SIM_DEVICE_NAME="iPhone 16"
 There is no `make` target for this yet. Device builds have been done by hand, and the
 steps are not documented. A build signed with a free Personal Team expires after 7 days,
 after which the app won't launch and has to be reinstalled. A one-command reinstall is
-planned: see [[US-0226 Reinstall device builds easily]] and
+planned: see [[US-0230 Reinstall device builds easily]] and
 [[US-0191 Make targets for physical devices]].
 
 Signing settings (`iOS/Local.xcconfig`) must never be committed.
