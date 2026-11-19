@@ -17,7 +17,7 @@ playlists exist.
 ## Decision
 
 Playback remembers what it was started from as an `EpisodeSource` (a
-subscription today; see `DATA_MODEL.md`), saved with the play context and
+subscription today; see [[DATA_MODEL]]), saved with the play context and
 restored with it. The "From:" row names it and tapping it navigates back to it.
 It is separate from the episode's own feed, which is what the lock screen shows
 as the artist.
