@@ -1,31 +1,44 @@
-# Bookmarks
 ---
+type: feature
+status: accepted
 priority: mid
-depends: episode, player
+area: bookmarks
+depends:
+  - "[[episode]]"
+  - "[[player]]"
 ---
+# Bookmarks
 
 Allow user to mark specific timestamps (for later refernece).
 May optionally have a text note attached to the bookmark. 
 
-May lay the foundation fo later features like sharing (at point) or looping
+May lay the foundation for later features like sharing (at point) or looping
 playback (a/b loops)
 
 Effectively, just mark a position in an episode.
 
 Don't worry about DAI (dynamic ad insertion) yet, but note it as a future
-complication. FOr now, just timestamp on currently available episode.
+complication. For now, just timestamp on currently available episode.
 
-## UI 
+## Parts
 
-from a list of bookmarks, I should be able to click on one, and jump to that
-part or the episode (intentional click).
-maybe with press-and-hold plays a preview?
+- [[bookmarks-ui]]: making, finding and jumping to bookmarks
+- [[bookmarks-screenshots]]: creating a bookmark from a screenshot of the player
 
-From a playing episode, I should be able to have a "quick bookmark" button that
-makes a mark at the current timestamp
+## User stories
 
-Perhaps there's an option that has a bookmark button on the home screen / lock
-controls?
-
-Would be good to have a view of bookmarks in an episode when seeing the episode
-view, but also have a way to organize/filter across episode-bookmarks
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

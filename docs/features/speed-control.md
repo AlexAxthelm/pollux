@@ -1,8 +1,12 @@
-# Playback Speed Control
 ---
+type: feature
+status: draft
 priority: low
-depends: player
+area: player
+depends:
+  - "[[player]]"
 ---
+# Playback Speed Control
 
 Allow users to adjust playback speed.
 
@@ -16,3 +20,21 @@ Allow users to adjust playback speed.
 - Should follow cascading defaults pattern (global → feed)
 - Per feed settings is possible 
 - "smart" speedups (eliminating silence) is a separate feature (much later)
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

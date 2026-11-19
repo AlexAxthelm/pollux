@@ -1,8 +1,12 @@
-# Mini Player
 ---
+type: feature
+status: accepted
 priority: MVP
-depends: player
+area: player
+depends:
+  - "[[player]]"
 ---
+# Mini Player
 
 The mini-player is a persistent, compact playback control visible whenever an
 episode is active (playing or paused) and the full player view is not open.
@@ -53,3 +57,21 @@ the row could animate into the player as an "open" affordance.
 For MVP, large screen layouts are a scaled-up version of the mobile layout
 (bottom bar, full width). Later, this will likely become a width-constrained
 component, but the interaction model remains the same.
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

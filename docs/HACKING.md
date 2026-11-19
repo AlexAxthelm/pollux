@@ -1,7 +1,11 @@
+---
+type: reference
+---
 # Hacking on Pollux
 
 This document covers local setup, build commands, and development workflows.
-For a conceptual overview of the architecture, see `ARCHITECTURE.md`.
+For a conceptual overview of the architecture, see `ARCHITECTURE.md`. For how the
+specs, user stories and decisions in `docs/` are organized, see `README.md`.
 
 ---
 
@@ -105,6 +109,16 @@ make ios-dev        # runs ios-build then opens the project in Xcode
 
 Or manually: `xed iOS/` after `make ios-build`.
 
+### Build without launching
+
+```bash
+make ios-xcodebuild   # ios-build, then xcodebuild for the simulator
+```
+
+The app lands in `build/DerivedData/Build/Products/Debug-iphonesimulator/Pollux.app`.
+Use this when you want to install and launch it yourself with `xcrun simctl`, since
+`make ios-sim` blocks on the launch console.
+
 ### Run in simulator
 
 ```bash
@@ -131,15 +145,14 @@ make rust-test      # cargo test
 make ios-test       # xcodebuild test (Swift)
 ```
 
-Rust tests live alongside the source in `shared/src/app.rs` using standard
-`#[cfg(test)]` modules. Crux provides test helpers
+Rust tests live alongside the source, in `#[cfg(test)]` modules in `shared/src/app.rs`
+and the other core modules (`feed_parser.rs`, `html.rs`, `player.rs`, and so on). Crux provides test helpers
 (`cmd.expect_one_effect().expect_render()`) that let you test the update
 function without a shell.
 
 Swift tests live in `iOS/PolluxTests/` and use the swift-testing framework
 (`import Testing`, with `@Suite` / `@Test` and `#expect` assertions) rather
-than XCTest. `iOS/PolluxTests/DatabaseManagerTests.swift` covers the
-`DatabaseManager` suite.
+than XCTest.
 
 `make ios-test` depends on `ios-build`, so it regenerates the Xcode project
 and runs against a simulator — you need an installed simulator runtime
@@ -167,6 +180,8 @@ make rust-lock-check    # cargo check --locked (ensures Cargo.lock is up to date
 make swift-lint         # swiftlint lint --strict iOS/Pollux
 make swift-format-check # swiftformat --lint iOS/Pollux
 ```
+
+`make lint` runs both lint targets, and `make format-check` runs both format checks.
 
 Auto-fix formatting:
 
@@ -201,7 +216,8 @@ No output means clean.
 
 ## Workflow: adding a new feature to the core
 
-1. Edit `shared/src/app.rs`:
+1. Edit `shared/src/app.rs` (and the other core modules the feature touches, such as
+   `model.rs`, `view_model.rs`, `effect.rs` and `capabilities/`):
    - Add variants to `Event` for any new user actions
    - Add fields to `Model` for new state
    - Add fields to `ViewModel` for anything the UI needs to display

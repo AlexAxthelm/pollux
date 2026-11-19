@@ -1,10 +1,19 @@
-# Episodes
 ---
+type: feature
+status: draft
 priority: MVP
-depends: subscription
+area: episode
+depends:
+  - "[[subscription]]"
 ---
+# Episodes
 
 Episodes are the atomic unit of content in Pollux.
+
+## Parts
+
+- [[episode-ui]]: the list row, swipe gestures and the detail page
+- [[episode-chapters]]: chapters
 
 ## State
 
@@ -20,8 +29,11 @@ Status is set automatically by playback (reaching the end of an episode, within 
 small tolerance, marks it as played). Users may also set status manually at any
 time, regardless of actual listening history.
 
+How and when playback marks an episode played is in [[player-progress]] and
+[[ADR-0002 Played is decided when the listener leaves an episode]].
+
 Status is a field used for playlist filtering. Listening history (play counts, time
-listened) is tracked separately — see `listening-stats.md`.
+listened) is tracked separately — see [[listening-stats]].
 
 ### Replaying a Completed Episode
 
@@ -42,13 +54,14 @@ Tracks whether the episode audio file is available in local storage:
 - **Downloaded**: available for offline playback ("ready to play")
 - **Failed**: download attempted but unsuccessful
 - **Removed**: episode was previously in a subscription feed but no longer appears
-  in it; may still be available locally or on other devices
+  in it; may still be available locally or on other devices (see
+  [[subscription-delisted-episodes]])
 
 ### Star / Flag
 
 A user-set marker to distinguish an episode. Used to influence playlist and
-download behavior (see `playlist-rules.md`), and to protect episodes from
-eviction (see `storage.md`). Additional flag types may be added later.
+download behavior (see [[playlists-rules]]), and to protect episodes from
+eviction (see [[storage-protection]]). Additional flag types may be added later.
 
 ## Actions
 
@@ -64,51 +77,33 @@ eviction (see `storage.md`). Additional flag types may be added later.
 - Move to top / Move to bottom *(only shown when viewing episode within a playlist)*
 - *(future)* Add / remove tags
 
-### Swipe Gestures (on episode list row)
-
-Swipe actions are user-configurable. Defaults:
-
-| Gesture | Default Action |
-|---|---|
-| Short swipe left | Flag / Unflag |
-| Short swipe right | Download / Delete |
-| Long swipe left | Played / Unplayed |
-| Long swipe right | *(unassigned)* |
-
-Each action is a toggle based on current state.
-
 ## UI
 
-### List View (single row)
-
-Displayed when episodes appear in a playlist, subscription, or search results:
-
-- Small episode art
-- Play button
-- Title
-- Three-dots menu
-- Played status indicator
-- Download status indicator (progress bar while downloading)
-- Duration
-- Playback position (if in-progress)
-
-### Detail View (full page)
-
-Expanded view for a single episode:
-
-- Album art
-- Title, feed name
-- Release date, duration
-- Show notes
-- Chapters (if available)
-- Chapter art (if available)
-- Bookmark list (see `bookmarks.md`)
+The list row, swipe gestures and detail page are in [[episode-ui]].
 
 ## Chapters
 
-see chapters.md 
+See [[episode-chapters]].
 
 ## Open Questions
 
-- Can the app check if an episode is still available on the server without
-  downloading it? (Relevant for eviction and archive protection in storage.)
+- Whether the app can check if an episode is still available on the server without
+  downloading it is tracked in [[storage-protection]].
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

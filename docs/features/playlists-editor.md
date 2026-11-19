@@ -1,8 +1,16 @@
-# Playlist Editor
 ---
+type: feature
+status: accepted
 priority: high
-depends: playlists, playlist-rules, subscription, library
+area: playlists
+parent: "[[playlists]]"
+depends:
+  - "[[playlists]]"
+  - "[[playlists-rules]]"
+  - "[[subscription]]"
+  - "[[library]]"
 ---
+# Playlist Editor
 
 The playlist editor is the interface for creating and editing playlists. It
 combines a rules builder with a live preview of the resulting episode list.
@@ -109,7 +117,7 @@ Sort rows are applied in order (primary → secondary → tertiary, etc.).
 ### Settings
 
 A collapsed section at the bottom of Component 1, using the standard feed
-settings interface (see `settings.md`). Expanded on tap. Not distracting in
+settings interface (see [[settings-cascade]]). Expanded on tap. Not distracting in
 the default collapsed state.
 
 ---
@@ -121,7 +129,7 @@ playlist were saved now. Updates in real-time as rules are added, removed,
 reordered, or changed.
 
 The episode rows in the preview are the same format as in the full playlist
-view (see `playlists.md`) — this is not a simplified list, it's the real thing.
+view (see [[playlists-ui]]) — this is not a simplified list, it's the real thing.
 
 If the rule set produces no episodes, show an empty state explaining why
 (e.g. "No unplayed episodes match these filters").
@@ -137,3 +145,21 @@ pre-checked on open. Feeds that are in the playlist sources are floated to the
 top
 
 ---
+
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

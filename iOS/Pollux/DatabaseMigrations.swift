@@ -11,7 +11,8 @@ import GRDB
 /// Before the first release, remove the erase-on-change below and freeze `v1_initial`. From
 /// then on a schema change is a *new* append-only migration, and each one that alters a
 /// table that can already hold rows should be tested against a database that has some (the
-/// migrator can stop at an earlier version with `migrate(_:upTo:)`).
+/// migrator can stop at an earlier version with `migrate(_:upTo:)`). See ADR-0040 in
+/// docs/decisions.
 extension DatabaseManager {
     static func runMigrations(_ db: DatabasePool) throws {
         var migrator = DatabaseMigrator()

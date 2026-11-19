@@ -412,7 +412,7 @@ impl App for Pollux {
                 // NOTE: this makes re-selection a no-op even if the feed's stored
                 // episodes changed since the last load. A feed refresh therefore
                 // reloads the open feed's episodes explicitly (see `RefreshSaved`)
-                // rather than relying on re-selection. See docs/features/subscription.md.
+                // rather than relying on re-selection. See ADR-0014 in docs/decisions.
                 let same_feed = model
                     .selected_subscription
                     .as_ref()
@@ -881,7 +881,7 @@ pub(crate) fn enqueue_download(model: &mut Model, episode_id: &str) -> Command<E
 }
 
 /// Pre-download storage check. Unlimited today — the user-configurable soft cap
-/// arrives with the Settings screen (see ROADMAP follow-ups). Device-full is not
+/// arrives with the Settings screen (see `docs/features/storage-limits.md`). Device-full is not
 /// predicted here; it surfaces as the shell's write failing (`DownloadResult::Error`
 /// → `Failed`), which is the fail-on-full behavior the storage spec calls for.
 fn download_allowed(_model: &Model) -> bool {
@@ -1336,7 +1336,7 @@ pub enum Event {
         result: Box<StorageResult>,
     },
     /// Change the active theme. Not yet emitted by any UI — the seam for the
-    /// Settings appearance section (see `docs/features/theme.md`).
+    /// Settings appearance section (see `docs/features/theme-ui.md`).
     SetTheme {
         id: ThemeId,
         mode: ThemeMode,

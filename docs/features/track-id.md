@@ -1,7 +1,10 @@
-# Track ID 
 ---
+type: feature
+status: draft
 priority: very low
+area: player
 ---
+# Track ID 
 
 The general idea on this one is that I listen to a lot of music podcasts and it would be really nice to have some way to identify what song is playing, jump in between songs as if it were a normal music playlist — not part of a podcast which always sort of gets treated as like one monolithic block of an MP3 file. So I want to be moving back and forth within the MP3 file.
 
@@ -15,3 +18,20 @@ less official listings
 
 This might tap into social stuff where there's a common database across users of the timestamps for tracklists in various episodes.
 
+## User stories
+
+```base
+views:
+  - type: table
+    name: User Stories
+    filters:
+      and:
+        - file.hasLink(this.file)
+        - type == "user-story"
+    order:
+      - file.name
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
+```

@@ -8,7 +8,7 @@
 //!
 //! The active selection (`ThemeId` + `ThemeMode`) lives in the `Model` and is
 //! projected into the `ViewModel` as a [`ThemeView`]. There is no UI to change
-//! it yet; the Settings appearance section (see `docs/features/theme.md`) will
+//! it yet; the Settings appearance section (see `docs/features/theme-ui.md`) will
 //! drive it through [`crate::Event::SetTheme`]. Until then the default is
 //! `System` / `FollowSystem`, which reproduces the OS's native appearance.
 
@@ -239,11 +239,12 @@ mod tests {
         // a theme automatically extends this test.
         //
         // The shell paints `text` with base05 and `secondaryText` with base04 (see
-        // docs/features/theme-semantic-mapping.md). Primary text must clear WCAG AA
-        // (4.5:1); secondary text must clear the 3:1 large-text/UI bar — canonical
-        // palettes can't always reach 4.5:1 for de-emphasized text (that gap is
-        // documented, with more accessible themes planned). base03 (the "comments"
-        // color) must never back text: it fails even 3:1.
+        // docs/features/theme-semantic-mapping.md and ADR-0035 in docs/decisions).
+        // Primary text must clear WCAG AA (4.5:1); secondary text must clear the 3:1
+        // large-text/UI bar — canonical palettes can't always reach 4.5:1 for
+        // de-emphasized text (that gap is documented in
+        // docs/features/theme-accessibility.md, with more accessible themes planned).
+        // base03 (the "comments" color) must never back text: it fails even 3:1.
         for id in ThemeId::ALL {
             let view = theme_view(id, ThemeMode::FollowSystem);
             for palette in view.light.iter().chain(view.dark.iter()) {

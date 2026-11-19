@@ -1,7 +1,10 @@
+---
+type: reference
+---
 # Pollux Data Model
 
 This document defines the core entities and their relationships. It is the
-code-facing complement to `GLOSSARY.md`, which covers user-facing terminology.
+code-facing complement to [[GLOSSARY]], which covers user-facing terminology.
 
 This is a living document. Entities are added and refined as features are
 specced and user stories are walked through. Field-level detail is added when
@@ -25,17 +28,17 @@ Entities listed here are at one of three levels of definition:
 
 ## Core Entities
 
-### Subscription *(Identified)*
+### Subscription *(Sketched)*
 
 The app's record of a podcast the user has subscribed to, backed by a feed URI.
 One-to-many with Episode.
 
-See also: `GLOSSARY.md` — Subscription.
+See also: [[GLOSSARY]] — Subscription.
 
 #### Refresh state
 
 Besides its identity and feed metadata, a Subscription carries the bookkeeping
-feed refresh needs (see `features/subscription.md`, "Refresh as built"):
+feed refresh needs (see [[subscription-refresh]], "As built"):
 
 - `last_refreshed` — when the feed was last successfully fetched (a 304 counts).
 - `etag`, `last_modified` — validators from the last successful fetch, replayed
@@ -50,12 +53,12 @@ Refresh outcomes that produce no new body (304, 429, failures) are written by
 all of the above from the fresh parse. A 304's write also flags episodes whose
 `missing_since` clock has run the grace period, and reports how many.
 
-### Episode *(Identified)*
+### Episode *(Sketched)*
 
 The atomic unit of content. Belongs to a Subscription. Has playback status,
 download status, and flag state.
 
-See also: `GLOSSARY.md` — Episode, Playback status, Flag.
+See also: [[GLOSSARY]] — Episode, Playback status, Flag.
 
 #### What a refresh preserves
 
@@ -71,7 +74,7 @@ need care:
 - `download_status` — an episode flagged `RemovedFromFeed` that reappears in the
   feed returns to `NotDownloaded`. Episodes that drop out of the feed are flagged
   only after being absent for 48 hours, and only if they are `NotDownloaded` or
-  `Failed`; see `features/subscription.md`, "De-listed Episodes".
+  `Failed`; see [[subscription-delisted-episodes]].
 - `missing_since` — storage-only (the core never sees it): the unix time an
   episode was first missed by a refresh, or NULL while it is present. Every
   refresh with a non-empty feed starts a clock for each of the subscription's
@@ -81,14 +84,7 @@ need care:
 
 #### Schema baseline
 
-Until the first release the database is disposable, so the schema is a single
-baseline (`v1_initial`, in `iOS/Pollux/DatabaseMigrations.swift`) that is edited in
-place rather than grown by appending migrations. In debug builds the migrator
-erases and recreates the database whenever that definition changes, so an existing
-simulator database never needs wiping by hand. Before the first release, remove
-that erase-on-change and freeze the baseline; after that every schema change is a
-new append-only migration, and each one that alters a table that can already hold
-rows should be tested against a database that has some.
+See [[ADR-0040 The database schema is a single baseline until the first release]].
 
 #### Identity across refreshes
 
@@ -97,38 +93,9 @@ where `feed_guid` is the feed's `<guid>` when present. This key decides whether 
 refresh **updates** an episode or **inserts a new one**, so it also decides
 whether playback position, played status, and flags survive a refresh.
 
-**Identity when `<guid>` is absent.** `<guid>` is optional in RSS 2.0. When it is
-missing, `feed-rs` would synthesise a random UUID that differs on every parse, so
-the unique key never matched and every refresh re-inserted every episode — the
-library grew without bound and playback state reset to Unplayed. Resolved for
-RSS: `parse_feed` registers `feed-rs`'s `id_generator` hook, which fires only for
-entries with no id, to mark them; those get a locally derived `feed_guid` from
-`stable_episode_id(enclosure_url, title)` instead. Entries with a real `<guid>`
-are untouched.
+**Identity when `<guid>` is absent.** Resolved for RSS: see [[ADR-0038 A missing guid is replaced by an id derived from the enclosure URL and title]]. It also records the residual failure modes.
 
-Two properties of the derived id worth keeping in mind:
-
-- It is **not** keyed on the parse-time `subscription_id` (a fresh UUID each
-  parse — folding it in would reintroduce the instability). Storage already
-  scopes uniqueness per feed, so the derived value only needs to be unique
-  within one feed.
-- It uses a hand-rolled FNV-1a rather than `std`'s `DefaultHasher`, whose
-  algorithm `std` does not guarantee across releases; stored ids must stay valid
-  across upgrades. A known-answer test locks the hash so it cannot silently
-  drift.
-
-Residual failure modes (accepted, and milder than every-refresh churn): editing
-a title or a change to the enclosure URL yields a new id and thus a duplicate
-row; two entries sharing *both* title and enclosure URL collapse to one. This
-does not yet cover Atom, which is moot until Atom entries parse at all (see
-`features/feed-parsing.md`).
-
-**Duplicate guids.** Feeds sometimes repeat a `<guid>` across entries. Storage
-resolves this by overwriting, and because feeds are conventionally newest-first,
-an unguarded overwrite let an *older* duplicate replace a *newer* episode.
-`parse_feed` now collapses duplicates before storage, keeping the **first**
-occurrence. That choice is deliberate — record it here so it is not silently
-reversed.
+**Duplicate guids.** Collapsed to the first occurrence before storage: see [[ADR-0039 Duplicate guids collapse to the first occurrence before storage]].
 
 ### Playlist *(Identified)*
 
@@ -138,7 +105,7 @@ episodes.
 
 One-to-many with PlaylistSource, PlaylistFilter, PlaylistSort.
 
-See also: `GLOSSARY.md` — Playlist.
+See also: [[GLOSSARY]] — Playlist.
 
 ### PlaylistSource *(Identified)*
 
@@ -184,20 +151,20 @@ The following entities are identified but intentionally not defined yet.
 ### PlayHistory
 
 A continuous event log of listening activity: episode, position, device,
-playback speed, wall time. Referenced in `docs/features/listening-stats.md`.
+playback speed, wall time. Referenced in [[listening-stats]].
 Required for listening statistics and will interact with sync. Detail deferred.
 
 ### Bookmark
 
 A user-set timestamp on an episode, with an optional text note. Referenced in
-`docs/features/bookmarks.md`. Detail deferred.
+[[bookmarks]]. Detail deferred.
 
 ### Device
 
 Represents a physical device the app runs on. Required for per-device storage
 rules and sync. Detail deferred until sync is scoped.
 
-See also: `docs/features/storage-sync.md`, `docs/features/sync.md`.
+See also: [[storage-sync]], [[sync-downloads]], [[sync]].
 
 ---
 
@@ -221,14 +188,14 @@ state, the saved play context, and the "From:" row, so adding the variant needs 
 schema or event change; only the places that resolve a source (its title, its
 episode order) gain a case. The name is kept for now.
 
-See also: `GLOSSARY.md` — EpisodeSource.
+See also: [[GLOSSARY]] — EpisodeSource.
 
 ---
 
 ## Settings
 
 Settings follow the cascading defaults pattern (global → subscription →
-playlist → episode) documented in `DESIGN_PRINCIPLES.md` §3 and `GLOSSARY.md`.
+playlist → episode) documented in [[DESIGN_PRINCIPLES]] §3 and [[GLOSSARY]].
 
 **Resolved: settings are structured config objects, not key-value rows.**
 
@@ -255,4 +222,4 @@ These names are placeholders. The final names and the Rust representation
 The key constraint is that all levels share the same field shape so that the
 cascade logic is uniform.
 
-See also: `docs/features/settings.md`, `DESIGN_PRINCIPLES.md` §3.
+See also: [[settings]], [[DESIGN_PRINCIPLES]] §3.

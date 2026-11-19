@@ -49,7 +49,8 @@ pub fn parse_feed(url: &str, body: Vec<u8>) -> Result<(Subscription, Vec<Episode
     // Episode identity is (subscription, feed_guid) in storage, where a repeat
     // guid silently overwrites the earlier row. Feeds are conventionally newest
     // first, so an unguarded overwrite would let an older duplicate replace a
-    // newer episode. Collapse duplicates here instead, keeping the first.
+    // newer episode. Collapse duplicates here instead, keeping the first. See ADR-0039 in
+    // docs/decisions.
     let mut seen_guids: HashSet<String> = HashSet::new();
 
     let episodes = feed
@@ -147,7 +148,7 @@ pub(crate) fn now_unix() -> i64 {
 /// episode's title or a change to its enclosure URL yields a new id and thus a
 /// duplicate row; two entries that share both a title and an enclosure URL
 /// collapse to one. Both are rarer than the every-refresh churn of relying on
-/// feed-rs's synthesised id.
+/// feed-rs's synthesised id. See ADR-0038 in docs/decisions.
 fn stable_episode_id(enclosure_url: &str, title: &str) -> String {
     // NUL-delimited so ("ab", "c") and ("a", "bc") cannot collide (NUL cannot
     // appear in an XML enclosure URL or title). The version prefix lets us
