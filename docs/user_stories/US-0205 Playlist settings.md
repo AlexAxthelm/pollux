@@ -1,10 +1,10 @@
 ---
 type: user-story
-status: draft
+status: closed
 feature:
   - "[[playlists]]"
   - "[[player]]"
-  - "[[settings]]"
+  - "[[settings-cascade]]"
 related:
   - "[[US-0167 Playlist settings]]"
 ---

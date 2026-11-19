@@ -1,10 +1,10 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
   - "[[playlists]]"
   - "[[subscription]]"
-  - "[[settings]]"
+  - "[[settings-cascade]]"
 related: []
 ---
 As a user

@@ -1,8 +1,8 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[settings]]"
+  - "[[settings-ui]]"
 related:
   - "[[US-0177 Settings can reset to default]]"
 ---

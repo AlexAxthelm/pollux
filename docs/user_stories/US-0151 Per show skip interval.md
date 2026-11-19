@@ -1,10 +1,10 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
   - "[[player]]"
   - "[[subscription]]"
-  - "[[settings]]"
+  - "[[settings-cascade]]"
 related:
   - "[[US-0141 Adjust skip]]"
 ---

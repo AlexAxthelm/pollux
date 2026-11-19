@@ -1,8 +1,8 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[settings]]"
+  - "[[settings-ui]]"
 related:
   - "[[US-0181 Notifications for changes in default]]"
   - "[[US-0172 New settings notification]]"

@@ -1,8 +1,8 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[settings]]"
+  - "[[settings-cascade]]"
   - "[[playlists]]"
   - "[[subscription]]"
 related:

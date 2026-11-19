@@ -1,8 +1,8 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[settings]]"
+  - "[[settings-cascade]]"
 related:
   - "[[US-0177 Settings can reset to default]]"
   - "[[US-0179 Good defaults]]"

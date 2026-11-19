@@ -1,8 +1,8 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[settings]]"
+  - "[[settings-cascade]]"
 related:
   - "[[US-0180 Non-defaults visible]]"
   - "[[US-0185 Non-default global settings visible]]"

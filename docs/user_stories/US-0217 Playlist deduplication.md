@@ -1,9 +1,8 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
   - "[[playlists]]"
-  - "[[settings]]"
 related: []
 ---
 As a curator

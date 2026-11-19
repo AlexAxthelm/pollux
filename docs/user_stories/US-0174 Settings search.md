@@ -1,8 +1,8 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[settings]]"
+  - "[[settings-ui]]"
 related:
   - "[[US-0173 All settings in one spot]]"
 ---
