@@ -2,7 +2,7 @@
 type: user-story
 status: accepted
 feature:
-  - "[[sync]]"
+  - "[[sync-downloads]]"
   - "[[storage-sync]]"
   - "[[downloads]]"
 related:

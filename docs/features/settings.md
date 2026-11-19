@@ -71,7 +71,7 @@ Settings for power-users. Should be hidden by default, but can be shown
 
 - Should settings be synced across devices, or are they per-device?
   Storage limit is clearly per-device. Skip increments could go either way.
-  See [[sync]].
+  See [[sync-settings]].
 
 ## User stories
 

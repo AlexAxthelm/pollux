@@ -18,17 +18,17 @@ possible.
 Also sync playback positions and event logs (played/unplayed, etc), playlists,
 bookmarks, etc.
 
-## Per-device downloads
+Sync is out of scope for MVP and v1.0.
 
-Which episodes are downloaded is a per-device decision. A user with multiple
-devices should be able to control which episodes get downloaded to each (for
-example, a feed downloaded on the phone but not on the laptop, or vice versa), so
-they can manage listening on each device.
+## Parts
 
-Sync may suggest that download rules match across devices, but not strongly. Once
-sync works, a view like "available on phone" would be a nice bonus. Storage
-limits and other device-specific rules are in [[storage-sync]]; the download
-machinery is in [[downloads]].
+- [[sync-settings]]: whether settings sync or stay per-device
+- [[sync-downloads]]: per-device control over which episodes are downloaded
+- [[sync-playback]]: subscriptions, playback positions, the listening log, and per-device state
+
+## Decisions
+
+- [[ADR-0037 Audio files are re-downloaded on each device, not synced]]
 
 ## User stories
 

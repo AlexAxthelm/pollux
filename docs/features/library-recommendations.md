@@ -20,7 +20,7 @@ useful playlists and content to resume.
 - **Last played playlist**: quick resume of whatever was playing most recently
 - **Continue on this device**: episodes in-progress
 - **Continue from other devices**: episodes in-progress on other devices
-  (depends on `sync.md`)
+  (depends on `sync.md`; see [[sync-playback]])
 - **Playlists you play often**: frequently used playlists surfaced for quick
   access
 
