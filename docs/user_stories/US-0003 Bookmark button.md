@@ -1,9 +1,9 @@
 ---
 type: user-story
-status: draft
+status: accepted
 feature:
-  - "[[bookmarks]]"
   - "[[player]]"
+  - "[[bookmarks-ui]]"
 related: []
 ---
 As a listener

@@ -3,8 +3,8 @@ type: user-story
 status: draft
 feature:
   - "[[library]]"
-  - "[[bookmarks]]"
   - "[[episode-ui]]"
+  - "[[episode]]"
 related:
   - "[[US-0072 Star episodes]]"
 ---
