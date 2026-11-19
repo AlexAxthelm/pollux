@@ -7,6 +7,21 @@ These docs are plain Markdown in the repo, and `docs/` is also an Obsidian
 vault. Everything here must stay readable as ordinary text (GitHub, an editor,
 or an agent reading the files); Obsidian only adds navigation on top.
 
+## Living docs
+
+This vault is a primary way of working on Pollux, not an archive. It is meant to stay true
+as the app changes, for the user and for agents working alongside them.
+
+- **Features** are kept up to date with everything: when something is built, changed or
+  found out, the feature note says so.
+- **User stories** are added often. Anyone, including an agent, can suggest one; a new story
+  starts as `draft`, and the maintainer accepts it.
+- **Decisions (ADRs)** are not relitigated lightly, but they are not set in stone. If there is a
+  compelling reason to change one, write a new ADR that supersedes it and say why.
+- **Contradictions** are flagged with `#needs-decision`, not quietly resolved.
+
+`CLAUDE.md` at the repository root tells agents the same.
+
 ## Layout
 
 ```
