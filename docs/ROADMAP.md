@@ -1,8 +1,10 @@
-# Implementation Plan
 ---
+type: reference
+---
+# Implementation Plan
+
 This is a rough ordering for MVP implementation, based on feature dependencies
 and what needs to exist before other things can be built or tested meaningfully.
----
 
 ## Phase 0 — Foundation
 

@@ -1,3 +1,6 @@
+---
+type: reference
+---
 # Pollux docs
 
 These docs are plain Markdown in the repo, and `docs/` is also an Obsidian

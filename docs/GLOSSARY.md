@@ -1,3 +1,6 @@
+---
+type: reference
+---
 # Pollux Glossary
 
 This document defines terminology used in Pollux's codebase, documentation,

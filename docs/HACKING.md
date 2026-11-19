@@ -1,3 +1,6 @@
+---
+type: reference
+---
 # Hacking on Pollux
 
 This document covers local setup, build commands, and development workflows.

@@ -1,3 +1,6 @@
+---
+type: reference
+---
 # Pollux Design Principles
 
 This document captures the core design philosophy behind Pollux. It is intended

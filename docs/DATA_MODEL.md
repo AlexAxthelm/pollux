@@ -1,3 +1,6 @@
+---
+type: reference
+---
 # Pollux Data Model
 
 This document defines the core entities and their relationships. It is the

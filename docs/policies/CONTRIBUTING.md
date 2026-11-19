@@ -1,3 +1,6 @@
+---
+type: policy
+---
 # Contributing to Pollux
 
 Thanks for your interest in contributing to Pollux.
