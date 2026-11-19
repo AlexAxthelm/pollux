@@ -2,7 +2,7 @@
 type: feature
 status: draft
 priority: MVP
-area:
+area: navigation
 depends:
   - "[[library]]"
   - "[[player]]"
