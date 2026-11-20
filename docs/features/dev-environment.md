@@ -14,10 +14,17 @@ How a developer builds, checks and runs Pollux locally. Setup and commands are i
 
 * Build tool preflight check ([[US-0187 Check for build tools]]).
 * A local forbidden-patterns scan ([[US-0190 Admin checks run locally]]).
-* Make targets for physical devices and release builds
-  ([[US-0191 Make targets for physical devices]]).
-* Easy reinstall of development builds on a phone, which expire after 7 days on a free
-  Personal Team ([[US-0230 Reinstall device builds easily]]).
+* A release-mode Rust core for device builds, and a device-run target that does not need
+  the one-time signing setup ([[US-0191 Make targets for physical devices]]).
+* Showing when a device build expires ([[US-0232 See when a device build expires]]).
+
+## As built
+
+* `make ios-device` builds, installs over the existing app and launches it on the first
+  paired iPhone ([[US-0230 Reinstall device builds easily]],
+  [[US-0231 Reinstall keeps app data]]). Verified on a physical iPhone 14 Pro Max: the
+  reinstall kept subscriptions once `PRODUCT_BUNDLE_IDENTIFIER` in `iOS/Local.xcconfig`
+  matched the installed app. Setup is in [[HACKING]].
 
 ## User stories
 
