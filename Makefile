@@ -160,7 +160,7 @@ DEVICE_APP_PATH := $(DERIVED_DATA)/Build/Products/Debug-iphoneos/$(XCODE_SCHEME)
 DEVICE_ID ?= $(shell \
 	f=$$(mktemp) && xcrun devicectl list devices -j $$f >/dev/null 2>&1 \
 	&& jq -r '[.result.devices[] \
-		| select(.hardwareProperties.platform == "iOS" \
+		| select(.hardwareProperties.deviceType == "iPhone" \
 			and .connectionProperties.pairingState == "paired")] \
 		| .[0].identifier // empty' $$f; rm -f $$f)
 
@@ -183,8 +183,8 @@ ios-device: ios-build
 	xcrun devicectl device install app --device $(DEVICE_ID) "$(DEVICE_APP_PATH)"
 	xcrun devicectl device process launch --device $(DEVICE_ID) \
 		$$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$(DEVICE_APP_PATH)/Info.plist") \
-	|| { echo "Launch failed. If the error mentions an untrusted profile, trust it on the phone:"; \
-		echo "Settings > General > VPN & Device Management > your Apple ID > Trust."; exit 1; }
+	|| { echo "Launch failed. The app is installed. If the error says the device is locked, unlock the phone and re-run."; \
+		echo "If it says the profile is untrusted: Settings > General > VPN & Device Management > your Apple ID > Trust."; exit 1; }
 
 # `pipefail`: see ios-xcodebuild.
 ios-test: ios-build
