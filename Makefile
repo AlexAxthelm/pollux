@@ -148,6 +148,44 @@ ios-sim: ios-xcodebuild
 	xcrun simctl launch --console $(SIM_ID) \
 		$$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$(APP_PATH)/Info.plist")
 
+# -- Physical device --
+# Build a signed Debug app, install it over the existing one (data is kept) and launch it.
+# Signing comes from the git-ignored iOS/Local.xcconfig (DEVELOPMENT_TEAM). A free Personal
+# Team's provisioning expires after 7 days, so re-run this target to refresh the install.
+# Pick another phone with DEVICE_ID (see `xcrun devicectl list devices`).
+# The install replaces the app only if the bundle id matches the one already on the phone, so
+# set PRODUCT_BUNDLE_IDENTIFIER in iOS/Local.xcconfig to that id. Otherwise iOS installs a
+# second, empty app. The id being installed is printed below.
+DEVICE_APP_PATH := $(DERIVED_DATA)/Build/Products/Debug-iphoneos/$(XCODE_SCHEME).app
+DEVICE_ID ?= $(shell \
+	f=$$(mktemp) && xcrun devicectl list devices -j $$f >/dev/null 2>&1 \
+	&& jq -r '[.result.devices[] \
+		| select(.hardwareProperties.deviceType == "iPhone" \
+			and .connectionProperties.pairingState == "paired")] \
+		| .[0].identifier // empty' $$f; rm -f $$f)
+
+ios-device: ios-build
+	@[ -f iOS/Local.xcconfig ] || \
+		{ echo "iOS/Local.xcconfig not found. Create it with DEVELOPMENT_TEAM = <your team id> (see docs/HACKING.md)."; exit 1; }
+	@[ -n "$(DEVICE_ID)" ] || \
+		{ echo "No paired iPhone found. Connect and unlock it, or pass DEVICE_ID=<id>."; exit 1; }
+	set -o pipefail; \
+	xcodebuild \
+		-project $(XCODE_PROJECT) \
+		-scheme $(XCODE_SCHEME) \
+		-configuration Debug \
+		-derivedDataPath $(DERIVED_DATA) \
+		-destination 'generic/platform=iOS' \
+		-xcconfig iOS/Local.xcconfig \
+		-allowProvisioningUpdates \
+		| xcbeautify
+	@echo "Installing $$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$(DEVICE_APP_PATH)/Info.plist") on device $(DEVICE_ID)"
+	xcrun devicectl device install app --device $(DEVICE_ID) "$(DEVICE_APP_PATH)"
+	xcrun devicectl device process launch --device $(DEVICE_ID) \
+		$$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$(DEVICE_APP_PATH)/Info.plist") \
+	|| { echo "Launch failed. The app is installed. If the error says the device is locked, unlock the phone and re-run."; \
+		echo "If it says the profile is untrusted: Settings > General > VPN & Device Management > your Apple ID > Trust."; exit 1; }
+
 # `pipefail`: see ios-xcodebuild.
 ios-test: ios-build
 	set -o pipefail; \
@@ -177,5 +215,5 @@ regenerate: swift-generated-clean typegen
         rust-format rust-format-check rust-lock-check rust-build rust-clean \
         swift-all-checks swift-lint swift-format swift-format-check \
         typegen package generate-project \
-        ios-build ios-xcodebuild ios-rebuild ios-dev ios-sim ios-test ios-clean \
+        ios-build ios-xcodebuild ios-rebuild ios-dev ios-sim ios-device ios-test ios-clean \
         swift-clean xcode-clean swift-generated-clean regenerate

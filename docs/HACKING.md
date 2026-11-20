@@ -135,6 +135,40 @@ xcrun simctl list devices available     # see installed simulators
 make ios-sim SIM_DEVICE_NAME="iPhone 16"
 ```
 
+### Run on a physical device
+
+```bash
+make ios-device
+```
+
+This builds a signed Debug app, installs it on the first paired iPhone, and launches it.
+Install replaces the app in place, so its data is kept
+([[US-0230 Reinstall device builds easily]], [[US-0231 Reinstall keeps app data]]). Only iPhones are
+auto-selected. Pass `DEVICE_ID=<id>` to pick a specific phone or an iPad
+(`xcrun devicectl list devices`). The Rust core is still a
+debug build; a release option is open in [[US-0191 Make targets for physical devices]].
+
+**One-time setup**
+
+1. Sign in to your Apple ID in Xcode → Settings → Accounts. Without a working login,
+   `xcodebuild` fails with `No Accounts` or `missing Xcode-Username`.
+2. Create `iOS/Local.xcconfig` (git-ignored; never commit it):
+   ```
+   DEVELOPMENT_TEAM = <your team id>
+   CODE_SIGN_STYLE = Automatic
+   PRODUCT_BUNDLE_IDENTIFIER = <the bundle id already on your phone>
+   ```
+   Find the team id in Xcode's Accounts pane. If the bundle id differs from the installed
+   app's, iOS installs a second, empty app instead of replacing yours. List what is on the
+   phone with `xcrun devicectl device info apps --device <id>`.
+3. On the phone, after the first install, trust the profile: Settings → General → VPN &
+   Device Management → your Apple ID → Trust. Until then the launch fails with "profile has
+   not been explicitly trusted". Keep the phone unlocked during the run, or the launch
+   fails with "device was not, or could not be, unlocked" (the app is still installed).
+
+A build signed with a free Personal Team expires after 7 days. Re-run `make ios-device` to
+refresh it. The target does not yet show the expiry date ([[US-0232 See when a device build expires]]).
+
 ---
 
 ## Testing

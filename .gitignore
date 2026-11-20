@@ -43,3 +43,6 @@ DerivedData/
 docs/.obsidian/*
 !docs/.obsidian/templates.json
 !docs/.obsidian/types.json
+
+# Local signing settings for device builds (see docs/HACKING.md)
+iOS/Local.xcconfig
