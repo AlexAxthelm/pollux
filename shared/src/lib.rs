@@ -8,6 +8,7 @@ pub mod ffi;
 mod html;
 pub mod model;
 mod player;
+pub mod settings;
 pub mod theme;
 pub mod view_model;
 
