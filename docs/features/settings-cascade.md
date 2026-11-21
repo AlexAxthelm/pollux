@@ -24,9 +24,14 @@ see Context stack below).
 The UI should always make clear whether a value is using the global default or
 a custom override, and offer a way to reset to default:
 
-- `Refresh every 12 hours (default)` — using global default
-- `Refresh every 24 hours (default)` — global default has been changed
+- `Refresh every 12 hours (default)` — on the global page, using the app default
+- `Refresh every 24 hours (inherited from library)` — on a subscription's page, following the
+  global value (whether or not that is the app default)
 - `Refresh every 1 hour` — per-subscription override is set; subtle reset button shown
+
+The global page says "(default)" because its value follows the app default. A subscription's
+page says what the value follows, "(inherited from library)", since "default" there would hide
+that the global value may have been changed.
 
 This pattern applies to: refresh interval, download rules, skip increments, and
 any other setting that makes sense to configure globally but override locally.
@@ -56,8 +61,9 @@ opens a Subscription settings page. The page is clearly marked as editing that
 subscription (its name is in the header), not the library or the global defaults. Some of
 its settings are behind the **Advanced** flag (see [[settings-ui]]). See [[subscription]].
 
-Sections inherit from the global page and use defaults, with a "(default)" note unless
-changed. A value that isn't the default has a small "reset to default" button next to it.
+Sections inherit from the global page, with an "(inherited from library)" note unless changed.
+A value the subscription has set has a small reset button next to it, which returns it to the
+global value.
 - Playback
 - Library (display options)
 - Storage (how many episodes to keep locally)

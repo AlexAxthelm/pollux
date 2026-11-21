@@ -4,7 +4,7 @@ import SwiftUI
 /// One subscription's settings page, reached from the gear on its page. It is marked as
 /// editing that podcast (its artwork and name head the page) so it can't be mistaken for the
 /// library-wide settings. A value the podcast hasn't set follows the library setting and
-/// reads "(default)"; one it has set shows a button that returns it to the library value.
+/// reads "(inherited from library)"; one it has set shows a button that returns it to the library value.
 ///
 /// The rows read from `core.view.subscriptionDetail.settings`, which describes the selected
 /// subscription, so the page shows them only while that is this subscription (it is, when
@@ -25,6 +25,7 @@ struct SubscriptionSettingsScreen: View {
                 PlaybackSettingsSection(
                     settings: core.view.subscriptionDetail.settings,
                     footer: "Anything you don't change here follows the library settings.",
+                    unsetLabel: "(inherited from library)",
                     onChange: {
                         core.update(.setSubscriptionSetting(subscriptionId: subscription.id, change: $0))
                     },

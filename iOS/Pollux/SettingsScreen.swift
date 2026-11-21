@@ -13,6 +13,7 @@ struct SettingsScreen: View {
             PlaybackSettingsSection(
                 settings: core.view.settings,
                 footer: "These apply to every podcast unless it has its own setting.",
+                unsetLabel: "(default)",
                 onChange: { core.update(.setGlobalSetting($0)) },
             )
         }
@@ -30,6 +31,9 @@ struct PlaybackSettingsSection: View {
     @Environment(\.themeColors) private var themeColors
     let settings: SettingsView
     let footer: String
+    /// What a setting that isn't set at this level reads: "(default)" on the global page,
+    /// where it follows the app default, and what it follows on a subscription's page.
+    let unsetLabel: String
     let onChange: (SettingChange) -> Void
 
     var body: some View {
@@ -41,6 +45,7 @@ struct PlaybackSettingsSection: View {
                 setting: settings.resumeRewindSecs,
                 presets: SettingsPresets.rewind,
                 zeroLabel: "Off",
+                unsetLabel: unsetLabel,
                 onChange: { onChange(.resumeRewindSecs($0)) },
             )
         } header: {
@@ -61,12 +66,13 @@ struct PlaybackSettingsSection: View {
             setting: setting,
             presets: SettingsPresets.skip,
             zeroLabel: nil,
+            unsetLabel: unsetLabel,
             onChange: { onChange(change($0)) },
         )
     }
 }
 
-/// One setting: a picker over the presets, then either a quiet "(default)" when the user
+/// One setting: a picker over the presets, then either a quiet `unsetLabel` when the user
 /// hasn't set it or a button that puts it back. `onChange` gets the new value, or `nil` to
 /// reset. Choosing the default's own number is a choice, so it counts as set (settings-cascade).
 struct SettingRow: View {
@@ -75,6 +81,7 @@ struct SettingRow: View {
     let setting: SettingValue
     let presets: [UInt32]
     let zeroLabel: String?
+    let unsetLabel: String
     let onChange: (UInt32?) -> Void
 
     var body: some View {
@@ -102,7 +109,7 @@ struct SettingRow: View {
             .buttonStyle(.borderless)
             .font(.caption)
         } else {
-            Text("(default)")
+            Text(unsetLabel)
                 .font(.caption)
                 .foregroundStyle(themeColors.secondaryText)
         }
