@@ -92,8 +92,9 @@ value wins, walking up from the episode:
 - Most settings are behind the **Advanced** filter (see [[settings-ui]]), and which
   settings the filter reveals depends on the level being edited.
 - Playback-time settings are the ones the context stack is about. Storage, download and
-  refresh settings can be set on playlists too, but have no playback context; see the
-  open question below.
+  refresh settings can be set on playlists too, but have no playback context. A playlist is evaluated like a
+  subscription: each can request that an episode be downloaded or retained, and storage
+  combines the requests (default: retain). See [[storage-eviction]].
 
 ### Not decided yet
 
@@ -109,10 +110,6 @@ value wins, walking up from the episode:
   These contradict each other. Both are kept as originally written. Global settings are
   reached from a gear at the top right of the library; other settings pages are added
   contextually as they are built.
-- #needs-decision **How do non-playback settings (storage, downloads, refresh) resolve
-  for an episode in several playlists?** There is no playback context. See
-  [[ADR-0044 An episode's settings come from the context it is played from]] and
-  [[US-0044 Retention rules interactions]].
 
 ## User stories
 
