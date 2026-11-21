@@ -63,7 +63,7 @@ struct ContentView: View {
             .background(themeColors.background)
             .navigationTitle("Library")
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItemGroup(placement: .primaryAction) {
                     Button {
                         core.update(.refreshAll)
                     } label: {
@@ -75,6 +75,11 @@ struct ContentView: View {
                     }
                     .disabled(core.view.library.subscriptions.isEmpty || core.view.library.refreshing)
                     .accessibilityLabel(core.view.library.refreshing ? "Refreshing" : "Refresh all")
+                    NavigationLink {
+                        SettingsScreen(core: core)
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
+                    }
                 }
             }
             .navigationDestination(for: SubscriptionSummary.self) { sub in
