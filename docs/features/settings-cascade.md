@@ -65,19 +65,40 @@ button next to it.
 
 Same as feed settings, but also refresh interval
 
-## Playlist and episode overrides (not specified yet)
+## Context stack
 
-The cascade above is episode → feed → global, but this file only specifies feeds.
-The stories add:
+*Draft, see [[ADR-0044 An episode's settings come from the context it is played from]].*
 
-- Playlists have their own settings (for example skip interval and autoplay), and
-  can use a show's default settings.
-- An episode can override the defaults, and otherwise follows its show's defaults.
-- Playlists and subscriptions should be managed similarly, so behavior is consistent.
+An episode's settings come from the context it is played from. The most local set
+value wins, walking up from the episode:
 
-List filtering and sorting for playlists is in [[playlists]], not here.
+`episode → playlist (innermost … outermost) → subscription → global`
 
-*This section is drawn from the stories below; it has not been specified further.*
+- Played from a subscription: episode → subscription → global.
+- Played from a playlist A that includes B, where the episode comes via B:
+  episode → B → A → the episode's subscription → global. Episodes from sibling sources
+  in A can have different effective settings.
+- Played from the library: episode → subscription → global.
+- An unset playlist value falls through to the episode's subscription, so a playlist's
+  settings page shows **"Follows each source"** rather than a single inherited value.
+- An episode override beats an explicit playlist value.
+- Subscriptions and playlists take the same settings and look the same (US-0068).
+
+### Which settings appear where
+
+- Every setting is declared with the levels it applies to. Almost all apply to playlists
+  as well as subscriptions; for example a playlist can raise storage to "keep all" before
+  a trip while the show keeps one.
+- Most settings are behind the **Advanced** filter (see [[settings-ui]]), and which
+  settings the filter reveals depends on the level being edited.
+- Playback-time settings are the ones the context stack is about. Storage, download and
+  refresh settings can be set on playlists too, but have no playback context; see the
+  open question below.
+
+### Not decided yet
+
+- Saving a speed or skip change made in the player to an episode or context is deferred.
+  For now it applies to the player session only.
 
 ## Open questions
 
@@ -85,9 +106,13 @@ List filtering and sorting for playlists is in [[playlists]], not here.
   per-feed settings are accessible from the subscription details page, "not from the
   main settings screen", and later that the page is accessible "either from the main
   settings page, or by clicking the gear/settings button from the feed details page".
-  These contradict each other. Both are kept as originally written.
-- When a playlist and a show both set a value, which wins? Where do playlists sit in
-  the cascade between a show and global?
+  These contradict each other. Both are kept as originally written. Global settings are
+  reached from a gear at the top right of the library; other settings pages are added
+  contextually as they are built.
+- #needs-decision **How do non-playback settings (storage, downloads, refresh) resolve
+  for an episode in several playlists?** There is no playback context. See
+  [[ADR-0044 An episode's settings come from the context it is played from]] and
+  [[US-0044 Retention rules interactions]].
 
 ## User stories
 

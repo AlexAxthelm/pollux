@@ -14,8 +14,9 @@ depends:
 # Settings
 
 A central location for user preferences that affect behavior.
-Accessible from a gear/settings icon in the library toolbar, or via contextual
-entry points throughout the app.
+Accessible from a gear/settings icon at the top right of the library screen, or via
+contextual entry points throughout the app (subscription, playlist and episode settings
+are added as they are built; see [[settings-cascade]]).
 
 ## Parts
 
