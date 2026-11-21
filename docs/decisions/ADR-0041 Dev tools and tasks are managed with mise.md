@@ -52,7 +52,8 @@ cargo-swift stays with cargo-run-bin and the pin in the root `Cargo.toml`.
   global config would override it, so don't add one.
 * `stable` still floats, so a new stable release can break CI with new lints. Pinning a
   version is a separate decision.
-* The CI change cannot be tested locally. The first PR run is its test.
+* CI cannot be tested locally. The PR run is its test, and it passed for the lint, format and
+  Rust jobs (PR #28).
 * Open: running independent checks in parallel (`depends`), pinning the Rust version,
   moving cargo-swift from cargo-run-bin to mise, and whether mise's auto-install makes a preflight check
   ([[US-0187 Check for build tools]]) unnecessary.

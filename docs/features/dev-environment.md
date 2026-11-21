@@ -30,8 +30,9 @@ managed with mise ([[ADR-0041 Dev tools and tasks are managed with mise]]).
   launch step, `ios-dev`, `ios-rebuild`, `clean` and `format`. CI now calls the same tasks
   through `jdx/mise-action`, which ran green on PR #28 for the lint, format and Rust jobs.
 * mise installs Rust from `rust-toolchain.toml`, locally and in CI, replacing
-  `dtolnay/rust-toolchain`. Not yet checked: a first install on a machine without Rust, and
-  the Rust CI jobs on this setup. `clippy` was added to the toolchain file's components,
+  `dtolnay/rust-toolchain`. The Rust CI jobs passed on this setup (PR #28), installing the
+  toolchain in about 13 seconds. Not yet checked: a first install on a machine without
+  Rust. `clippy` was added to the toolchain file's components,
   because it was missing for anyone without a default-profile install.
 * `mise run ios-device` builds, installs over the existing app and launches it on the first
   paired iPhone ([[US-0230 Reinstall device builds easily]],
