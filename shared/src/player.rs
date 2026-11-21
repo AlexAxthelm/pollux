@@ -241,14 +241,16 @@ fn is_current(model: &Model, session: u32) -> bool {
         .is_some_and(|a| a.session == session)
 }
 
-/// The settings that apply to playback right now. Only the global level exists so far; the
-/// subscription and playlist layers of the active context join here (ADR-0044), most local
-/// first, so callers don't change when they do.
+/// The settings that apply to playing `episode` right now: its own subscription's, then the
+/// global ones (ADR-0044). The playlists on the route to the episode join between them when
+/// playback can start from one, most local first, so callers don't change when they do. The
+/// subscription is the episode's own, which is always in the stack, whatever started playback.
 ///
 /// Resolved where it is used, on the listener's action, not cached: a change to a setting
 /// applies to the next skip or resume. Never call it from the position tick.
-fn playback_settings(model: &Model) -> ResolvedSettings {
-    resolve([&model.global_settings])
+fn playback_settings(model: &Model, episode: &Episode) -> ResolvedSettings {
+    let subscription = model.subscription_settings.get(&episode.subscription_id);
+    resolve(subscription.into_iter().chain([&model.global_settings]))
 }
 
 /// Starts playing `episode_id` from the feed on screen. Resumes in place if it is
@@ -280,7 +282,7 @@ pub(crate) fn play_episode(model: &mut Model, episode_id: &str) -> Cmd {
         PlaybackStatus::Played => 0,
         _ => episode.playback_position_secs.unwrap_or(0),
     };
-    let start = saved.saturating_sub(playback_settings(model).resume_rewind_secs);
+    let start = saved.saturating_sub(playback_settings(model, &episode).resume_rewind_secs);
 
     let mut playing_episode = episode.clone();
     playing_episode.playback_status = PlaybackStatus::InProgress;
@@ -338,8 +340,11 @@ pub(crate) fn play(model: &mut Model) -> Cmd {
     // A restored (or errored) episode has nothing loaded, so it needs a fresh session.
     let needs_load = model.active_playback.as_ref().is_some_and(|a| !a.loaded);
     let fresh = needs_load.then(|| next_session(model));
-    let rewind = playback_settings(model).resume_rewind_secs;
-    let Some(active) = model.active_playback.as_mut() else {
+    let rewind = model
+        .active_playback
+        .as_ref()
+        .map(|a| playback_settings(model, &a.episode).resume_rewind_secs);
+    let (Some(rewind), Some(active)) = (rewind, model.active_playback.as_mut()) else {
         return Command::done();
     };
     active.error = None;
@@ -489,18 +494,26 @@ pub(crate) fn seek_to(model: &mut Model, secs: u32) -> Cmd {
 }
 
 pub(crate) fn skip_forward(model: &mut Model) -> Cmd {
-    let Some(position) = model.active_playback.as_ref().map(|a| a.position_secs) else {
+    let Some((position, skip)) = model.active_playback.as_ref().map(|a| {
+        (
+            a.position_secs,
+            playback_settings(model, &a.episode).skip_forward_secs,
+        )
+    }) else {
         return Command::done();
     };
-    let skip = playback_settings(model).skip_forward_secs;
     seek_to(model, position.saturating_add(skip))
 }
 
 pub(crate) fn skip_back(model: &mut Model) -> Cmd {
-    let Some(position) = model.active_playback.as_ref().map(|a| a.position_secs) else {
+    let Some((position, skip)) = model.active_playback.as_ref().map(|a| {
+        (
+            a.position_secs,
+            playback_settings(model, &a.episode).skip_back_secs,
+        )
+    }) else {
         return Command::done();
     };
-    let skip = playback_settings(model).skip_back_secs;
     seek_to(model, position.saturating_sub(skip))
 }
 
@@ -754,7 +767,7 @@ pub(crate) fn on_backgrounded(model: &mut Model) -> Cmd {
 
 pub(crate) fn player_view(model: &Model) -> Option<PlayerView> {
     let active = model.active_playback.as_ref()?;
-    let settings = playback_settings(model);
+    let settings = playback_settings(model, &active.episode);
     let subscription = model
         .subscriptions
         .iter()
