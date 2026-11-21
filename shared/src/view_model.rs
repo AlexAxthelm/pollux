@@ -17,9 +17,9 @@ pub struct ViewModel {
     pub settings: SettingsView,
 }
 
-/// The settings page for one level, one entry per setting. Today only the global level has a
-/// page; a subscription or playlist page will be the same shape, with `reset_value` holding the
-/// value inherited from the level above instead of the app default.
+/// The settings page for one level, one entry per setting. The global page and a subscription's
+/// page have this shape, and a playlist's will too. `reset_value` holds the value inherited from
+/// the level above, which is the app default at the global level.
 #[derive(Facet, Serialize, Deserialize, Clone)]
 pub struct SettingsView {
     pub skip_forward_secs: SettingValue,

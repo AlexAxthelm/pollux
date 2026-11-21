@@ -90,20 +90,35 @@ screen only offers the presets, plus a saved value that isn't one of them so it 
   stored by the shell as an opaque string. Only values the user has set are saved, and the
   document is read key by key, so one bad value doesn't cost the others. Keys this build
   doesn't know are kept when saving. See [[ADR-0045 Settings are saved as one JSON document per level]].
-- **Global and subscription levels in the core.** The player resolves an episode's settings from
-  its own subscription's, then the global ones ([[ADR-0044 An episode's settings come from the context it is played from]]).
-  Only the global screen exists, so nothing sets a subscription's settings from the app yet.
+- **Subscription settings.** A gear on the subscription's page (next to Sort) opens **Podcast
+  settings**, headed by the show's artwork and name and "Changes here apply to this podcast
+  only", so it can't be mistaken for the library settings. It has the same three Playback rows.
+  A value the podcast hasn't set shows the global value it follows and reads
+  "(inherited from library)", not "(default)"; one it has set shows a reset button that returns
+  it to the global value ("Reset to 45 s"). A change to a global setting shows through every
+  podcast that hasn't set its own. See [[settings-cascade]] and [[subscription]].
+- **The player resolves along the stack.** For each episode it reads its own subscription's
+  settings first, then the global ones ([[ADR-0044 An episode's settings come from the context it is played from]]).
+  A podcast's skip or rewind beats the global one; a value the podcast leaves unset follows it.
+  Checked in the simulator: the player's buttons read −10 and +60 with the podcast set to 10 and
+  60 s, and fell back to the global values when reset.
 - **Not built yet:**
   - the other sections (next-episode behavior, library, downloads and storage, refresh interval,
     gestures, notifications, appearance, advanced) and the **Advanced** filter
     ([[US-0233 Advanced settings depend on what is being edited]]);
-  - the subscription settings page, playlist and episode settings pages, and playlists on the context stack;
+  - playlist and episode settings pages, and playlists on the context stack;
+  - a list of subscriptions and playlists on the global page (see Subscription and playlist
+    settings above); a subscription's page is reached only from its own page for now;
+  - the **Advanced** filter on a subscription's page: none of the three settings is advanced yet;
+  - the subscription settings that aren't playback (refresh interval, download rules);
+  - dropping a subscription's settings in the core when unsubscribe is built
+    ([[subscription-unsubscribe]]);
   - telling the user when saved settings can't be read or a change couldn't be saved
     ([[US-0235 Be told when saved settings can't be read]], [[US-0236 Be told when a setting couldn't be saved]]).
     Until then a failed save is silent and the change is lost at the next launch, and after a
     failed read changes last for the session only;
   - search, export and the new-setting notices ([[settings-ui]]);
-  - a VoiceOver pass on the screen ([[settings-ui]]).
+  - a VoiceOver pass on the screens ([[settings-ui]]).
 
 ## Open Questions
 

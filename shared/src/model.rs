@@ -90,8 +90,8 @@ pub struct Model {
     pub theme_mode: ThemeMode,
 
     // The user's global settings: only the values they have overridden, so an empty one
-    // means every setting is at its app default. Nothing sets it yet; the Settings screen
-    // will. Read through `crate::settings::resolve`, never directly.
+    // means every setting is at its app default. Set from the Settings screen. Read through
+    // `crate::settings::resolve`, never directly.
     pub global_settings: Settings,
     // Each subscription's overridden settings, by subscription id. A subscription with no
     // entry has set nothing. Read through `crate::settings::resolve` with the global ones.

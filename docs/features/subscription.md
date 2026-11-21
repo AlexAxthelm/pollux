@@ -58,6 +58,11 @@ Known subscription settings:
 - Download rules (see `downloads-auto.md`)
 - *(more to be defined)*
 
+*As built:* the page ("Podcast settings") has the three playback settings from [[settings]]:
+skip forward, skip back and rewind on resume. A setting the subscription hasn't set follows the
+global one and reads "(inherited from library)"; one it has set offers a reset to the global
+value. Refresh interval and download rules are not subscription settings yet.
+
 ## UI
 
 ### Library View
@@ -70,7 +75,7 @@ Known subscription settings:
 
 - Feed artwork, title, description
 - Episode list (full, including de-listed episodes behind toggle)
-- Gear icon to the subscription's settings
+- Gear icon to the subscription's settings. *As built:* next to the Sort button.
 - Unsubscribe (in menu, protected)
 
 The subscription preview shown before subscribing is in [[subscription-subscribe]].

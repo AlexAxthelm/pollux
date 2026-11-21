@@ -11,7 +11,7 @@
 //! only takes the layers that apply, most local first, and the first one that sets a value
 //! wins. Adding a level is adding a layer to the list, not a change here.
 //!
-//! Only the global level exists so far. It is saved as one JSON document per level, written
+//! The global and subscription levels exist so far. Each is saved as one JSON document, written
 //! by the core and kept opaque by the shell (ADR-0045).
 
 use crux_core::{render::render, Command};

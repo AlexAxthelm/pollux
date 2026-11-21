@@ -116,20 +116,28 @@ value wins, walking up from the episode:
 
 ## As built
 
-The global and subscription levels exist in the core; nothing in the UI edits a subscription's
-settings yet. The core has one settings type shared by every level, where an unset value is
-`None`, and one resolver that takes the levels that apply, most local first, and returns every
-setting with a concrete value. The player calls it with the episode's own subscription's settings,
-then the global ones, so a subscription that sets a skip or rewind beats the global value and one
-that leaves it unset follows it. Adding a level (a playlist on the route) is adding a layer, not
-changing the resolver. Resolution happens on the user's action or when playback starts, never on every
+The global and subscription levels are built, in the core and in the app. The core has one
+settings type shared by every level, where an unset value is `None`, and one resolver that takes
+the levels that apply, most local first, and returns every setting with a concrete value. The
+player calls it with the episode's own subscription's settings, then the global ones, so a
+subscription that sets a skip or rewind beats the global value and one that leaves it unset
+follows it. Adding a level (a playlist on the route) is adding a layer, not changing the
+resolver. Resolution happens on the user's action or when playback starts, never on every
 position tick.
 
-The global Settings screen shows, for each setting, the value in effect, what a reset would give,
-and whether it is set (the "(default)" label and the reset button). At the global level a reset
-gives the app default; a subscription or playlist page will show the value inherited from above,
-or "Follows each source" for a playlist. The subscription settings page, playlist and episode
-settings, and walking the route through included playlists, are not built yet. See [[settings]] for the screen and
+Each settings page shows, for each setting, the value in effect, what a reset would give, and
+whether it is set:
+
+- **Global page** (gear in the library toolbar): an unset setting reads "(default)", and a reset
+  gives the app default.
+- **Subscription page** (gear on the subscription's page, "Podcast settings"): an unset setting
+  shows the global value it follows and reads "(inherited from library)", and a reset gives the
+  global value. A change on the global page shows through at once.
+- A value set to the same number as the one it would inherit still counts as set (see Seeing
+  what is customised).
+
+Not built yet: playlist and episode settings and their pages ("Follows each source"), walking the
+route through included playlists, and the Advanced filter. See [[settings]] for the screens and
 [[ADR-0045 Settings are saved as one JSON document per level]] for how settings are saved.
 
 ## Open questions
