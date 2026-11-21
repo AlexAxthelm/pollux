@@ -39,6 +39,12 @@ The user should be able to tell where a value comes from:
 - A setting that differs from the user's own global value is shown as overridden.
 - A global setting the user has changed from the app default is shown as changed.
 
+A setting counts as customised because the user **set** it, not because its value differs.
+A value set to the same number as the current default still counts as set: it is shown as
+customised, offers a reset, and stays where it is if the default later changes. That is what
+makes "I chose this" different from "I never touched it" (see [[US-0181 Notifications for changes in default]]).
+Resetting removes the setting, so it follows the default again.
+
 Changing a global setting is respected by everything that has not overridden it.
 Returning a setting to its default should be easy, so the user doesn't need to know
 what a sensible default is.

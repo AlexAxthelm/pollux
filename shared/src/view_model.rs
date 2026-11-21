@@ -44,7 +44,9 @@ pub struct SettingValue {
     /// level). Resetting the setting makes `value` equal to this. Not called `default`, which
     /// is a Swift keyword and so can't be a field in the generated types.
     pub reset_value: u32,
-    /// The user has set this value at this level, so it is shown as customised.
+    /// The user has set this value at this level, so it is shown as customised. True even
+    /// when `value == reset_value`: it was chosen on purpose, and it stays if the default
+    /// changes (settings-cascade).
     pub is_set: bool,
 }
 
