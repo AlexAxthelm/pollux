@@ -33,22 +33,26 @@ type Cmd = Command<Effect, Event>;
 ///
 /// Serialized as JSON holding only the values that are set, so a setting added later needs
 /// no migration and an unset one follows the app default (and any change to it). Each key is
-/// read on its own: a key that is missing, unknown or has a bad value is unset, and the
-/// others are kept, so one bad setting doesn't cost the user the rest.
+/// read on its own: a key that is missing or has a bad value is unset, and the others are
+/// kept, so one bad setting doesn't cost the user the rest. Keys this build doesn't know are
+/// kept in `unknown` and written back unchanged, so a newer build's settings survive a save
+/// by an older one.
 /// This type never crosses the FFI boundary (bincode can't skip fields); the shell sees the
 /// JSON as an opaque string.
-#[derive(Serialize, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Settings {
     /// Seconds the forward skip button jumps.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub skip_forward_secs: Option<u32>,
     /// Seconds the back skip button jumps.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub skip_back_secs: Option<u32>,
     /// Seconds playback rewinds when it resumes, so the listener hears what they missed.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub resume_rewind_secs: Option<u32>,
+    /// Keys in the saved document that this build has no setting for, kept as read.
+    pub(crate) unknown: serde_json::Map<String, serde_json::Value>,
 }
+
+/// The keys this build knows. Anything else in a document is kept in `Settings::unknown`.
+const KNOWN_KEYS: [&str; 3] = ["skip_forward_secs", "skip_back_secs", "resume_rewind_secs"];
 
 /// The level a [`Settings`] belongs to. Only the global level exists so far; a subscription
 /// or a playlist adds a variant carrying its id, as `EpisodeSource` does.
@@ -69,16 +73,27 @@ pub enum SettingChange {
 }
 
 impl Settings {
-    /// The JSON the shell stores: only the values that are set, so nothing set is `{}`.
+    /// The JSON the shell stores: the values that are set, plus any keys this build doesn't
+    /// know, so nothing set is `{}`. A known key that is unset is left out.
     pub(crate) fn to_json(&self) -> String {
-        // A struct of optional integers always serializes.
-        serde_json::to_string(self).expect("settings always serialize")
+        let mut map = self.unknown.clone();
+        for (key, value) in [
+            ("skip_forward_secs", self.skip_forward_secs),
+            ("skip_back_secs", self.skip_back_secs),
+            ("resume_rewind_secs", self.resume_rewind_secs),
+        ] {
+            if let Some(value) = value {
+                map.insert(key.to_string(), value.into());
+            }
+        }
+        serde_json::Value::Object(map).to_string()
     }
 
     /// Reads stored JSON, keeping what it can. `None` only when the document isn't a JSON
-    /// object at all. Within an object each key is read alone: one that is missing, unknown,
-    /// null or not a whole number that fits is unset, and the others still count. It doesn't
-    /// try to repair anything, so a truncated document is unreadable as a whole.
+    /// object at all. Within an object each key is read alone: a known one that is null or not
+    /// a whole number that fits is unset, and the others still count. Keys that aren't known
+    /// are kept as they are. It doesn't try to repair anything, so a truncated document is
+    /// unreadable as a whole.
     pub(crate) fn from_json(json: &str) -> Option<Self> {
         let value: serde_json::Value = serde_json::from_str(json).ok()?;
         let map = value.as_object()?;
@@ -91,6 +106,11 @@ impl Settings {
             skip_forward_secs: secs("skip_forward_secs"),
             skip_back_secs: secs("skip_back_secs"),
             resume_rewind_secs: secs("resume_rewind_secs"),
+            unknown: map
+                .iter()
+                .filter(|(key, _)| !KNOWN_KEYS.contains(&key.as_str()))
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
         })
     }
 
@@ -334,7 +354,7 @@ mod tests {
         };
         assert_eq!(
             s.to_json(),
-            r#"{"skip_forward_secs":60,"resume_rewind_secs":0}"#
+            r#"{"resume_rewind_secs":0,"skip_forward_secs":60}"#
         );
     }
 
@@ -344,6 +364,7 @@ mod tests {
             skip_forward_secs: Some(45),
             skip_back_secs: Some(10),
             resume_rewind_secs: Some(5),
+            ..Settings::default()
         };
         assert_eq!(Settings::from_json(&s.to_json()).unwrap(), s);
     }
@@ -384,9 +405,8 @@ mod tests {
     }
 
     #[test]
-    fn missing_keys_are_unset_and_unknown_keys_are_ignored() {
-        let s =
-            Settings::from_json(r#"{"skip_back_secs":20,"from_a_newer_version":true}"#).unwrap();
+    fn missing_keys_are_unset() {
+        let s = Settings::from_json(r#"{"skip_back_secs":20}"#).unwrap();
         assert_eq!(
             s,
             Settings {
@@ -395,6 +415,39 @@ mod tests {
             }
         );
         assert_eq!(Settings::from_json("{}").unwrap(), Settings::default());
+    }
+
+    #[test]
+    fn unknown_keys_are_kept_when_saved_again() {
+        let mut s = Settings::from_json(
+            r#"{"skip_back_secs":20,"from_a_newer_version":{"on":true},"another":3}"#,
+        )
+        .unwrap();
+        assert_eq!(s.skip_back_secs, Some(20));
+        s.apply(SettingChange::SkipForwardSecs(Some(60)));
+        let saved: serde_json::Value = serde_json::from_str(&s.to_json()).unwrap();
+        assert_eq!(
+            saved,
+            serde_json::json!({
+                "skip_forward_secs": 60,
+                "skip_back_secs": 20,
+                "from_a_newer_version": {"on": true},
+                "another": 3,
+            })
+        );
+    }
+
+    #[test]
+    fn resetting_a_known_key_removes_it_but_keeps_the_unknown_ones() {
+        let mut s = Settings::from_json(r#"{"skip_back_secs":20,"other":1}"#).unwrap();
+        s.apply(SettingChange::SkipBackSecs(None));
+        assert_eq!(s.to_json(), r#"{"other":1}"#);
+    }
+
+    #[test]
+    fn a_bad_known_value_is_dropped_when_saved_but_unknown_keys_stay() {
+        let s = Settings::from_json(r#"{"skip_back_secs":"x","other":1}"#).unwrap();
+        assert_eq!(s.to_json(), r#"{"other":1}"#);
     }
 
     #[test]
