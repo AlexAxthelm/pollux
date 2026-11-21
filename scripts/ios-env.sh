@@ -20,12 +20,14 @@ SIM_DEVICE_NAME="${SIM_DEVICE_NAME:-iPhone 14 Pro Max}"
 # a hint. Use as `SIM_ID="$(sim_id)"` under `set -e`.
 sim_id() {
   local id
+  # Take the first match inside jq. Truncating with `head -1` would make jq die of SIGPIPE
+  # when several runtimes have a match, and `pipefail` would then fail the lookup.
   id="$(xcrun simctl list devices available -j \
-    | jq -r --arg name "$SIM_DEVICE_NAME" '.devices
+    | jq -r --arg name "$SIM_DEVICE_NAME" '[.devices
         | to_entries[].value[]
         | select(.name == $name and .isAvailable == true)
-        | .udid' \
-    | head -1)"
+        | .udid]
+        | first // empty')"
   if [ -z "$id" ]; then
     echo "Simulator '$SIM_DEVICE_NAME' not found. See \`xcrun simctl list devices available\`, then set SIM_DEVICE_NAME." >&2
     return 1
