@@ -44,6 +44,15 @@ a subscription, a playlist). See [[US-0233 Advanced settings depend on what is b
 
 *This file is drawn from the stories below; it has not been specified further.*
 
+## Not built yet
+
+- **VoiceOver and other accessibility on the settings screens.** The global Settings screen
+  was built without a VoiceOver pass. Each row reads as one control ("Skip forward, 60 s")
+  with a separate reset button, but the order, hints and reset wording haven't been tried with
+  VoiceOver, and Dynamic Type and larger text haven't been looked at. To come back to, with
+  the app-wide accessibility doc once it exists ([[accessibility]], not written yet). Contrast
+  is covered in [[theme-accessibility]].
+
 ## Open questions
 
 - How are the new-setting and changed-default notices delivered? See
