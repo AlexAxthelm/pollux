@@ -33,6 +33,15 @@ subscription that no longer exists, and a context save would fail (it is capped 
 attempts). The player should stop and clear when its episode's subscription is removed.
 (User story: [[US-0161 Stop on unsubscribe]].)
 
+## Effect on settings
+
+A subscription has its own saved settings ([[settings-cascade]], [[ADR-0045 Settings are saved as one JSON document per level]]).
+*As built:* the shell removes them in the same transaction as the subscription (`DeleteSubscription`).
+*When unsubscribe is built:* the core also keeps each subscription's settings in memory
+(`Model::subscription_settings`), and nothing removes that entry yet. The unsubscribe flow has to
+drop it, or a later change for the same id would save a document for a subscription that no longer
+exists, and the player could resolve an episode against settings of a show that is gone.
+
 ## User stories
 
 ```base
