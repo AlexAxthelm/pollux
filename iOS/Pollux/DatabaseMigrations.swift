@@ -81,6 +81,20 @@ extension DatabaseManager {
                 t.column("source_kind", .text).notNull()
                 t.column("source_id", .text).notNull()
             }
+            try createSettingsTable(db)
+        }
+    }
+
+    /// The settings the user has overridden, one row per level. `json` is written and read
+    /// by the core and is opaque here (ADR-0045). `scope_kind` and `scope_id` follow
+    /// `play_context`'s source columns: a subscription or playlist is a new kind, not a new
+    /// column. The global level is ('global', ''). Part of the `v1_initial` baseline.
+    private static func createSettingsTable(_ db: Database) throws {
+        try db.create(table: "settings") { t in
+            t.column("scope_kind", .text).notNull()
+            t.column("scope_id", .text).notNull()
+            t.column("json", .text).notNull()
+            t.primaryKey(["scope_kind", "scope_id"])
         }
     }
 }

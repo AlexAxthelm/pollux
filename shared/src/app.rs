@@ -17,6 +17,7 @@ use crate::feed_parser::{now_unix, parse_feed};
 use crate::html::strip_html_preview;
 use crate::model::{DownloadProgress, Model, QueuedDownload};
 use crate::player;
+use crate::settings::{self, SettingChange};
 use crate::theme::{theme_view, ThemeId, ThemeMode};
 use crate::view_model::{
     DownloadNotice, EpisodeSummary, LibraryView, SubscriptionDetailView, SubscriptionSummary,
@@ -49,7 +50,12 @@ impl App for Pollux {
                 // so it is safe on a background-refresh launch too.
                 let context = Command::request_from_shell(StorageOperation::LoadPlayContext)
                     .then_send(|r| Event::PlayContextLoaded(Box::new(r)));
-                subscriptions.and(context).and(render())
+                // The global settings, so the player has the user's skip and rewind from the
+                // first press. A metadata read, safe on a background-refresh launch too.
+                subscriptions
+                    .and(context)
+                    .and(settings::load_global())
+                    .and(render())
             }
             Event::ResumePendingDownloads => {
                 // Once per process: the shell sends this on every activation, but the
@@ -689,6 +695,11 @@ impl App for Pollux {
                 player::on_response(model, session, *result)
             }
             Event::PlayContextLoaded(result) => player::on_context_loaded(model, *result),
+            Event::SettingsLoaded(result) => settings::on_loaded(model, *result),
+            Event::SetGlobalSetting(change) => settings::set_global(model, change),
+            // Required resolution sink for the settings write. The change is already in
+            // memory and in effect; see `settings::set_global` for what a failed write means.
+            Event::SettingsSaved(result) => settings::on_saved(*result),
             // Required resolution sink for playback persistence writes. These are
             // best-effort (the next checkpoint retries), so there is nothing to do.
             Event::PlaybackPersisted(_) => Command::done(),
@@ -1405,6 +1416,12 @@ pub enum Event {
     },
     /// The episode saved as active by the previous session, loaded at launch.
     PlayContextLoaded(Box<StorageResult>),
+    /// The global settings saved by an earlier session, loaded at launch.
+    SettingsLoaded(Box<StorageResult>),
+    /// The user changed, or reset, one global setting. Takes effect at once and is saved.
+    SetGlobalSetting(SettingChange),
+    /// Resolution sink for the settings write.
+    SettingsSaved(Box<StorageResult>),
     /// Resolution sink for best-effort playback writes (position, play-context clears).
     /// Position writes retry at the next checkpoint, so there is nothing to do.
     PlaybackPersisted(Box<StorageResult>),
@@ -1531,8 +1548,8 @@ mod tests {
         assert!(model.loading);
 
         let effects: Vec<Effect> = cmd.effects().collect();
-        // ListSubscriptions + LoadPlayContext + render.
-        assert_eq!(effects.len(), 3);
+        // ListSubscriptions + LoadPlayContext + LoadSettings + render.
+        assert_eq!(effects.len(), 4);
 
         let has_context = effects
             .iter()
