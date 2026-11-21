@@ -4,11 +4,13 @@
 #
 # Not managed here: Rust (rustup + rust-toolchain.toml), cargo-swift (cargo-run-bin,
 # pinned in the root Cargo.toml), Xcode and the simulator runtime.
+#
+# macOS only: these have no Linux builds, and the Rust CI jobs run on Linux.
 [tools]
-xcodegen = "2.46.0"
-xcbeautify = "3.2.1"
-swiftlint = "0.65.0"
-swiftformat = "0.62.1"
+xcodegen = { version = "2.46.0", os = ["macos"] }
+xcbeautify = { version = "3.2.1", os = ["macos"] }
+swiftlint = { version = "0.65.0", os = ["macos"] }
+swiftformat = { version = "0.62.1", os = ["macos"] }
 
 # Shared constants for inline tasks, used as {{vars.name}}. The file tasks in
 # mise-tasks/ are not templated; they read scripts/ios-env.sh instead.
