@@ -1,0 +1,11 @@
+# Developer tools for Pollux. `mise install` fetches them; see docs/HACKING.md.
+# Pinned to the versions the Swift checks were last run with, so lint and format
+# results don't shift under us. Bump deliberately.
+#
+# Not managed here: Rust (rustup + rust-toolchain.toml), cargo-swift (cargo-run-bin,
+# pinned in the root Cargo.toml), Xcode and the simulator runtime.
+[tools]
+xcodegen = "2.46.0"
+xcbeautify = "3.2.1"
+swiftlint = "0.65.0"
+swiftformat = "0.62.1"

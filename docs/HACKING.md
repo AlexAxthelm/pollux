@@ -20,16 +20,12 @@ specs, user stories and decisions in `docs/` are organized, see `README.md`.
   you also need an **iOS Simulator runtime**, which recent Xcode versions do not
   bundle — install one via Xcode → Settings → Platforms, or
   `xcodebuild -downloadPlatform iOS`.
-- **xcodegen** — regenerates the Xcode project from `iOS/project.yml`
-  ```
-  brew install xcodegen
-  ```
-- **xcbeautify** — formats `xcodebuild` output; `make ios-sim` and `make ios-test`
-  pipe through it, so it must be installed or those targets fail with
-  `xcbeautify: command not found`
-  ```
-  brew install xcbeautify
-  ```
+- **mise** — installs the pinned developer tools in `mise.toml` (xcodegen, xcbeautify,
+  swiftlint, swiftformat). Install it (`brew install mise`), then run `mise install` in the
+  repo. Activate it in your shell (`eval "$(mise activate zsh)"`, see the
+  [mise docs](https://mise.jdx.dev/getting-started.html)) so the tools are on `PATH`, or
+  prefix commands with `mise exec --`. `make ios-sim` and `make ios-test` pipe through
+  xcbeautify, so without these tools they fail with `xcbeautify: command not found`.
 - **cargo-run-bin** — runs project-pinned cargo tools via `cargo bin`. The build
   uses it for **cargo-swift**, pinned to `0.9.0` in `[workspace.metadata.bin]` in
   the root `Cargo.toml`. `make package` invokes cargo-swift through it, building
@@ -39,17 +35,12 @@ specs, user stories and decisions in `docs/` are organized, see `README.md`.
   cargo install cargo-run-bin
   ```
 
-### For Swift checks (also required in CI)
-
-```
-brew install swiftlint swiftformat
-```
-
 ### Verify your setup
 
 ```
 rustup show                        # should show stable toolchain and Apple targets
 cargo install --list | grep cargo-run-bin
+mise ls --current                  # all four tools installed, none "missing"
 xcodegen --version
 xcbeautify --version
 swiftlint --version
