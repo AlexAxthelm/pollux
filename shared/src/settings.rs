@@ -32,12 +32,12 @@ type Cmd = Command<Effect, Event>;
 /// Whether a given setting is *offered* at a level is the UI's concern, not this type's.
 ///
 /// Serialized as JSON holding only the values that are set, so a setting added later needs
-/// no migration and an unset one follows the app default (and any change to it). Unknown
-/// keys are ignored on load, so a downgrade or a removed setting doesn't break reading.
+/// no migration and an unset one follows the app default (and any change to it). Each key is
+/// read on its own: a key that is missing, unknown or has a bad value is unset, and the
+/// others are kept, so one bad setting doesn't cost the user the rest.
 /// This type never crosses the FFI boundary (bincode can't skip fields); the shell sees the
 /// JSON as an opaque string.
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
-#[serde(default)]
+#[derive(Serialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Settings {
     /// Seconds the forward skip button jumps.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -75,9 +75,23 @@ impl Settings {
         serde_json::to_string(self).expect("settings always serialize")
     }
 
-    /// Reads stored JSON. Missing keys are unset and unknown keys are ignored.
-    pub(crate) fn from_json(json: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(json)
+    /// Reads stored JSON, keeping what it can. `None` only when the document isn't a JSON
+    /// object at all. Within an object each key is read alone: one that is missing, unknown,
+    /// null or not a whole number that fits is unset, and the others still count. It doesn't
+    /// try to repair anything, so a truncated document is unreadable as a whole.
+    pub(crate) fn from_json(json: &str) -> Option<Self> {
+        let value: serde_json::Value = serde_json::from_str(json).ok()?;
+        let map = value.as_object()?;
+        let secs = |key: &str| {
+            map.get(key)
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|n| u32::try_from(n).ok())
+        };
+        Some(Self {
+            skip_forward_secs: secs("skip_forward_secs"),
+            skip_back_secs: secs("skip_back_secs"),
+            resume_rewind_secs: secs("resume_rewind_secs"),
+        })
     }
 
     fn apply(&mut self, change: SettingChange) {
@@ -151,7 +165,7 @@ pub(crate) fn load_global() -> Cmd {
 pub(crate) fn on_loaded(model: &mut Model, result: StorageResult) -> Cmd {
     match result {
         StorageResult::Settings(json) => {
-            if let Ok(settings) = Settings::from_json(&json) {
+            if let Some(settings) = Settings::from_json(&json) {
                 model.global_settings = settings;
             }
             model.global_settings_loaded = true;
@@ -335,6 +349,41 @@ mod tests {
     }
 
     #[test]
+    fn one_bad_value_does_not_cost_the_others() {
+        let s = Settings::from_json(
+            r#"{"skip_forward_secs":"sixty","skip_back_secs":20,"resume_rewind_secs":-3}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            s,
+            Settings {
+                skip_back_secs: Some(20),
+                ..Settings::default()
+            }
+        );
+        for bad in ["null", "1.5", "99999999999", "true", "[]"] {
+            let doc = format!(r#"{{"skip_forward_secs":{bad},"skip_back_secs":20}}"#);
+            let s = Settings::from_json(&doc).unwrap();
+            assert_eq!(s.skip_forward_secs, None, "{bad}");
+            assert_eq!(s.skip_back_secs, Some(20), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_document_that_is_not_an_object_is_unreadable() {
+        for bad in [
+            "not json",
+            r#"{"skip_back_secs":20"#,
+            "[1,2]",
+            "60",
+            "null",
+            "",
+        ] {
+            assert_eq!(Settings::from_json(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
     fn missing_keys_are_unset_and_unknown_keys_are_ignored() {
         let s =
             Settings::from_json(r#"{"skip_back_secs":20,"from_a_newer_version":true}"#).unwrap();
@@ -382,7 +431,7 @@ mod tests {
     fn unreadable_settings_leave_the_defaults() {
         for event in [
             loaded("not json"),
-            loaded(r#"{"skip_forward_secs":"sixty"}"#),
+            loaded("[1,2]"),
             Event::SettingsLoaded(Box::new(StorageResult::Error("db locked".into()))),
         ] {
             let mut model = Model::default();
