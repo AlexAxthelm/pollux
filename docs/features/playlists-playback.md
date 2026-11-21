@@ -49,8 +49,14 @@ playback**, not by which playlists happen to contain that episode:
 - Pressing play on a playlist from the library resumes from the current position
   if already active, or begins from the first episode if not
 
-**Episode ordering note:** There is no drag-to-reorder. To pin specific episodes
-to the front, a rule should be used. This will be a later rule type.
+**Episode ordering note:** There is no drag-to-reorder. Specific episodes are pinned
+with a playlist's hand-picked list: each member sits in a top, one-off or end group, and
+the "Move to top / Move to bottom" menu actions set it (not MVP; drag within the top and
+end groups is a later touch, see [[US-0233 Order a playlist by hand with top and end pools]]). See [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]].
+
+**Queue:** A separate ephemeral queue plays before the active playlist resumes, without
+changing it. See [[ADR-0041 Queued episodes play before the active playlist resumes]].
+*Not built yet.*
 
 ## Related
 
@@ -62,19 +68,14 @@ to the front, a rule should be used. This will be a later rule type.
 ## Decisions
 
 - [[ADR-0029 The active playlist is set by where playback started]]
+- [[ADR-0041 Queued episodes play before the active playlist resumes]]
+- [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]
 
 ## Open questions
 
-- #needs-decision **Can episodes be reordered by hand?** The text above says "There is
-  no drag-to-reorder. To pin specific episodes to the front, a rule should be used."
-  The context menu in [[episode]] offers "Move to top / Move to bottom" when viewing an
-  episode within a playlist, and [[US-0204 Episodes can be reordered in playlists]] asks to
-  reorder specific episodes (its note leans toward an episode-specific rule). Both are kept
-  as originally written.
-- #needs-decision **How does queueing an episode fit?**
-  [[US-0152 Queue]] asks to queue an episode so it plays without changing the playlist
-  being listened to. The spec says activating a playlist evicts the previous one and has no
-  queue.
+None open. Reordering by hand is decided in
+[[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]; queueing
+in [[ADR-0041 Queued episodes play before the active playlist resumes]].
 
 ## User stories
 

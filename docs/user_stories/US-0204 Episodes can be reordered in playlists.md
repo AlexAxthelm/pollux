@@ -5,7 +5,8 @@ feature:
   - "[[playlists]]"
   - "[[episode]]"
   - "[[playlists-editor]]"
-related: []
+related:
+  - "[[US-0233 Order a playlist by hand with top and end pools]]"
 ---
 As a curator
 I want to reorder specific episodes

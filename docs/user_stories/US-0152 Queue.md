@@ -4,7 +4,8 @@ status: accepted
 feature:
   - "[[player]]"
   - "[[playlists-playback]]"
-related: []
+related:
+  - "[[ADR-0041 Queued episodes play before the active playlist resumes]]"
 ---
 As a listener
 I want to queue an episode

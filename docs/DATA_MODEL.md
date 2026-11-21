@@ -113,6 +113,12 @@ A join entity between a Playlist and one of its sources. A source may be a
 Subscription or another Playlist (enabling meta-playlists). Carries an ordering
 so that "by source" sorts are deterministic.
 
+A third kind of source is the playlist's own **hand-picked list**: an ordered list of
+single episode ids, each with a group (top, one-off or end). It exists only inside the
+playlist that owns it and cannot be used as a source by another playlist. Filters apply to
+its episodes as normal; top and end members are placed after the sorts. See
+[[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]. *Not MVP.*
+
 ### PlaylistFilter *(Identified)*
 
 A filter rule attached to a Playlist. Carries a type (e.g. playback status,

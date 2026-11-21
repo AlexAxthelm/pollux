@@ -17,7 +17,8 @@ see [[playlists-editor]]
 
 ## Filters
 
-Filters narrow the set of episodes included in the playlist.
+Filters narrow the set of episodes included in the playlist. Every filter can include or
+exclude ([[ADR-0043 Every filter can include or exclude]]).
 
 ### MVP
 
@@ -72,20 +73,14 @@ A rule applied to a populated source set acts only on that set.
 
 ## Open questions
 
-- #needs-decision **Include and exclude.** The filter tables above have no include or
-  exclude. The editor spec puts an include/exclude toggle on every filter
-  ([[playlists-editor]]), and the stories ask to include or exclude by starred status,
-  date, duration, title and listened status
-  ([[US-0221 Playlist filter for stars]], [[US-0222 Playlist filter for date]],
-  [[US-0223 Playlist filter for duration]], [[US-0224 Playlist filter on titles]],
-  [[US-0225 Playlist filter for status]]) and to exclude episodes that match some criteria
-  ([[US-0215 Playlist episode exclusion]]).
 - #needs-decision **Title filter.** [[US-0224 Playlist filter on titles]] asks for a title
   filter. It is not in the MVP or Later filter tables.
 - Specific episodes can be added or included by hand
   ([[US-0202 Add episodes to playlists]], [[US-0216 Include episodes in playlist]]). How
-  that relates to rules is not specified here; see the reordering question in
-  [[playlists-playback]].
+  that relates to rules is decided in
+  [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]:
+  a hand-picked source owned by the playlist, not MVP. Filters apply to hand-picked
+  episodes as normal.
 
 ## User stories
 
