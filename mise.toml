@@ -2,9 +2,15 @@
 # Pinned to the versions the Swift checks were last run with, so lint and format
 # results don't shift under us. Bump deliberately.
 #
-# Not managed here: Rust (rustup + rust-toolchain.toml), cargo-swift (cargo-run-bin,
-# pinned in the root Cargo.toml), Xcode and the simulator runtime.
+# Rust is not listed here. The setting below makes mise read rust-toolchain.toml (channel,
+# components and targets), so the toolchain is described in one place, and mise installs
+# it through rustup.
 #
+# Not managed here: cargo-swift (cargo-run-bin, pinned in the root Cargo.toml), Xcode and
+# the simulator runtime.
+[settings]
+idiomatic_version_file_enable_tools = ["rust"]
+
 # macOS only: these have no Linux builds, and the Rust CI jobs run on Linux.
 [tools]
 xcodegen = { version = "2.46.0", os = ["macos"] }

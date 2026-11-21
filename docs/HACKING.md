@@ -13,15 +13,15 @@ specs, user stories and decisions in `docs/` are organized, see `README.md`.
 
 ### Required
 
-- **Rust** (stable) — managed via `rust-toolchain.toml`; install via
-  [rustup](https://rustup.rs/)
 - **Xcode 16+** — required for Swift 6.2 and iOS 18 deployment target. Accept the
   license (`sudo xcodebuild -license accept`) after installing. For `mise run ios-sim`
   you also need an **iOS Simulator runtime**, which recent Xcode versions do not
   bundle — install one via Xcode → Settings → Platforms, or
   `xcodebuild -downloadPlatform iOS`.
-- **mise** — installs the pinned developer tools in `mise.toml` (xcodegen, xcbeautify,
-  swiftlint, swiftformat). Install it (`brew install mise`), then run `mise install` in the
+- **mise** — installs the Rust toolchain and the pinned developer tools. Rust comes from
+  `rust-toolchain.toml` (stable, with rustfmt, clippy and the Apple targets), which mise
+  reads and installs through rustup. The other tools are pinned in `mise.toml`: xcodegen,
+  xcbeautify, swiftlint, swiftformat. Install it (`brew install mise`), then run `mise install` in the
   repo. Activate it in your shell (`eval "$(mise activate zsh)"`, see the
   [mise docs](https://mise.jdx.dev/getting-started.html)) so the tools are on `PATH`, or
   prefix commands with `mise exec --`. `mise run ios-sim` and `mise run ios-test` pipe through
@@ -38,9 +38,9 @@ specs, user stories and decisions in `docs/` are organized, see `README.md`.
 ### Verify your setup
 
 ```
-rustup show                        # should show stable toolchain and Apple targets
+rustup show                        # should show stable toolchain and Apple targets (needs mise activated)
 cargo install --list | grep cargo-run-bin
-mise ls --current                  # all four tools installed, none "missing"
+mise ls --current                  # rust and the four tools installed, none "missing"
 xcodegen --version
 xcbeautify --version
 swiftlint --version
@@ -309,12 +309,12 @@ mise run ios-rebuild    # clean + full ios-build
 
 ## Troubleshooting
 
-**`cargo: command not found` after installing via Homebrew**
-Homebrew's `rustup` formula is keg-only and does not link `cargo`/`rustc` into
-`PATH`. Add its bin dir to your shell profile:
-`export PATH="/opt/homebrew/opt/rustup/bin:$PATH"`. (A `brew link --force rustup`
-works too, but later `brew` runs wipe the force-link, so the PATH entry is the
-durable fix.)
+**`cargo: command not found`**
+With mise activated in your shell (see Prerequisites), `cargo` and `rustc` are on `PATH`.
+Without it, run commands through `mise exec -- cargo …`, or `mise run <task>`, which does
+this for you. If you installed rustup from Homebrew instead, its formula is keg-only and
+does not link `cargo`/`rustc` into `PATH`: add `/opt/homebrew/opt/rustup/bin` to your
+`PATH`, or use mise.
 
 **`error: no such command: bin` from `mise run package`**
 `mise run package` runs `cargo bin cargo-swift`, which needs the **cargo-run-bin**
