@@ -3,7 +3,7 @@ use facet::Facet;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::{DownloadStatus, Episode, EpisodeSource, PlaybackStatus, Subscription};
-use crate::settings::SettingsScope;
+use crate::settings::{SavedSettings, SettingsScope};
 
 #[derive(Facet, Serialize, Deserialize, Clone, Debug)]
 #[repr(C)]
@@ -78,11 +78,9 @@ pub enum StorageOperation {
         scope: SettingsScope,
         json: String,
     },
-    /// The settings JSON saved for `scope` as `StorageResult::Settings`, or `NotFound`
-    /// when nothing has been saved for it.
-    LoadSettings {
-        scope: SettingsScope,
-    },
+    /// Every saved settings document, as `StorageResult::AllSettings` (empty when nothing is
+    /// saved). A subscription's document is removed with the subscription.
+    LoadAllSettings,
 }
 
 #[derive(Facet, Serialize, Deserialize, Clone, Debug)]
@@ -101,8 +99,8 @@ pub enum StorageResult {
     /// Answer to `UpdateRefreshState`: how many episodes that write flagged
     /// `RemovedFromFeed` (a 304 confirms pending absences; nothing else flags any).
     EpisodesRemoved(u64),
-    /// Answer to `LoadSettings`: the saved settings JSON, exactly as it was saved.
-    Settings(String),
+    /// Answer to `LoadAllSettings`: each level's saved JSON, exactly as it was saved.
+    AllSettings(Vec<SavedSettings>),
     NotFound,
     Error(String),
 }

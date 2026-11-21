@@ -55,12 +55,20 @@ pub struct Settings {
 /// The keys this build knows. Anything else in a document is kept in `Settings::unknown`.
 const KNOWN_KEYS: [&str; 3] = ["skip_forward_secs", "skip_back_secs", "resume_rewind_secs"];
 
-/// The level a [`Settings`] belongs to. Only the global level exists so far; a subscription
-/// or a playlist adds a variant carrying its id, as `EpisodeSource` does.
-#[derive(Facet, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+/// The level a [`Settings`] belongs to: the global one, or one subscription's. A playlist
+/// will add a variant carrying its id, as `EpisodeSource` does.
+#[derive(Facet, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub enum SettingsScope {
     Global,
+    Subscription(String),
+}
+
+/// One level's saved settings JSON, as the shell stores and returns it (ADR-0045).
+#[derive(Facet, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SavedSettings {
+    pub scope: SettingsScope,
+    pub json: String,
 }
 
 /// One setting changed at one level: `Some` sets it, `None` resets it to the next level up
@@ -184,49 +192,58 @@ pub(crate) fn settings_view(settings: &Settings) -> SettingsView {
     }
 }
 
-/// Asks the shell for the saved global settings; the answer is `Event::SettingsLoaded`.
-pub(crate) fn load_global() -> Cmd {
-    Command::request_from_shell(StorageOperation::LoadSettings {
-        scope: SettingsScope::Global,
-    })
-    .then_send(|r| Event::SettingsLoaded(Box::new(r)))
+/// Asks the shell for every saved settings document, at launch; the answer is
+/// `Event::SettingsLoaded`. They are few, and the player needs a subscription's settings the
+/// moment an episode starts, so all of them are read up front rather than on demand.
+pub(crate) fn load_all() -> Cmd {
+    Command::request_from_shell(StorageOperation::LoadAllSettings)
+        .then_send(|r| Event::SettingsLoaded(Box::new(r)))
 }
 
-/// The saved global settings arrived at launch. Nothing saved, a failed read or JSON that
-/// can't be read all leave the settings at their defaults: the player works either way, and
-/// refusing to start over a preference would be worse.
+/// The settings of one level, created empty if nothing has been set there yet.
+fn level_mut<'a>(model: &'a mut Model, scope: &SettingsScope) -> &'a mut Settings {
+    match scope {
+        SettingsScope::Global => &mut model.global_settings,
+        SettingsScope::Subscription(id) => {
+            model.subscription_settings.entry(id.clone()).or_default()
+        }
+    }
+}
+
+/// The saved settings arrived at launch. Nothing saved, a failed read or a document that
+/// can't be read all leave that level's settings at their defaults: the player works either
+/// way, and refusing to start over a preference would be worse.
 ///
 /// What was saved is only treated as answered when the shell actually answered. A document
-/// that can't be parsed stays where it is until the user changes a setting, which replaces
-/// it. A failed read is different: the saved document may be fine, so saving is held and the
-/// change stays in memory only, rather than overwriting it (US-0235).
+/// that can't be parsed stays where it is until the user changes a setting at that level,
+/// which replaces it. A failed read is different: the saved documents may be fine, so saving
+/// is held for every level and a change stays in memory only, rather than overwriting them
+/// (US-0235).
 pub(crate) fn on_loaded(model: &mut Model, result: StorageResult) -> Cmd {
-    match result {
-        StorageResult::Settings(json) => {
+    if let StorageResult::AllSettings(saved) = result {
+        for SavedSettings { scope, json } in saved {
             if let Some(settings) = Settings::from_json(&json) {
-                model.global_settings = settings;
+                *level_mut(model, &scope) = settings;
             }
-            model.global_settings_loaded = true;
         }
-        StorageResult::NotFound => model.global_settings_loaded = true,
-        _ => {}
+        model.settings_loaded = true;
     }
     render()
 }
 
-/// The user set, or reset, one global setting. It takes effect at once, then is saved, unless
-/// the saved settings haven't been read successfully yet, in which case it is not saved.
-pub(crate) fn set_global(model: &mut Model, change: SettingChange) -> Cmd {
-    model.global_settings.apply(change);
-    if !model.global_settings_loaded {
+/// The user set, or reset, one setting at one level. It takes effect at once, then is saved,
+/// unless the saved settings haven't been read successfully yet, in which case it is not
+/// saved.
+pub(crate) fn set(model: &mut Model, scope: SettingsScope, change: SettingChange) -> Cmd {
+    let level = level_mut(model, &scope);
+    level.apply(change);
+    if !model.settings_loaded {
         return render();
     }
-    Command::request_from_shell(StorageOperation::SaveSettings {
-        scope: SettingsScope::Global,
-        json: model.global_settings.to_json(),
-    })
-    .then_send(|r| Event::SettingsSaved(Box::new(r)))
-    .and(render())
+    let json = level_mut(model, &scope).to_json();
+    Command::request_from_shell(StorageOperation::SaveSettings { scope, json })
+        .then_send(|r| Event::SettingsSaved(Box::new(r)))
+        .and(render())
 }
 
 /// The settings write resolved. A failure leaves the change in effect for this run but
@@ -347,15 +364,27 @@ mod tests {
     }
 
     fn nothing_saved() -> Event {
-        Event::SettingsLoaded(Box::new(StorageResult::NotFound))
+        Event::SettingsLoaded(Box::new(StorageResult::AllSettings(vec![])))
     }
 
     fn read_failed() -> Event {
         Event::SettingsLoaded(Box::new(StorageResult::Error("db locked".into())))
     }
 
+    fn saved(scope: SettingsScope, json: &str) -> SavedSettings {
+        SavedSettings {
+            scope,
+            json: json.to_string(),
+        }
+    }
+
+    fn loaded_all(saved: Vec<SavedSettings>) -> Event {
+        Event::SettingsLoaded(Box::new(StorageResult::AllSettings(saved)))
+    }
+
+    /// Only the global document was saved.
     fn loaded(json: &str) -> Event {
-        Event::SettingsLoaded(Box::new(StorageResult::Settings(json.to_string())))
+        loaded_all(vec![saved(SettingsScope::Global, json)])
     }
 
     #[test]
@@ -469,15 +498,12 @@ mod tests {
     }
 
     #[test]
-    fn launch_asks_for_the_saved_global_settings() {
+    fn launch_asks_for_all_the_saved_settings() {
         let mut model = Model::default();
         let effects = send(&mut model, Event::Started);
-        assert!(storage_ops(&effects).iter().any(|op| matches!(
-            op,
-            StorageOperation::LoadSettings {
-                scope: SettingsScope::Global
-            }
-        )));
+        assert!(storage_ops(&effects)
+            .iter()
+            .any(|op| matches!(op, StorageOperation::LoadAllSettings)));
     }
 
     #[test]
@@ -491,11 +517,9 @@ mod tests {
     #[test]
     fn nothing_saved_leaves_the_defaults() {
         let mut model = Model::default();
-        send(
-            &mut model,
-            Event::SettingsLoaded(Box::new(StorageResult::NotFound)),
-        );
+        send(&mut model, nothing_saved());
         assert_eq!(model.global_settings, Settings::default());
+        assert!(model.subscription_settings.is_empty());
     }
 
     #[test]
@@ -679,5 +703,127 @@ mod tests {
         let view = SettingsView::default();
         assert_eq!(view.skip_forward_secs.value, SKIP_FORWARD_SECS);
         assert!(!view.skip_forward_secs.is_set);
+    }
+
+    // -- Subscription settings --
+
+    fn sub(id: &str) -> SettingsScope {
+        SettingsScope::Subscription(id.to_string())
+    }
+
+    fn set_sub(id: &str, change: SettingChange) -> Event {
+        Event::SetSubscriptionSetting {
+            subscription_id: id.to_string(),
+            change,
+        }
+    }
+
+    #[test]
+    fn each_level_loads_into_its_own_settings() {
+        let mut model = Model::default();
+        send(
+            &mut model,
+            loaded_all(vec![
+                saved(SettingsScope::Global, r#"{"skip_forward_secs":45}"#),
+                saved(sub("a"), r#"{"skip_forward_secs":60}"#),
+                saved(sub("b"), r#"{"skip_back_secs":10}"#),
+            ]),
+        );
+        assert_eq!(model.global_settings.skip_forward_secs, Some(45));
+        assert_eq!(model.subscription_settings["a"].skip_forward_secs, Some(60));
+        assert_eq!(model.subscription_settings["a"].skip_back_secs, None);
+        assert_eq!(model.subscription_settings["b"].skip_back_secs, Some(10));
+        assert!(!model.subscription_settings.contains_key("c"));
+    }
+
+    #[test]
+    fn an_unreadable_document_only_affects_its_own_level() {
+        let mut model = Model::default();
+        send(
+            &mut model,
+            loaded_all(vec![
+                saved(SettingsScope::Global, r#"{"skip_forward_secs":45}"#),
+                saved(sub("a"), "not json"),
+                saved(sub("b"), r#"{"skip_back_secs":10}"#),
+            ]),
+        );
+        assert_eq!(model.global_settings.skip_forward_secs, Some(45));
+        assert!(!model.subscription_settings.contains_key("a"));
+        assert_eq!(model.subscription_settings["b"].skip_back_secs, Some(10));
+    }
+
+    #[test]
+    fn a_subscription_change_saves_only_that_subscriptions_document() {
+        let mut model = Model::default();
+        send(
+            &mut model,
+            loaded_all(vec![
+                saved(SettingsScope::Global, r#"{"skip_forward_secs":45}"#),
+                saved(sub("a"), r#"{"skip_back_secs":10}"#),
+            ]),
+        );
+        let effects = send(
+            &mut model,
+            set_sub("a", SettingChange::SkipForwardSecs(Some(60))),
+        );
+        let ops = storage_ops(&effects);
+        let [StorageOperation::SaveSettings { scope, json }] = ops.as_slice() else {
+            panic!("expected one save, got {ops:?}");
+        };
+        assert_eq!(scope, &sub("a"));
+        assert_eq!(json, r#"{"skip_back_secs":10,"skip_forward_secs":60}"#);
+        // The global level is untouched.
+        assert_eq!(model.global_settings.skip_forward_secs, Some(45));
+        assert!(effects.iter().any(|e| matches!(e, Effect::Render(_))));
+    }
+
+    #[test]
+    fn a_subscription_with_nothing_set_can_be_changed() {
+        let mut model = Model::default();
+        send(&mut model, nothing_saved());
+        let effects = send(
+            &mut model,
+            set_sub("new", SettingChange::SkipBackSecs(Some(5))),
+        );
+        assert_eq!(model.subscription_settings["new"].skip_back_secs, Some(5));
+        assert!(matches!(
+            storage_ops(&effects).as_slice(),
+            [StorageOperation::SaveSettings { scope, json }]
+                if scope == &sub("new") && json == r#"{"skip_back_secs":5}"#
+        ));
+    }
+
+    #[test]
+    fn resetting_a_subscription_setting_removes_it_from_what_is_saved() {
+        let mut model = Model::default();
+        send(
+            &mut model,
+            loaded_all(vec![saved(sub("a"), r#"{"skip_forward_secs":60}"#)]),
+        );
+        let effects = send(
+            &mut model,
+            set_sub("a", SettingChange::SkipForwardSecs(None)),
+        );
+        assert_eq!(model.subscription_settings["a"], Settings::default());
+        assert!(matches!(
+            storage_ops(&effects).as_slice(),
+            [StorageOperation::SaveSettings { json, .. }] if json == "{}"
+        ));
+    }
+
+    #[test]
+    fn subscription_changes_are_held_like_global_ones_until_the_load_answers() {
+        for load in [None, Some(read_failed())] {
+            let mut model = Model::default();
+            if let Some(load) = load {
+                send(&mut model, load);
+            }
+            let effects = send(
+                &mut model,
+                set_sub("a", SettingChange::SkipBackSecs(Some(5))),
+            );
+            assert_eq!(model.subscription_settings["a"].skip_back_secs, Some(5));
+            assert!(storage_ops(&effects).is_empty());
+        }
     }
 }

@@ -21,7 +21,8 @@ Settings are stored in one table, keyed by level (`scope_kind`, `scope_id`; the 
 - The document holds **only the values the user has overridden**. A value that is not in it is unset and follows the next level up, or the app default. Resetting a setting removes its key.
 - The **core** writes and reads the JSON, and the shell stores it as an opaque string. The format lives in Rust, with its tests, and not in each shell.
 - Missing keys are read as unset and unknown keys are ignored when reading, so adding a setting needs no migration and an older or newer build can still read the document. Unknown keys are kept and written back unchanged when the document is saved, so a build that doesn't know a setting doesn't erase it.
-- A subscription or playlist level is a new `scope_kind`, not a new table or column, as with `play_context`'s source columns.
+- A subscription or playlist level is a new `scope_kind`, not a new table or column, as with `play_context`'s source columns. A subscription's document is `subscription` with the subscription's id, and it is removed in the same transaction as the subscription.
+- All documents are read in one query at launch and kept in the core, because the player needs a subscription's settings the moment an episode starts and a load is asynchronous. There are few of them. A document for a level this build doesn't know (written by a newer build) is left in the table and not read, so it isn't lost.
 
 ## Consequences
 

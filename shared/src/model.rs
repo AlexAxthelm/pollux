@@ -93,10 +93,13 @@ pub struct Model {
     // means every setting is at its app default. Nothing sets it yet; the Settings screen
     // will. Read through `crate::settings::resolve`, never directly.
     pub global_settings: Settings,
-    // True once the saved global settings have really been answered (found, not found, or
-    // found but unparseable), and false while the load is pending or the read failed. Saving
-    // is held until then, so a failed read can't be overwritten by the next change (US-0235).
-    pub global_settings_loaded: bool,
+    // Each subscription's overridden settings, by subscription id. A subscription with no
+    // entry has set nothing. Read through `crate::settings::resolve` with the global ones.
+    pub subscription_settings: HashMap<String, Settings>,
+    // True once the saved settings have really been answered (found, not found, or found but
+    // unparseable), and false while the load is pending or the read failed. Saving is held
+    // until then, so a failed read can't be overwritten by the next change (US-0235).
+    pub settings_loaded: bool,
 }
 
 /// The player's current episode and transport state. Holds its own `Episode` copy so

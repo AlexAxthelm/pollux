@@ -19,24 +19,35 @@ extension DatabaseManager {
         return .success
     }
 
-    /// The saved settings JSON for `scope`, or `.notFound` when none is saved.
-    func loadSettings(scope: SettingsScope) throws -> StorageResult {
-        let columns = Self.settingsScopeColumns(scope)
-        let json = try db.read { db -> String? in
-            try String.fetchOne(
-                db,
-                sql: "SELECT json FROM settings WHERE scope_kind = ? AND scope_id = ?",
-                arguments: [columns.kind, columns.id],
-            )
+    /// Every saved settings document. A row whose level this build doesn't know (written by a
+    /// newer one) is left in place and not returned, so it isn't lost.
+    func loadAllSettings() throws -> StorageResult {
+        let rows = try db.read { db in
+            try Row.fetchAll(db, sql: "SELECT scope_kind, scope_id, json FROM settings")
         }
-        guard let json else { return .notFound }
-        return .settings(json)
+        let saved = rows.compactMap { row -> SavedSettings? in
+            let kind: String = row["scope_kind"]
+            let id: String = row["scope_id"]
+            guard let scope = Self.settingsScope(kind: kind, id: id) else { return nil }
+            return SavedSettings(scope: scope, json: row["json"])
+        }
+        return .allSettings(saved)
     }
 
     /// A `SettingsScope` as the `(kind, id)` pair stored in `settings`.
     static func settingsScopeColumns(_ scope: SettingsScope) -> (kind: String, id: String) {
         switch scope {
         case .global: ("global", "")
+        case let .subscription(id): ("subscription", id)
+        }
+    }
+
+    /// The inverse of `settingsScopeColumns`, or `nil` for a level this build doesn't know.
+    static func settingsScope(kind: String, id: String) -> SettingsScope? {
+        switch kind {
+        case "global": .global
+        case "subscription": .subscription(id)
+        default: nil
         }
     }
 }

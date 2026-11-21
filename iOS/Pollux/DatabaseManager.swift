@@ -79,8 +79,8 @@ actor DatabaseManager {
             try await clearPlayContext()
         case let .saveSettings(scope, json):
             try await saveSettings(scope: scope, json: json)
-        case let .loadSettings(scope):
-            try loadSettings(scope: scope)
+        case .loadAllSettings:
+            try loadAllSettings()
         default:
             try await executeEpisode(operation)
         }
@@ -189,6 +189,11 @@ actor DatabaseManager {
     private func deleteSubscription(id: String) async throws -> StorageResult {
         try await db.write { db in
             try db.execute(sql: "DELETE FROM subscriptions WHERE id = ?", arguments: [id])
+            // The subscription's own settings go with it, in the same transaction.
+            try db.execute(
+                sql: "DELETE FROM settings WHERE scope_kind = 'subscription' AND scope_id = ?",
+                arguments: [id],
+            )
         }
         return .success
     }
