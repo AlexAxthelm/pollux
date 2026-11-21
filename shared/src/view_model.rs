@@ -13,6 +13,39 @@ pub struct ViewModel {
     /// Active theme, resolved by the shell into platform colors. Present on every
     /// render so the shell can apply it globally without a separate query.
     pub theme: ThemeView,
+    /// The global settings as the Settings screen shows them (see `SettingsView`).
+    pub settings: SettingsView,
+}
+
+/// The settings page for one level, one entry per setting. Today only the global level has a
+/// page; a subscription or playlist page will be the same shape, with `reset_value` holding the
+/// value inherited from the level above instead of the app default.
+#[derive(Facet, Serialize, Deserialize, Clone)]
+pub struct SettingsView {
+    pub skip_forward_secs: SettingValue,
+    pub skip_back_secs: SettingValue,
+    pub resume_rewind_secs: SettingValue,
+}
+
+impl Default for SettingsView {
+    /// Every setting at its app default, which is what an empty `Settings` projects to.
+    fn default() -> Self {
+        crate::settings::settings_view(&crate::settings::Settings::default())
+    }
+}
+
+/// One setting as the page shows it: the value in effect, and what it would be if reset.
+/// The shell writes "(default)" when `is_set` is false, and offers a reset when it is true.
+#[derive(Facet, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SettingValue {
+    /// The value in effect at this level.
+    pub value: u32,
+    /// The value this setting takes when it isn't set here (the app default at the global
+    /// level). Resetting the setting makes `value` equal to this. Not called `default`, which
+    /// is a Swift keyword and so can't be a field in the generated types.
+    pub reset_value: u32,
+    /// The user has set this value at this level, so it is shown as customised.
+    pub is_set: bool,
 }
 
 /// The active episode's transport state, present whenever the mini-player should show

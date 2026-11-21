@@ -740,6 +740,7 @@ impl App for Pollux {
             subscription_detail: build_subscription_detail(model),
             player: player::player_view(model),
             theme: theme_view(model.theme_id, model.theme_mode),
+            settings: settings::settings_view(&model.global_settings),
         }
     }
 }

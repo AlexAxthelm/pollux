@@ -22,6 +22,7 @@ use crate::capabilities::storage::{StorageOperation, StorageResult};
 use crate::defaults::{RESUME_REWIND_SECS, SKIP_BACKWARD_SECS, SKIP_FORWARD_SECS};
 use crate::effect::Effect;
 use crate::model::Model;
+use crate::view_model::{SettingValue, SettingsView};
 use crate::Event;
 
 type Cmd = Command<Effect, Event>;
@@ -163,6 +164,23 @@ pub fn resolve<'a>(layers: impl IntoIterator<Item = &'a Settings> + Clone) -> Re
         skip_forward_secs: first(|s| s.skip_forward_secs, defaults.skip_forward_secs),
         skip_back_secs: first(|s| s.skip_back_secs, defaults.skip_back_secs),
         resume_rewind_secs: first(|s| s.resume_rewind_secs, defaults.resume_rewind_secs),
+    }
+}
+
+/// Projects one level's settings for its page. `is_set` is whether the level overrides the
+/// setting, `value` is what is in effect there, and `default` is what it would be if reset:
+/// for the global level, the app default.
+pub(crate) fn settings_view(settings: &Settings) -> SettingsView {
+    let defaults = ResolvedSettings::default();
+    let value = |set: Option<u32>, default: u32| SettingValue {
+        value: set.unwrap_or(default),
+        reset_value: default,
+        is_set: set.is_some(),
+    };
+    SettingsView {
+        skip_forward_secs: value(settings.skip_forward_secs, defaults.skip_forward_secs),
+        skip_back_secs: value(settings.skip_back_secs, defaults.skip_back_secs),
+        resume_rewind_secs: value(settings.resume_rewind_secs, defaults.resume_rewind_secs),
     }
 }
 
@@ -593,5 +611,73 @@ mod tests {
             let effects = send(&mut model, Event::SettingsSaved(Box::new(result)));
             assert!(effects.is_empty());
         }
+    }
+
+    // -- The settings page --
+
+    #[test]
+    fn nothing_set_shows_every_setting_at_its_app_default() {
+        let view = settings_view(&Settings::default());
+        let defaults = ResolvedSettings::default();
+        for (shown, default) in [
+            (view.skip_forward_secs, defaults.skip_forward_secs),
+            (view.skip_back_secs, defaults.skip_back_secs),
+            (view.resume_rewind_secs, defaults.resume_rewind_secs),
+        ] {
+            assert_eq!(
+                shown,
+                SettingValue {
+                    value: default,
+                    reset_value: default,
+                    is_set: false
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn a_set_value_shows_as_set_and_remembers_what_a_reset_would_give() {
+        let view = settings_view(&skip_forward(60));
+        assert_eq!(
+            view.skip_forward_secs,
+            SettingValue {
+                value: 60,
+                reset_value: ResolvedSettings::default().skip_forward_secs,
+                is_set: true
+            }
+        );
+        assert!(!view.skip_back_secs.is_set);
+    }
+
+    #[test]
+    fn a_value_set_to_the_default_still_counts_as_set() {
+        let default = ResolvedSettings::default().skip_forward_secs;
+        let view = settings_view(&skip_forward(default));
+        assert!(view.skip_forward_secs.is_set);
+    }
+
+    #[test]
+    fn the_view_model_carries_the_settings_and_follows_changes() {
+        let mut model = Model::default();
+        assert!(!Pollux.view(&model).settings.skip_back_secs.is_set);
+        send(&mut model, nothing_saved());
+        send(
+            &mut model,
+            Event::SetGlobalSetting(SettingChange::SkipBackSecs(Some(10))),
+        );
+        let shown = Pollux.view(&model).settings.skip_back_secs;
+        assert_eq!((shown.value, shown.is_set), (10, true));
+        send(
+            &mut model,
+            Event::SetGlobalSetting(SettingChange::SkipBackSecs(None)),
+        );
+        assert!(!Pollux.view(&model).settings.skip_back_secs.is_set);
+    }
+
+    #[test]
+    fn the_default_view_is_every_setting_at_its_default() {
+        let view = SettingsView::default();
+        assert_eq!(view.skip_forward_secs.value, SKIP_FORWARD_SECS);
+        assert!(!view.skip_forward_secs.is_set);
     }
 }
