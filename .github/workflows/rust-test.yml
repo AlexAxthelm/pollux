@@ -12,5 +12,10 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install mise
+        uses: jdx/mise-action@v5
+        with:
+          install: false # only the task runner is needed; the Swift tools are macOS-only
+
       - name: Run tests
-        run: make rust-test
+        run: mise run rust-test

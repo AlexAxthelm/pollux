@@ -14,5 +14,10 @@ jobs:
         with:
           components: rustfmt
 
+      - name: Install mise
+        uses: jdx/mise-action@v5
+        with:
+          install: false # only the task runner is needed; the Swift tools are macOS-only
+
       - name: Run format check
-        run: make rust-format-check
+        run: mise run rust-format-check

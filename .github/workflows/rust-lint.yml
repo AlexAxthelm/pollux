@@ -14,5 +14,10 @@ jobs:
         with:
           components: clippy
 
+      - name: Install mise
+        uses: jdx/mise-action@v5
+        with:
+          install: false # only the task runner is needed; the Swift tools are macOS-only
+
       - name: Run lint
-        run: make rust-lint
+        run: mise run rust-lint

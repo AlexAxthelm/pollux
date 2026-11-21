@@ -5,12 +5,15 @@ jobs:
   format-check:
     name: "swiftformat"
     runs-on: macos-latest
+    env:
+      # Install, and auto-install, only this tool (mise.toml pins the others too).
+      MISE_ENABLE_TOOLS: swiftformat
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install swiftformat
-        run: brew install swiftformat
+      - name: Install mise and swiftformat
+        uses: jdx/mise-action@v5
 
       - name: Run format check
-        run: make swift-format-check
+        run: mise run swift-format-check
