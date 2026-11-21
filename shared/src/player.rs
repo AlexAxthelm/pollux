@@ -34,14 +34,12 @@ use crate::app::{
 };
 use crate::capabilities::player::{MediaSource, PlayerOperation, PlayerResult};
 use crate::capabilities::storage::{StorageOperation, StorageResult};
-use crate::defaults::{
-    CONTEXT_SAVE_ATTEMPTS, PLAYED_TOLERANCE_SECS, POSITION_CHECKPOINT_SECS, RESUME_REWIND_SECS,
-    SKIP_BACKWARD_SECS, SKIP_FORWARD_SECS,
-};
+use crate::defaults::{CONTEXT_SAVE_ATTEMPTS, PLAYED_TOLERANCE_SECS, POSITION_CHECKPOINT_SECS};
 use crate::domain::{DownloadStatus, Episode, EpisodeSource, PlaybackStatus};
 use crate::effect::Effect;
 use crate::html::strip_html_preview;
 use crate::model::{ActivePlayback, Model};
+use crate::settings::{resolve, ResolvedSettings};
 use crate::view_model::PlayerView;
 
 #[cfg(test)]
@@ -58,6 +56,8 @@ mod interruption_resume_tests;
 mod metadata_refresh_tests;
 #[cfg(test)]
 mod played_tests;
+#[cfg(test)]
+mod settings_tests;
 #[cfg(test)]
 mod tests;
 
@@ -241,6 +241,16 @@ fn is_current(model: &Model, session: u32) -> bool {
         .is_some_and(|a| a.session == session)
 }
 
+/// The settings that apply to playback right now. Only the global level exists so far; the
+/// subscription and playlist layers of the active context join here (ADR-0044), most local
+/// first, so callers don't change when they do.
+///
+/// Resolved where it is used, on the listener's action, not cached: a change to a setting
+/// applies to the next skip or resume. Never call it from the position tick.
+fn playback_settings(model: &Model) -> ResolvedSettings {
+    resolve([&model.global_settings])
+}
+
 /// Starts playing `episode_id` from the feed on screen. Resumes in place if it is
 /// already the active episode.
 pub(crate) fn play_episode(model: &mut Model, episode_id: &str) -> Cmd {
@@ -270,7 +280,7 @@ pub(crate) fn play_episode(model: &mut Model, episode_id: &str) -> Cmd {
         PlaybackStatus::Played => 0,
         _ => episode.playback_position_secs.unwrap_or(0),
     };
-    let start = saved.saturating_sub(RESUME_REWIND_SECS);
+    let start = saved.saturating_sub(playback_settings(model).resume_rewind_secs);
 
     let mut playing_episode = episode.clone();
     playing_episode.playback_status = PlaybackStatus::InProgress;
@@ -328,6 +338,7 @@ pub(crate) fn play(model: &mut Model) -> Cmd {
     // A restored (or errored) episode has nothing loaded, so it needs a fresh session.
     let needs_load = model.active_playback.as_ref().is_some_and(|a| !a.loaded);
     let fresh = needs_load.then(|| next_session(model));
+    let rewind = playback_settings(model).resume_rewind_secs;
     let Some(active) = model.active_playback.as_mut() else {
         return Command::done();
     };
@@ -335,7 +346,7 @@ pub(crate) fn play(model: &mut Model) -> Cmd {
     active.is_playing = true;
     // The listener took over: an interruption ending later must not second-guess them.
     active.resume_after_interruption = false;
-    let rewound = active.position_secs.saturating_sub(RESUME_REWIND_SECS);
+    let rewound = active.position_secs.saturating_sub(rewind);
     active.position_secs = rewound;
     let cmd = if let Some(session) = fresh {
         active.session = session;
@@ -481,14 +492,16 @@ pub(crate) fn skip_forward(model: &mut Model) -> Cmd {
     let Some(position) = model.active_playback.as_ref().map(|a| a.position_secs) else {
         return Command::done();
     };
-    seek_to(model, position.saturating_add(SKIP_FORWARD_SECS))
+    let skip = playback_settings(model).skip_forward_secs;
+    seek_to(model, position.saturating_add(skip))
 }
 
 pub(crate) fn skip_back(model: &mut Model) -> Cmd {
     let Some(position) = model.active_playback.as_ref().map(|a| a.position_secs) else {
         return Command::done();
     };
-    seek_to(model, position.saturating_sub(SKIP_BACKWARD_SECS))
+    let skip = playback_settings(model).skip_back_secs;
+    seek_to(model, position.saturating_sub(skip))
 }
 
 pub(crate) fn on_tick(model: &mut Model, session: u32, position_secs: u32) -> Cmd {
@@ -741,6 +754,7 @@ pub(crate) fn on_backgrounded(model: &mut Model) -> Cmd {
 
 pub(crate) fn player_view(model: &Model) -> Option<PlayerView> {
     let active = model.active_playback.as_ref()?;
+    let settings = playback_settings(model);
     let subscription = model
         .subscriptions
         .iter()
@@ -779,8 +793,8 @@ pub(crate) fn player_view(model: &Model) -> Option<PlayerView> {
         duration_secs: known_duration(active),
         is_playing: active.is_playing,
         is_streaming: matches!(active.media, MediaSource::Stream { .. }),
-        skip_forward_secs: SKIP_FORWARD_SECS,
-        skip_back_secs: SKIP_BACKWARD_SECS,
+        skip_forward_secs: settings.skip_forward_secs,
+        skip_back_secs: settings.skip_back_secs,
         description,
         description_text,
         error: active.error.clone(),

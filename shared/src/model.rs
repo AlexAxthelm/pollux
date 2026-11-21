@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::capabilities::player::MediaSource;
 use crate::domain::{Episode, EpisodeSortOrder, EpisodeSource, Subscription};
+use crate::settings::Settings;
 use crate::theme::{ThemeId, ThemeMode};
 use crate::view_model::DownloadNotice;
 
@@ -87,6 +88,11 @@ pub struct Model {
     // appearance section lands and drives `Event::SetTheme`.
     pub theme_id: ThemeId,
     pub theme_mode: ThemeMode,
+
+    // The user's global settings: only the values they have overridden, so an empty one
+    // means every setting is at its app default. Nothing sets it yet; the Settings screen
+    // will. Read through `crate::settings::resolve`, never directly.
+    pub global_settings: Settings,
 }
 
 /// The player's current episode and transport state. Holds its own `Episode` copy so
