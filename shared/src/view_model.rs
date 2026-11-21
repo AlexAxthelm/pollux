@@ -30,7 +30,10 @@ pub struct SettingsView {
 impl Default for SettingsView {
     /// Every setting at its app default, which is what an empty `Settings` projects to.
     fn default() -> Self {
-        crate::settings::settings_view(&crate::settings::Settings::default())
+        crate::settings::settings_view(
+            &crate::settings::Settings::default(),
+            &crate::settings::ResolvedSettings::default(),
+        )
     }
 }
 
@@ -125,6 +128,10 @@ pub struct SubscriptionDetailView {
     /// it after a refresh failed. Shown as a banner above the list, which stays in place
     /// (unlike `error`, which replaces it).
     pub list_notice: Option<String>,
+    /// The selected subscription's settings page. A value it hasn't set shows what it
+    /// inherits from the global settings, and a reset gives that value. Default when no
+    /// subscription is selected.
+    pub settings: SettingsView,
 }
 
 /// A failed-download-operation notice, paired with the episode it's about. Transient

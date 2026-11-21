@@ -176,20 +176,36 @@ pub fn resolve<'a>(layers: impl IntoIterator<Item = &'a Settings> + Clone) -> Re
 }
 
 /// Projects one level's settings for its page. `is_set` is whether the level overrides the
-/// setting, `value` is what is in effect there, and `default` is what it would be if reset:
-/// for the global level, the app default.
-pub(crate) fn settings_view(settings: &Settings) -> SettingsView {
-    let defaults = ResolvedSettings::default();
-    let value = |set: Option<u32>, default: u32| SettingValue {
-        value: set.unwrap_or(default),
-        reset_value: default,
+/// setting, `value` is what is in effect there, and `reset_value` is what it would be if
+/// reset: what the level above gives (`inherited`), which for the global level is the app
+/// default.
+pub(crate) fn settings_view(level: &Settings, inherited: &ResolvedSettings) -> SettingsView {
+    let value = |set: Option<u32>, reset_value: u32| SettingValue {
+        value: set.unwrap_or(reset_value),
+        reset_value,
         is_set: set.is_some(),
     };
     SettingsView {
-        skip_forward_secs: value(settings.skip_forward_secs, defaults.skip_forward_secs),
-        skip_back_secs: value(settings.skip_back_secs, defaults.skip_back_secs),
-        resume_rewind_secs: value(settings.resume_rewind_secs, defaults.resume_rewind_secs),
+        skip_forward_secs: value(level.skip_forward_secs, inherited.skip_forward_secs),
+        skip_back_secs: value(level.skip_back_secs, inherited.skip_back_secs),
+        resume_rewind_secs: value(level.resume_rewind_secs, inherited.resume_rewind_secs),
     }
+}
+
+/// The global settings page: a reset gives the app default.
+pub(crate) fn global_view(model: &Model) -> SettingsView {
+    settings_view(&model.global_settings, &ResolvedSettings::default())
+}
+
+/// One subscription's settings page: a reset gives the global value, so that is what an unset
+/// setting shows. A subscription that has set nothing has no entry.
+pub(crate) fn subscription_view(model: &Model, subscription_id: &str) -> SettingsView {
+    let none = Settings::default();
+    let level = model
+        .subscription_settings
+        .get(subscription_id)
+        .unwrap_or(&none);
+    settings_view(level, &resolve([&model.global_settings]))
 }
 
 /// Asks the shell for every saved settings document, at launch; the answer is
@@ -641,7 +657,7 @@ mod tests {
 
     #[test]
     fn nothing_set_shows_every_setting_at_its_app_default() {
-        let view = settings_view(&Settings::default());
+        let view = settings_view(&Settings::default(), &ResolvedSettings::default());
         let defaults = ResolvedSettings::default();
         for (shown, default) in [
             (view.skip_forward_secs, defaults.skip_forward_secs),
@@ -661,7 +677,7 @@ mod tests {
 
     #[test]
     fn a_set_value_shows_as_set_and_remembers_what_a_reset_would_give() {
-        let view = settings_view(&skip_forward(60));
+        let view = settings_view(&skip_forward(60), &ResolvedSettings::default());
         assert_eq!(
             view.skip_forward_secs,
             SettingValue {
@@ -676,7 +692,7 @@ mod tests {
     #[test]
     fn a_value_set_to_the_default_still_counts_as_set() {
         let default = ResolvedSettings::default().skip_forward_secs;
-        let view = settings_view(&skip_forward(default));
+        let view = settings_view(&skip_forward(default), &ResolvedSettings::default());
         assert!(view.skip_forward_secs.is_set);
     }
 
@@ -825,5 +841,133 @@ mod tests {
             assert_eq!(model.subscription_settings["a"].skip_back_secs, Some(5));
             assert!(storage_ops(&effects).is_empty());
         }
+    }
+
+    // -- The subscription settings page --
+
+    fn select(model: &mut Model, id: &str) {
+        model.selected_subscription = Some(crate::domain::Subscription {
+            id: id.to_string(),
+            feed_url: "https://example.com/f.rss".into(),
+            title: "Feed".into(),
+            artwork_url: None,
+            description: None,
+            last_refreshed: None,
+            created_at: 0,
+            etag: None,
+            last_modified: None,
+            last_refresh_error: None,
+            retry_after_until: None,
+        });
+    }
+
+    #[test]
+    fn a_subscription_that_set_nothing_shows_the_global_values() {
+        let mut model = Model::default();
+        model.global_settings.skip_forward_secs = Some(45);
+        let view = subscription_view(&model, "a");
+        assert_eq!(
+            view.skip_forward_secs,
+            SettingValue {
+                value: 45,
+                reset_value: 45,
+                is_set: false
+            }
+        );
+        // Not set anywhere: the app default.
+        assert_eq!(view.skip_back_secs.value, SKIP_BACKWARD_SECS);
+        assert!(!view.skip_back_secs.is_set);
+    }
+
+    #[test]
+    fn a_subscription_override_shows_as_set_and_resets_to_the_global_value() {
+        let mut model = Model::default();
+        model.global_settings.skip_forward_secs = Some(45);
+        model
+            .subscription_settings
+            .insert("a".into(), skip_forward(60));
+        let view = subscription_view(&model, "a");
+        assert_eq!(
+            view.skip_forward_secs,
+            SettingValue {
+                value: 60,
+                reset_value: 45,
+                is_set: true
+            }
+        );
+        // Another subscription is unaffected.
+        assert!(!subscription_view(&model, "b").skip_forward_secs.is_set);
+    }
+
+    #[test]
+    fn the_global_page_is_not_affected_by_a_subscription() {
+        let mut model = Model::default();
+        model
+            .subscription_settings
+            .insert("a".into(), skip_forward(60));
+        assert!(!global_view(&model).skip_forward_secs.is_set);
+    }
+
+    #[test]
+    fn the_detail_view_carries_the_selected_subscriptions_settings() {
+        let mut model = Model::default();
+        // Nothing selected: the defaults.
+        assert!(
+            !Pollux
+                .view(&model)
+                .subscription_detail
+                .settings
+                .skip_back_secs
+                .is_set
+        );
+
+        select(&mut model, "a");
+        send(&mut model, nothing_saved());
+        send(
+            &mut model,
+            set_sub("a", SettingChange::SkipBackSecs(Some(10))),
+        );
+        let shown = Pollux
+            .view(&model)
+            .subscription_detail
+            .settings
+            .skip_back_secs;
+        assert_eq!((shown.value, shown.is_set), (10, true));
+        // The global page is unchanged.
+        assert!(!Pollux.view(&model).settings.skip_back_secs.is_set);
+
+        send(&mut model, set_sub("a", SettingChange::SkipBackSecs(None)));
+        assert!(
+            !Pollux
+                .view(&model)
+                .subscription_detail
+                .settings
+                .skip_back_secs
+                .is_set
+        );
+    }
+
+    #[test]
+    fn a_global_change_shows_through_an_unset_subscription_setting() {
+        let mut model = Model::default();
+        select(&mut model, "a");
+        send(&mut model, nothing_saved());
+        send(
+            &mut model,
+            Event::SetGlobalSetting(SettingChange::SkipBackSecs(Some(5))),
+        );
+        let shown = Pollux
+            .view(&model)
+            .subscription_detail
+            .settings
+            .skip_back_secs;
+        assert_eq!(
+            shown,
+            SettingValue {
+                value: 5,
+                reset_value: 5,
+                is_set: false
+            }
+        );
     }
 }

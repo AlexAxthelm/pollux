@@ -744,7 +744,7 @@ impl App for Pollux {
             subscription_detail: build_subscription_detail(model),
             player: player::player_view(model),
             theme: theme_view(model.theme_id, model.theme_mode),
-            settings: settings::settings_view(&model.global_settings),
+            settings: settings::global_view(model),
         }
     }
 }
@@ -780,7 +780,13 @@ fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
         None => (None, String::new(), None),
     };
 
+    let settings = subscription_id
+        .as_deref()
+        .map(|id| settings::subscription_view(model, id))
+        .unwrap_or_default();
+
     SubscriptionDetailView {
+        settings,
         subscription_id,
         title,
         artwork_url,

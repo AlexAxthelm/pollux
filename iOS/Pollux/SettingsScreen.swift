@@ -8,54 +8,60 @@ struct SettingsScreen: View {
     @ObservedObject var core: Core
     @Environment(\.themeColors) private var themeColors
 
-    private var settings: SettingsView {
-        core.view.settings
-    }
-
     var body: some View {
         Form {
-            Section {
-                skipRow(
-                    "Skip forward",
-                    settings.skipForwardSecs,
-                    change: SettingChange.skipForwardSecs,
-                )
-                skipRow(
-                    "Skip back",
-                    settings.skipBackSecs,
-                    change: SettingChange.skipBackSecs,
-                )
-                SettingRow(
-                    title: "Rewind on resume",
-                    setting: settings.resumeRewindSecs,
-                    presets: SettingsPresets.rewind,
-                    zeroLabel: "Off",
-                    onChange: { core.update(.setGlobalSetting(.resumeRewindSecs($0))) },
-                )
-            } header: {
-                Text("Playback")
-            } footer: {
-                Text("These apply to every podcast unless it has its own setting.")
-            }
-            .listRowBackground(themeColors.secondaryBackground)
+            PlaybackSettingsSection(
+                settings: core.view.settings,
+                footer: "These apply to every podcast unless it has its own setting.",
+                onChange: { core.update(.setGlobalSetting($0)) },
+            )
         }
         .scrollContentBackground(.hidden)
         .background(themeColors.background)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+/// The Playback section of a settings page: skip forward, skip back and rewind on resume.
+/// The global page and a subscription's page show the same rows, so the section takes the
+/// level's `SettingsView` and reports a change as a `SettingChange` (`nil` resets it).
+struct PlaybackSettingsSection: View {
+    @Environment(\.themeColors) private var themeColors
+    let settings: SettingsView
+    let footer: String
+    let onChange: (SettingChange) -> Void
+
+    var body: some View {
+        Section {
+            skipRow("Skip forward", settings.skipForwardSecs, SettingChange.skipForwardSecs)
+            skipRow("Skip back", settings.skipBackSecs, SettingChange.skipBackSecs)
+            SettingRow(
+                title: "Rewind on resume",
+                setting: settings.resumeRewindSecs,
+                presets: SettingsPresets.rewind,
+                zeroLabel: "Off",
+                onChange: { onChange(.resumeRewindSecs($0)) },
+            )
+        } header: {
+            Text("Playback")
+        } footer: {
+            Text(footer)
+        }
+        .listRowBackground(themeColors.secondaryBackground)
+    }
 
     private func skipRow(
         _ title: String,
         _ setting: SettingValue,
-        change: @escaping (UInt32?) -> SettingChange,
+        _ change: @escaping (UInt32?) -> SettingChange,
     ) -> some View {
         SettingRow(
             title: title,
             setting: setting,
             presets: SettingsPresets.skip,
             zeroLabel: nil,
-            onChange: { core.update(.setGlobalSetting(change($0))) },
+            onChange: { onChange(change($0)) },
         )
     }
 }
