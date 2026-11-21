@@ -18,14 +18,15 @@ specific one. The catalog of global settings is in [[settings]].
 ## Cascading defaults pattern
 
 Many settings follow a cascading default pattern: a global default applies
-unless overridden at a more specific level (episode → feed → global).
+unless overridden at a more specific level (episode → playlist → subscription → global;
+see Context stack below).
 
 The UI should always make clear whether a value is using the global default or
 a custom override, and offer a way to reset to default:
 
 - `Refresh every 12 hours (default)` — using global default
 - `Refresh every 24 hours (default)` — global default has been changed
-- `Refresh every 1 hour` — per-feed override is set; subtle reset button shown
+- `Refresh every 1 hour` — per-subscription override is set; subtle reset button shown
 
 This pattern applies to: refresh interval, download rules, skip increments, and
 any other setting that makes sense to configure globally but override locally.
@@ -42,42 +43,43 @@ Changing a global setting is respected by everything that has not overridden it.
 Returning a setting to its default should be easy, so the user doesn't need to know
 what a sensible default is.
 
-## Per-feed settings
+## Subscription settings
 
-Per-feed settings are accessible from the subscription details page, not from
-the main settings screen. They mirror global settings with override capability.
-See [[subscription]].
+Subscription settings are reached from a **gear icon on the subscription's page**, which
+opens a Subscription settings page. The page is clearly marked as editing that
+subscription (its name is in the header), not the library or the global defaults. Some of
+its settings are behind the **Advanced** flag (see [[settings-ui]]). See [[subscription]].
 
-Per feed settings should be a separate page, accessible either from the main
-settings page, or by clicking the "gear/settings" button from the feed details
-page.
-
-### Feed settings
-
-sections inherit from global page, and use defaults (with a "(default)" note
-unless changed. if not default, there should be a listtle "reset to default"
-button next to it.
+Sections inherit from the global page and use defaults, with a "(default)" note unless
+changed. A value that isn't the default has a small "reset to default" button next to it.
 - Playback
 - Library (display options)
 - Storage (how many episodes to keep locally)
+- Refresh interval (subscriptions only)
 
-### Subscription settings
+Playlists have a settings page of the same shape, marked as editing that playlist; an unset
+value there reads "Follows each source" (see Context stack).
 
-Same as feed settings, but also refresh interval
+*Superseded wording: an earlier version said these settings are "not from the main
+settings screen" and, elsewhere, reachable "either from the main settings page, or by
+clicking the gear". The gear on the subscription page is the decision. Whether the global
+page also lists subscriptions is in [[settings]].*
 
 ## Context stack
 
-*Draft, see [[ADR-0044 An episode's settings come from the context it is played from]].*
+*Accepted, see [[ADR-0044 An episode's settings come from the context it is played from]].*
 
 An episode's settings come from the context it is played from. The most local set
 value wins, walking up from the episode:
 
-`episode → playlist (innermost … outermost) → subscription → global`
+`episode → active playlist → included playlists on the route → subscription → global`
 
 - Played from a subscription: episode → subscription → global.
 - Played from a playlist A that includes B, where the episode comes via B:
-  episode → B → A → the episode's subscription → global. Episodes from sibling sources
-  in A can have different effective settings.
+  episode → A → B → the episode's subscription → global. A's own values apply to all of
+  its episodes; where A leaves one unset, B's (or C's, for episodes via C) applies, so
+  episodes from sibling sources in A can have different effective settings. Played from B
+  instead, B is the most local.
 - Played from the library: episode → subscription → global.
 - An unset playlist value falls through to the episode's subscription, so a playlist's
   settings page shows **"Follows each source"** rather than a single inherited value.
@@ -92,8 +94,7 @@ value wins, walking up from the episode:
 - Most settings are behind the **Advanced** filter (see [[settings-ui]]), and which
   settings the filter reveals depends on the level being edited.
 - Playback-time settings are the ones the context stack is about. Storage, download and
-  refresh settings can be set on playlists too, but have no playback context. A playlist is evaluated like a
-  subscription: each can request that an episode be downloaded or retained, and storage
+  refresh settings can be set on playlists too, but have no playback context. A playlist is evaluated like a subscription: each can request that an episode be downloaded or retained, and storage
   combines the requests (default: retain). See [[storage-eviction]].
 
 ### Not decided yet
@@ -103,13 +104,7 @@ value wins, walking up from the episode:
 
 ## Open questions
 
-- #needs-decision **Where are per-feed settings reached from?** The text above says
-  per-feed settings are accessible from the subscription details page, "not from the
-  main settings screen", and later that the page is accessible "either from the main
-  settings page, or by clicking the gear/settings button from the feed details page".
-  These contradict each other. Both are kept as originally written. Global settings are
-  reached from a gear at the top right of the library; other settings pages are added
-  contextually as they are built.
+None
 
 ## User stories
 

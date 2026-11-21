@@ -195,7 +195,9 @@ See also: [[GLOSSARY]] — EpisodeSource.
 ## Settings
 
 Settings follow the cascading defaults pattern (global → subscription →
-playlist → episode) documented in [[DESIGN_PRINCIPLES]] §3 and [[GLOSSARY]].
+playlist(s) → episode) documented in [[DESIGN_PRINCIPLES]] §3 and [[GLOSSARY]]. The chain
+an episode uses is the context it is played from: see
+[[ADR-0044 An episode's settings come from the context it is played from]].
 
 **Resolved: settings are structured config objects, not key-value rows.**
 
@@ -211,10 +213,12 @@ Conceptually:
 AppDefaultSettings      — all fields concrete; the authoritative defaults
 GlobalSettings      — Same fields, all optional; overrides app defaults
 SubscriptionSettings — same fields, all optional; overrides global
-PlaylistSettings    — same fields, all optional; overrides global
-                      (not subscription — a playlist may span many subscriptions)
-EpisodeSettings     — same fields, all optional; overrides subscription or playlist
-                      depending on playback context
+PlaylistSettings    — same fields, all optional; overrides subscription (a playlist
+                      may span many subscriptions, so an unset value follows each
+                      episode's own subscription). Playlists can nest: the playlist
+                      playback started from is the most local, and the playlists it
+                      includes sit above it, closer to the subscription
+EpisodeSettings     — same fields, all optional; overrides everything above
 ```
 
 These names are placeholders. The final names and the Rust representation

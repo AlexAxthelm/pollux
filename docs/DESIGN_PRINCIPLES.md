@@ -70,9 +70,10 @@ See [[ADR-0027 A playlist is a query over sources]] and
 
 ## 3. Cascading defaults
 
-Settings follow a consistent hierarchy: global → feed → episode (or global →
-feed → feed → ... → subscription → episode, for nested playlist cases). Each level
-inherits from the one above unless explicitly overridden.
+Settings follow a consistent hierarchy: global → subscription → included playlists →
+active playlist → episode. Each level inherits from the one above unless explicitly
+overridden, and the chain an episode uses is the context it is played from. See
+[[ADR-0044 An episode's settings come from the context it is played from]].
 
 The UI always makes the current state legible:
 - `Refresh every 12 hours (default)` — inherited, global is at its own default
@@ -87,13 +88,6 @@ but override locally.
 setting that only exists at one level is the exception, not the rule. The UI
 treatment (show current value, show whether it's default or overridden, offer
 reset) should be consistent everywhere.
-
-- #needs-decision **What is the cascade chain?** The first paragraph above reads "global →
-  feed → episode (or global → feed → feed → ... → subscription → episode, for nested
-  playlist cases)", and uses "feed" where [[GLOSSARY]] says to use "subscription". The
-  glossary says global → subscription → episode, and [[DATA_MODEL]] adds playlist
-  between global and episode. Where playlist and show settings rank is already open in
-  [[settings-cascade]]. All are kept as written.
 
 ---
 

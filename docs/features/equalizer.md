@@ -8,7 +8,7 @@ area: player
 
 * Should offer a mechanism to adjust overall volume levels for the episode, and
   per frequency (equializer)
-* Adjustable per episode, or per feed
+* Adjustable per episode, or per subscription
 * Include reasonable defaults
     * Maybe some good "smart" option, that seeks to have a good range
 

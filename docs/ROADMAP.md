@@ -65,7 +65,7 @@ Enough to navigate the app and see real data.
 - **Settings screen**: global defaults
 - **Subscription preview + subscribe flow**: subscribe button, redirect to
   details on subscribe
-- **Subscription details page**: per-feed settings stub, unsubscribe (hard
+- **Subscription details page**: subscription settings stub, unsubscribe (hard
   delete for MVP)
 
 Milestone: can subscribe to a podcast, see its episodes, and navigate the app.

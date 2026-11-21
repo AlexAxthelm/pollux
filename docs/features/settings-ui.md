@@ -26,6 +26,9 @@ may cause problems. The user can also choose to show them all the time, as a
 permanent opt-in. Which settings count as advanced is in the Advanced section of
 [[settings]].
 
+Which settings the Advanced filter reveals depends on what is being edited (library/global,
+a subscription, a playlist). See [[US-0233 Advanced settings depend on what is being edited]].
+
 ## Changing settings
 
 - A setting the user sets is persisted, and generally followed.

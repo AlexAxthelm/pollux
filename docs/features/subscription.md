@@ -46,13 +46,14 @@ see `subscription-soft-delete.md` for details
 for MVP: if a subscription is removed, all assosciated content files are also
 deleted.
 
-## Per-Feed Settings
+## Subscription settings
 
-The cascading default pattern applies to all per-feed settings. Each setting
+Reached from a gear icon on the subscription's page; see [[settings-cascade]]. The cascading
+default pattern applies to all subscription settings. Each setting
 shows whether it is using the global default or a custom value, and can be
 reset to default individually.
 
-Known per-feed settings:
+Known subscription settings:
 - Refresh interval
 - Download rules (see `downloads-auto.md`)
 - *(more to be defined)*
@@ -69,7 +70,7 @@ Known per-feed settings:
 
 - Feed artwork, title, description
 - Episode list (full, including de-listed episodes behind toggle)
-- Per-feed settings
+- Gear icon to the subscription's settings
 - Unsubscribe (in menu, protected)
 
 The subscription preview shown before subscribing is in [[subscription-subscribe]].

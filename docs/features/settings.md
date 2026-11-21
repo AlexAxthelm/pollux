@@ -20,7 +20,7 @@ are added as they are built; see [[settings-cascade]]).
 
 ## Parts
 
-- [[settings-cascade]]: global defaults, and overrides per feed, subscription, playlist and episode
+- [[settings-cascade]]: global defaults, and overrides per subscription, playlist and episode
 - [[settings-ui]]: finding, searching, undoing and understanding settings
 
 ## Global Settings Screen Structure
@@ -51,10 +51,11 @@ Settings are organized into sections on a single scrollable screen.
 - Swipe gesture mapping — configure per-gesture actions on episode rows
   (see [[episode-ui]])
 
-### Feed settings
+### Subscription and playlist settings
 
-- A list of feeds (playlists and subscriptions) that when selected, take the
-  user to the feed-specific settings page.
+- A list of subscriptions and playlists that when selected, take the user to that
+  one's settings page. Each page is also reached from a gear on its own page; see
+  [[settings-cascade]].
 
 ### Notifications
 - *(to be defined — see [[notifications]] and [[notifications-settings]])*
