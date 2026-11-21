@@ -66,5 +66,6 @@ that hasn't been tried.
 
 ## Environment
 
-- Found on `main` at `e8cd0b7` (merge of PR #23), built with `make ios-xcodebuild`
+- Found on `main` at `e8cd0b7` (merge of PR #23), built with `make ios-xcodebuild` (the Makefile has since been replaced by mise tasks, so it is
+  now `mise run ios-xcodebuild`; see [[ADR-0041 Dev tools and tasks are managed with mise]])
 - iPhone 14 Pro Max simulator, iOS 26.5. Not tried on a device.

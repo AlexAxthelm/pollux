@@ -25,9 +25,13 @@ managed with mise ([[ADR-0041 Dev tools and tasks are managed with mise]]).
 
 * mise pins xcodegen, xcbeautify, swiftlint and swiftformat (`mise.toml`) and runs every
   task that used to be a make target, under the same names (`mise run <task>`). The Makefile
-  is gone. Checked locally: `mise run check`, a cold `mise run ios-xcodebuild`, and
-  `mise run ios-test` all pass. Not run: `ios-device` with a phone connected, the `ios-sim`
-  launch step, `ios-dev`, `ios-rebuild`, `clean` and `format`. CI now calls the same tasks
+  is gone. Checked locally: `mise run check`, `ios-rebuild` (clean, then a full build),
+  `ios-xcodebuild`, `ios-test`, `ios-dev` (opens Xcode) and `ios-sim` all pass. Driving the
+  app after `ios-sim`, the Library listed the existing subscriptions (the install kept its
+  data), a subscription opened its episode list and back returned to the Library, with no
+  crash in the launch log. Not run: `ios-device` with a phone connected, `clean` and
+  `format`. `mise run check` prints cargo's `unused workspace dependency 'anyhow'` warning;
+  it predates mise and exits 0. CI now calls the same tasks
   through `jdx/mise-action`, which ran green on PR #28 for the lint, format and Rust jobs.
 * mise installs Rust from `rust-toolchain.toml`, locally and in CI, replacing
   `dtolnay/rust-toolchain`. The Rust CI jobs passed on this setup (PR #28), installing the

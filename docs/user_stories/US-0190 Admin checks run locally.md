@@ -13,6 +13,7 @@ a failed PR check
 
 Notes:
 * The forbidden-patterns scan (`.github/workflows/admin-forbidden-patterns.yml`) runs only
-  in CI, so PR #23 failed on three forced unwraps in tests that `make check` (now `mise run check`) had passed.
+  in CI, so PR #23 failed on three forced unwraps in tests that `make check` had passed. `make` has since been replaced by mise tasks, so that is now
+  `mise run check` ([[ADR-0041 Dev tools and tasks are managed with mise]]).
   Until a local equivalent exists (for example a `git grep` with the same patterns wired
   into `mise run check`), run the search in `docs/HACKING.md` before pushing.
