@@ -1,6 +1,6 @@
 # Pollux: instructions for Claude
 
-Build, run and test commands live in `docs/HACKING.md` and the `Makefile`. Architecture is in
+Build, run and test commands live in `docs/HACKING.md` and the mise tasks (`mise tasks`). Architecture is in
 `docs/ARCHITECTURE.md`. This file covers only what's easy to get wrong when working with an agent.
 
 ## The docs are living docs
@@ -69,16 +69,16 @@ To tap, type, swipe or inspect the app in the simulator, use tools in this order
 
 ### Practical notes
 
-- **Build:** `make ios-xcodebuild`. A fresh worktree has no `iOS/generated`, so the first build runs
+- **Build:** `mise run ios-xcodebuild`. A fresh worktree has no `iOS/generated`, so the first build runs
   the full Rust → Swift → xcodegen → xcodebuild chain and takes a while. The app lands in
   `build/DerivedData/Build/Products/Debug-iphonesimulator/Pollux.app`. Install and launch it
-  yourself with `xcrun simctl install` and `xcrun simctl launch`. `make ios-sim` blocks on
+  yourself with `xcrun simctl install` and `xcrun simctl launch`. `mise run ios-sim` blocks on
   `launch --console`. Get the bundle id with
   `/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" <app>/Info.plist`.
 - **The simulator may be shut down** between turns or sessions. If a UI tool says the device isn't
   booted, run `xcrun simctl boot <id>`, `open -a Simulator`, `xcrun simctl bootstatus <id> -b`,
   then relaunch the app. The installed app and its data survive.
-- **Simulator choice:** the Makefile picks `SIM_DEVICE_NAME`. Use `xcrun simctl list devices` to
+- **Simulator choice:** `scripts/ios-env.sh` sets the default `SIM_DEVICE_NAME`, which you can override with the environment variable. Use `xcrun simctl list devices` to
   find its id.
 - **Test feeds:** use real, reachable feed URLs and check them first with `curl -sIL <url>`.
 - **AXe output:** the raw `describe-ui` JSON is huge. Filter it, for example

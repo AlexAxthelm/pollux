@@ -6,15 +6,22 @@ feature:
 related: []
 ---
 As a developer setting up a new machine
-I want `make` to check that the required build tools are installed before it runs
+I want the build tasks to check that the required build tools are installed before they run
 so that I get a clear "install X" hint instead of an opaque failure like
 `error: no such command: bin` (missing cargo-run-bin) or `xcbeautify: command not found`
 
 Notes:
-* Prompted by PR #9 review: `make package` now depends on `cargo-run-bin`, and a
-  missing install surfaces as `error: no such command: bin`, which does not name
-  the tool. `xcbeautify` has the same class of problem on `make ios-sim`/`ios-test`.
-- Current mitigation is documentation only — these tools are listed under
-  Prerequisites in `docs/HACKING.md`, and the opaque errors have Troubleshooting
-  entries. This story tracks the deferred idea of a preflight `check-tools` target
-  so the failure is caught early with a clear hint.
+* Partly addressed by [[ADR-0041 Dev tools and tasks are managed with mise]]: `mise install`
+  provides xcodegen, xcbeautify, swiftlint and swiftformat at pinned versions, so a
+  missing `xcbeautify` is now one setup step instead of a separate brew install. Still open:
+  `cargo-run-bin`, Xcode and the simulator runtime are not covered. Mise's `auto_install`
+  setting is on by default, so `mise run` may install missing pinned tools itself; that has
+  not been checked end to end. #needs-decision whether this story still needs a preflight
+  task once it has been.
+* Prompted by PR #9 review: `package` (then a make target, now a mise task) depends on
+  `cargo-run-bin`, and a missing install surfaces as `error: no such command: bin`, which
+  does not name the tool. `xcbeautify` had the same class of problem on `ios-sim` and
+  `ios-test`.
+- Current mitigation: the tools are listed under Prerequisites in `docs/HACKING.md`, and
+  the opaque errors have Troubleshooting entries. This story tracks the deferred idea of a
+  preflight `check-tools` task so the failure is caught early with a clear hint.

@@ -9,8 +9,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install mise and the Rust toolchain
+        uses: jdx/mise-action@v5 # installs Rust from rust-toolchain.toml; the Swift tools are macOS-only
 
       - name: Run tests
-        run: make rust-test
+        run: mise run rust-test

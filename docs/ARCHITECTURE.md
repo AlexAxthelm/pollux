@@ -74,7 +74,7 @@ pollux/
 │   │   ├── NowPlaying*.swift     # lock screen, Control Center, headphone and car controls
 │   │   └── Theme.swift           # ThemeView → SwiftUI colors
 │   ├── PolluxTests/        # Swift tests (swift-testing)
-│   ├── generated/          # ← git-ignored; produced by `make typegen` + `make package`
+│   ├── generated/          # ← git-ignored; produced by `mise run typegen` + `mise run package`
 │   │   ├── App/            # Swift type stubs (Event, ViewModel, Request, …)
 │   │   └── Shared/         # Swift package wrapping the compiled Rust static lib
 │   └── project.yml         # XcodeGen spec (source of truth for the Xcode project)
@@ -90,7 +90,9 @@ pollux/
 ├── .github/workflows/      # CI (see below)
 ├── Cargo.toml              # workspace root
 ├── Cargo.lock
-├── Makefile                # primary task runner (see HACKING.md)
+├── mise.toml               # pins dev tools and defines tasks (see HACKING.md)
+├── mise-tasks/             # longer task scripts (package, ios-*)
+├── scripts/                # helpers sourced by the tasks
 ├── rust-toolchain.toml     # pins stable Rust + Apple targets
 └── .swift-version          # pins Swift 6.2
 ```
@@ -176,18 +178,18 @@ The Swift types (`Event`, `ViewModel`, `Request`, and the `App` Swift package
 wrapper) are **generated** — never written by hand. The pipeline:
 
 ```
-make typegen   →  cargo run --bin codegen (--features codegen,facet_typegen)
-                  writes Swift type stubs to iOS/generated/App/
+mise run typegen   →  cargo run --bin codegen (--features codegen,facet_typegen)
+                      writes Swift type stubs to iOS/generated/App/
 
-make package   →  cargo swift package (requires cargo-swift 0.9.0)
-                  compiles the Rust static library and wraps it as a Swift package
-                  writes to iOS/generated/Shared/
+mise run package   →  cargo swift package (requires cargo-swift 0.9.0)
+                      compiles the Rust static library and wraps it as a Swift package
+                      writes to iOS/generated/Shared/
 
-make generate-project  →  xcodegen --spec iOS/project.yml
-                           regenerates iOS/Pollux.xcodeproj
+mise run generate-project  →  xcodegen --spec iOS/project.yml
+                              regenerates iOS/Pollux.xcodeproj
 ```
 
-`make ios-build` runs all three in order. Run it whenever the core's public
+`mise run ios-build` runs all three in order. Run it whenever the core's public
 types change — new `Event`/`Effect` variants, `ViewModel` fields, or capability
 operation/result types in `shared/src/`.
 
@@ -262,6 +264,6 @@ When adding a new domain feature, the typical change surface is:
 1. Extend the core types in `shared/src/` — `Event`/`update()`/`view()` in
    `app.rs`, plus `model.rs`, `view_model.rs`, `effect.rs`, and `capabilities/`
    as needed
-2. Run `make ios-build` to regenerate Swift types and rebuild the Xcode project
+2. Run `mise run ios-build` to regenerate Swift types and rebuild the Xcode project
 3. Update SwiftUI views in `iOS/Pollux/` to consume the new `ViewModel` fields
    and emit the new `Event` variants

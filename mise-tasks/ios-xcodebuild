@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#MISE description="Build the app for the simulator (ios-build first)"
+#MISE depends=["ios-build"]
+set -euo pipefail
+cd "$MISE_PROJECT_ROOT"
+source scripts/ios-env.sh
+
+SIM_ID="$(sim_id)"
+# `pipefail` (set above): without it the pipeline's exit status is xcbeautify's, so a
+# failed build would still exit 0 (and `mise run check` / CI would pass).
+xcodebuild \
+  -project "$XCODE_PROJECT" \
+  -scheme "$XCODE_SCHEME" \
+  -configuration Debug \
+  -derivedDataPath "$DERIVED_DATA" \
+  -destination "platform=iOS Simulator,id=$SIM_ID" \
+  | xcbeautify
