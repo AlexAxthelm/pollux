@@ -142,20 +142,33 @@ pub(crate) fn load_global() -> Cmd {
 
 /// The saved global settings arrived at launch. Nothing saved, a failed read or JSON that
 /// can't be read all leave the settings at their defaults: the player works either way, and
-/// refusing to start over a preference would be worse. The cost is that the next change
-/// saves over whatever could not be read.
+/// refusing to start over a preference would be worse.
+///
+/// What was saved is only treated as answered when the shell actually answered. A document
+/// that can't be parsed stays where it is until the user changes a setting, which replaces
+/// it. A failed read is different: the saved document may be fine, so saving is held and the
+/// change stays in memory only, rather than overwriting it (US-0235).
 pub(crate) fn on_loaded(model: &mut Model, result: StorageResult) -> Cmd {
-    if let StorageResult::Settings(json) = result {
-        if let Ok(settings) = Settings::from_json(&json) {
-            model.global_settings = settings;
+    match result {
+        StorageResult::Settings(json) => {
+            if let Ok(settings) = Settings::from_json(&json) {
+                model.global_settings = settings;
+            }
+            model.global_settings_loaded = true;
         }
+        StorageResult::NotFound => model.global_settings_loaded = true,
+        _ => {}
     }
     render()
 }
 
-/// The user set, or reset, one global setting. It takes effect at once, then is saved.
+/// The user set, or reset, one global setting. It takes effect at once, then is saved, unless
+/// the saved settings haven't been read successfully yet, in which case it is not saved.
 pub(crate) fn set_global(model: &mut Model, change: SettingChange) -> Cmd {
     model.global_settings.apply(change);
+    if !model.global_settings_loaded {
+        return render();
+    }
     Command::request_from_shell(StorageOperation::SaveSettings {
         scope: SettingsScope::Global,
         json: model.global_settings.to_json(),
@@ -281,6 +294,14 @@ mod tests {
             .collect()
     }
 
+    fn nothing_saved() -> Event {
+        Event::SettingsLoaded(Box::new(StorageResult::NotFound))
+    }
+
+    fn read_failed() -> Event {
+        Event::SettingsLoaded(Box::new(StorageResult::Error("db locked".into())))
+    }
+
     fn loaded(json: &str) -> Event {
         Event::SettingsLoaded(Box::new(StorageResult::Settings(json.to_string())))
     }
@@ -373,6 +394,7 @@ mod tests {
     #[test]
     fn changing_a_setting_takes_effect_and_saves_only_what_is_overridden() {
         let mut model = Model::default();
+        send(&mut model, nothing_saved());
         let effects = send(
             &mut model,
             Event::SetGlobalSetting(SettingChange::SkipForwardSecs(Some(60))),
@@ -420,6 +442,45 @@ mod tests {
         assert!(matches!(
             storage_ops(&effects).as_slice(),
             [StorageOperation::SaveSettings { json, .. }] if json == "{}"
+        ));
+    }
+
+    #[test]
+    fn a_change_is_not_saved_before_the_load_answers() {
+        let mut model = Model::default();
+        let effects = send(
+            &mut model,
+            Event::SetGlobalSetting(SettingChange::SkipForwardSecs(Some(60))),
+        );
+        assert_eq!(model.global_settings.skip_forward_secs, Some(60));
+        assert!(storage_ops(&effects).is_empty());
+    }
+
+    #[test]
+    fn a_failed_read_holds_saving_so_the_saved_settings_are_not_overwritten() {
+        let mut model = Model::default();
+        send(&mut model, read_failed());
+        let effects = send(
+            &mut model,
+            Event::SetGlobalSetting(SettingChange::SkipForwardSecs(Some(60))),
+        );
+        assert_eq!(model.global_settings.skip_forward_secs, Some(60));
+        assert!(storage_ops(&effects).is_empty());
+        assert!(effects.iter().any(|e| matches!(e, Effect::Render(_))));
+    }
+
+    #[test]
+    fn an_unparseable_document_is_replaced_by_the_next_change() {
+        let mut model = Model::default();
+        send(&mut model, loaded("not json"));
+        let effects = send(
+            &mut model,
+            Event::SetGlobalSetting(SettingChange::SkipForwardSecs(Some(60))),
+        );
+        assert!(matches!(
+            storage_ops(&effects).as_slice(),
+            [StorageOperation::SaveSettings { json, .. }]
+                if json == r#"{"skip_forward_secs":60}"#
         ));
     }
 
