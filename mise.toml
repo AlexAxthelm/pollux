@@ -10,6 +10,11 @@ xcbeautify = "3.2.1"
 swiftlint = "0.65.0"
 swiftformat = "0.62.1"
 
+# Shared constants for inline tasks, used as {{vars.name}}. The file tasks in
+# mise-tasks/ are not templated; they read scripts/ios-env.sh instead.
+[vars]
+ios_swift_dir = "iOS/Pollux"
+
 # ── Tasks ─────────────────────────────────────────────────────────────────────
 # Run with `mise run <task>`; list them with `mise tasks`. Short tasks live here, the
 # longer shell recipes are in mise-tasks/ (shared iOS settings in scripts/ios-env.sh).
@@ -87,13 +92,13 @@ description = "Swift lint and format check"
 run = [{ task = "swift-lint" }, { task = "swift-format-check" }]
 
 [tasks.swift-lint]
-run = "swiftlint lint --strict iOS/Pollux"
+run = "swiftlint lint --strict {{vars.ios_swift_dir}}"
 
 [tasks.swift-format]
-run = "swiftformat iOS/Pollux"
+run = "swiftformat {{vars.ios_swift_dir}}"
 
 [tasks.swift-format-check]
-run = "swiftformat --lint iOS/Pollux"
+run = "swiftformat --lint {{vars.ios_swift_dir}}"
 
 [tasks.swift-clean]
 run = [{ task = "xcode-clean" }, { task = "swift-generated-clean" }]
