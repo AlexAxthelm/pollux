@@ -108,6 +108,22 @@ value wins, walking up from the episode:
 - Saving a speed or skip change made in the player to an episode or context is deferred.
   For now it applies to the player session only.
 
+## As built
+
+Only the global level exists. The core has one settings type shared by every level, where an
+unset value is `None`, and one resolver that takes the levels that apply, most local first, and
+returns every setting with a concrete value. The player calls it with just the global settings, so
+the context stack is in place but has one layer. Adding a level is adding a layer, not changing
+the resolver. Resolution happens on the user's action or when playback starts, never on every
+position tick.
+
+The global Settings screen shows, for each setting, the value in effect, what a reset would give,
+and whether it is set (the "(default)" label and the reset button). At the global level a reset
+gives the app default; a subscription or playlist page will show the value inherited from above,
+or "Follows each source" for a playlist. Subscription, playlist and episode settings, and walking
+the route through included playlists, are not built yet. See [[settings]] for the screen and
+[[ADR-0045 Settings are saved as one JSON document per level]] for how settings are saved.
+
 ## Open questions
 
 None
