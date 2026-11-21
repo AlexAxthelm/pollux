@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+#MISE description="Build a signed Debug app, install it over the existing one on a phone and launch it"
+#MISE depends=["ios-build"]
+# Signing comes from the git-ignored iOS/Local.xcconfig (DEVELOPMENT_TEAM). A free Personal
+# Team's provisioning expires after 7 days, so re-run this task to refresh the install.
+# Pick another phone with DEVICE_ID (see `xcrun devicectl list devices`).
+# The install replaces the app only if the bundle id matches the one already on the phone, so
+# set PRODUCT_BUNDLE_IDENTIFIER in iOS/Local.xcconfig to that id. Otherwise iOS installs a
+# second, empty app. The id being installed is printed below.
+set -euo pipefail
+cd "$MISE_PROJECT_ROOT"
+source scripts/ios-env.sh
+
+[ -f iOS/Local.xcconfig ] || {
+  echo "iOS/Local.xcconfig not found. Create it with DEVELOPMENT_TEAM = <your team id> (see docs/HACKING.md)."
+  exit 1
+}
+
+# Only paired iPhones are auto-selected.
+default_device_id() {
+  local f
+  f="$(mktemp)"
+  if xcrun devicectl list devices -j "$f" >/dev/null 2>&1; then
+    jq -r '[.result.devices[]
+      | select(.hardwareProperties.deviceType == "iPhone"
+        and .connectionProperties.pairingState == "paired")]
+      | .[0].identifier // empty' "$f"
+  fi
+  rm -f "$f"
+}
+DEVICE_ID="${DEVICE_ID:-$(default_device_id)}"
+[ -n "$DEVICE_ID" ] || {
+  echo "No paired iPhone found. Connect and unlock it, or pass DEVICE_ID=<id>."
+  exit 1
+}
+
+xcodebuild \
+  -project "$XCODE_PROJECT" \
+  -scheme "$XCODE_SCHEME" \
+  -configuration Debug \
+  -derivedDataPath "$DERIVED_DATA" \
+  -destination 'generic/platform=iOS' \
+  -xcconfig iOS/Local.xcconfig \
+  -allowProvisioningUpdates \
+  | xcbeautify
+
+BUNDLE_ID="$(bundle_id "$DEVICE_APP_PATH")"
+echo "Installing $BUNDLE_ID on device $DEVICE_ID"
+xcrun devicectl device install app --device "$DEVICE_ID" "$DEVICE_APP_PATH"
+xcrun devicectl device process launch --device "$DEVICE_ID" "$BUNDLE_ID" || {
+  echo "Launch failed. The app is installed. If the error says the device is locked, unlock the phone and re-run."
+  echo "If it says the profile is untrusted: Settings > General > VPN & Device Management > your Apple ID > Trust."
+  exit 1
+}

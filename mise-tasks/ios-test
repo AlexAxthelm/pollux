@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#MISE description="Run the Swift tests on the simulator"
+#MISE depends=["ios-build"]
+set -euo pipefail
+cd "$MISE_PROJECT_ROOT"
+source scripts/ios-env.sh
+
+SIM_ID="$(sim_id)"
+# pipefail: see ios-xcodebuild.
+xcodebuild test \
+  -project "$XCODE_PROJECT" \
+  -scheme PolluxTests \
+  -derivedDataPath "$DERIVED_DATA" \
+  -destination "platform=iOS Simulator,id=$SIM_ID" \
+  | xcbeautify
