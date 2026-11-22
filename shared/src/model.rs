@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::capabilities::player::MediaSource;
 use crate::domain::{Episode, EpisodeSortOrder, EpisodeSource, Subscription};
-use crate::settings::Settings;
+use crate::settings::{SettingChange, Settings, SettingsScope};
 use crate::theme::{ThemeId, ThemeMode};
 use crate::view_model::DownloadNotice;
 
@@ -100,6 +100,10 @@ pub struct Model {
     // unparseable), and false while the load is pending or the read failed. Saving is held
     // until then, so a failed read can't be overwritten by the next change (US-0235).
     pub settings_loaded: bool,
+    // Changes the user made while the launch load was pending, in order. They are applied in
+    // memory at once, then replayed over what was saved when it arrives, and saved. They stay
+    // here, unsaved, if the read failed.
+    pub pending_settings: Vec<(SettingsScope, SettingChange)>,
 }
 
 /// The player's current episode and transport state. Holds its own `Episode` copy so

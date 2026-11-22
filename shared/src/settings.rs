@@ -226,6 +226,13 @@ fn level_mut<'a>(model: &'a mut Model, scope: &SettingsScope) -> &'a mut Setting
     }
 }
 
+/// Asks the shell to store one level's settings as they are now.
+fn save(model: &mut Model, scope: SettingsScope) -> Cmd {
+    let json = level_mut(model, &scope).to_json();
+    Command::request_from_shell(StorageOperation::SaveSettings { scope, json })
+        .then_send(|r| Event::SettingsSaved(Box::new(r)))
+}
+
 /// The saved settings arrived at launch. Nothing saved, a failed read or a document that
 /// can't be read all leave that level's settings at their defaults: the player works either
 /// way, and refusing to start over a preference would be worse.
@@ -235,31 +242,45 @@ fn level_mut<'a>(model: &'a mut Model, scope: &SettingsScope) -> &'a mut Setting
 /// which replaces it. A failed read is different: the saved documents may be fine, so saving
 /// is held for every level and a change stays in memory only, rather than overwriting them
 /// (US-0235).
+///
+/// Changes made while the load was pending are replayed, in order, over what was saved (resets
+/// included), and each level they touched is saved once. They are not lost to the saved
+/// document replacing the level, and are saved even when nothing had been saved before.
 pub(crate) fn on_loaded(model: &mut Model, result: StorageResult) -> Cmd {
-    if let StorageResult::AllSettings(saved) = result {
-        for SavedSettings { scope, json } in saved {
-            if let Some(settings) = Settings::from_json(&json) {
-                *level_mut(model, &scope) = settings;
-            }
+    let StorageResult::AllSettings(saved) = result else {
+        return render();
+    };
+    for SavedSettings { scope, json } in saved {
+        if let Some(settings) = Settings::from_json(&json) {
+            *level_mut(model, &scope) = settings;
         }
-        model.settings_loaded = true;
     }
-    render()
+    model.settings_loaded = true;
+
+    let mut touched: Vec<SettingsScope> = Vec::new();
+    for (scope, change) in std::mem::take(&mut model.pending_settings) {
+        level_mut(model, &scope).apply(change);
+        if !touched.contains(&scope) {
+            touched.push(scope);
+        }
+    }
+    let mut cmd = render();
+    for scope in touched {
+        cmd = cmd.and(save(model, scope));
+    }
+    cmd
 }
 
-/// The user set, or reset, one setting at one level. It takes effect at once, then is saved,
-/// unless the saved settings haven't been read successfully yet, in which case it is not
-/// saved.
+/// The user set, or reset, one setting at one level. It takes effect at once, then is saved.
+/// While the saved settings haven't been read yet it is kept to be saved when they have been
+/// (see `on_loaded`); if that read fails it stays in memory only.
 pub(crate) fn set(model: &mut Model, scope: SettingsScope, change: SettingChange) -> Cmd {
-    let level = level_mut(model, &scope);
-    level.apply(change);
+    level_mut(model, &scope).apply(change);
     if !model.settings_loaded {
+        model.pending_settings.push((scope, change));
         return render();
     }
-    let json = level_mut(model, &scope).to_json();
-    Command::request_from_shell(StorageOperation::SaveSettings { scope, json })
-        .then_send(|r| Event::SettingsSaved(Box::new(r)))
-        .and(render())
+    save(model, scope).and(render())
 }
 
 /// The settings write resolved. A failure leaves the change in effect for this run but
@@ -969,5 +990,129 @@ mod tests {
                 is_set: false
             }
         );
+    }
+
+    // -- Changes made while the launch load is pending --
+
+    fn saves(effects: &[Effect]) -> Vec<(SettingsScope, String)> {
+        storage_ops(effects)
+            .into_iter()
+            .filter_map(|op| match op {
+                StorageOperation::SaveSettings { scope, json } => Some((scope, json)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_change_made_before_the_load_answers_is_kept_over_what_was_saved_and_saved() {
+        let mut model = Model::default();
+        let before = send(
+            &mut model,
+            Event::SetGlobalSetting(SettingChange::SkipForwardSecs(Some(60))),
+        );
+        assert!(storage_ops(&before).is_empty());
+
+        let effects = send(
+            &mut model,
+            loaded(r#"{"skip_forward_secs":45,"skip_back_secs":10}"#),
+        );
+        assert_eq!(model.global_settings.skip_forward_secs, Some(60));
+        // What was saved besides the change is kept.
+        assert_eq!(model.global_settings.skip_back_secs, Some(10));
+        assert_eq!(
+            saves(&effects),
+            vec![(
+                SettingsScope::Global,
+                r#"{"skip_back_secs":10,"skip_forward_secs":60}"#.to_string()
+            )]
+        );
+        assert!(effects.iter().any(|e| matches!(e, Effect::Render(_))));
+        assert!(model.pending_settings.is_empty());
+    }
+
+    #[test]
+    fn a_change_made_before_the_load_is_saved_even_when_nothing_was_saved() {
+        let mut model = Model::default();
+        send(
+            &mut model,
+            set_sub("a", SettingChange::SkipBackSecs(Some(5))),
+        );
+        let effects = send(&mut model, nothing_saved());
+        assert_eq!(
+            saves(&effects),
+            vec![(sub("a"), r#"{"skip_back_secs":5}"#.to_string())]
+        );
+    }
+
+    #[test]
+    fn a_reset_made_before_the_load_removes_what_was_saved() {
+        let mut model = Model::default();
+        send(
+            &mut model,
+            Event::SetGlobalSetting(SettingChange::SkipForwardSecs(None)),
+        );
+        let effects = send(
+            &mut model,
+            loaded(r#"{"skip_forward_secs":45,"skip_back_secs":10}"#),
+        );
+        assert_eq!(model.global_settings.skip_forward_secs, None);
+        assert_eq!(
+            saves(&effects),
+            vec![(
+                SettingsScope::Global,
+                r#"{"skip_back_secs":10}"#.to_string()
+            )]
+        );
+    }
+
+    #[test]
+    fn several_changes_before_the_load_apply_in_order_and_save_each_level_once() {
+        let mut model = Model::default();
+        for event in [
+            Event::SetGlobalSetting(SettingChange::SkipForwardSecs(Some(60))),
+            set_sub("a", SettingChange::SkipBackSecs(Some(5))),
+            Event::SetGlobalSetting(SettingChange::SkipForwardSecs(Some(90))),
+        ] {
+            send(&mut model, event);
+        }
+        let effects = send(&mut model, nothing_saved());
+        assert_eq!(model.global_settings.skip_forward_secs, Some(90));
+        assert_eq!(
+            saves(&effects),
+            vec![
+                (
+                    SettingsScope::Global,
+                    r#"{"skip_forward_secs":90}"#.to_string()
+                ),
+                (sub("a"), r#"{"skip_back_secs":5}"#.to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_change_before_a_failed_read_stays_in_memory_and_is_not_saved() {
+        let mut model = Model::default();
+        send(
+            &mut model,
+            Event::SetGlobalSetting(SettingChange::SkipForwardSecs(Some(60))),
+        );
+        let effects = send(&mut model, read_failed());
+        assert!(storage_ops(&effects).is_empty());
+        assert_eq!(model.global_settings.skip_forward_secs, Some(60));
+        assert!(!model.settings_loaded);
+        assert_eq!(model.pending_settings.len(), 1);
+    }
+
+    #[test]
+    fn changes_after_the_load_save_at_once_and_queue_nothing() {
+        let mut model = Model::default();
+        send(&mut model, nothing_saved());
+        let effects = send(
+            &mut model,
+            Event::SetGlobalSetting(SettingChange::SkipForwardSecs(Some(60))),
+        );
+        assert_eq!(saves(&effects).len(), 1);
+        assert!(model.pending_settings.is_empty());
     }
 }
