@@ -80,8 +80,8 @@ above, only three **Playback** settings exist so far:
 
 Each row is a picker. A setting the user hasn't set reads "(default)"; one they have set shows
 a "Reset to 30 s" button instead. Choosing the default's own number is still a choice, so it
-counts as set (see [[settings-cascade]]). The core accepts any whole number of seconds, and the
-screen only offers the presets, plus a saved value that isn't one of them so it can still be seen.
+counts as set (see [[settings-cascade]]). The core accepts whole seconds within a range (a skip of 1 to 3600, a rewind of 0 to 600; a saved
+value outside it is treated as unset), and the screen only offers the presets.
 
 - **The player follows them.** The skip buttons and their labels, the rewind when resuming and
   the rewind when starting an episode all read the settings. A change applies at once, to the

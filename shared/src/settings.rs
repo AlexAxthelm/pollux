@@ -14,6 +14,8 @@
 //! The global and subscription levels exist so far. Each is saved as one JSON document, written
 //! by the core and kept opaque by the shell (ADR-0045).
 
+use std::ops::RangeInclusive;
+
 use crux_core::{render::render, Command};
 use facet::Facet;
 use serde::{Deserialize, Serialize};
@@ -54,6 +56,14 @@ pub struct Settings {
 
 /// The keys this build knows. Anything else in a document is kept in `Settings::unknown`.
 const KNOWN_KEYS: [&str; 3] = ["skip_forward_secs", "skip_back_secs", "resume_rewind_secs"];
+
+/// The seconds a skip setting accepts. A skip of 0 would do nothing, and a skip past an hour is
+/// not a skip, so a saved value outside this is treated as a bad value (unset) rather than
+/// obeyed, as from a hand-edited document or a build with different limits.
+pub(crate) const SKIP_SECS_RANGE: RangeInclusive<u32> = 1..=3600;
+
+/// The seconds the rewind on resume accepts. 0 is valid, and means no rewind.
+pub(crate) const REWIND_SECS_RANGE: RangeInclusive<u32> = 0..=600;
 
 /// The level a [`Settings`] belongs to: the global one, or one subscription's. A playlist
 /// will add a variant carrying its id, as `EpisodeSource` does.
@@ -99,22 +109,23 @@ impl Settings {
     }
 
     /// Reads stored JSON, keeping what it can. `None` only when the document isn't a JSON
-    /// object at all. Within an object each key is read alone: a known one that is null or not
-    /// a whole number that fits is unset, and the others still count. Keys that aren't known
-    /// are kept as they are. It doesn't try to repair anything, so a truncated document is
-    /// unreadable as a whole.
+    /// object at all. Within an object each key is read alone: a known one that is null, not a
+    /// whole number that fits, or outside the range its setting accepts is unset, and the
+    /// others still count. Keys that aren't known are kept as they are. It doesn't try to
+    /// repair anything, so a truncated document is unreadable as a whole.
     pub(crate) fn from_json(json: &str) -> Option<Self> {
         let value: serde_json::Value = serde_json::from_str(json).ok()?;
         let map = value.as_object()?;
-        let secs = |key: &str| {
+        let secs = |key: &str, accepts: &RangeInclusive<u32>| {
             map.get(key)
                 .and_then(serde_json::Value::as_u64)
                 .and_then(|n| u32::try_from(n).ok())
+                .filter(|n| accepts.contains(n))
         };
         Some(Self {
-            skip_forward_secs: secs("skip_forward_secs"),
-            skip_back_secs: secs("skip_back_secs"),
-            resume_rewind_secs: secs("resume_rewind_secs"),
+            skip_forward_secs: secs("skip_forward_secs", &SKIP_SECS_RANGE),
+            skip_back_secs: secs("skip_back_secs", &SKIP_SECS_RANGE),
+            resume_rewind_secs: secs("resume_rewind_secs", &REWIND_SECS_RANGE),
             unknown: map
                 .iter()
                 .filter(|(key, _)| !KNOWN_KEYS.contains(&key.as_str()))
@@ -471,6 +482,63 @@ mod tests {
             let s = Settings::from_json(&doc).unwrap();
             assert_eq!(s.skip_forward_secs, None, "{bad}");
             assert_eq!(s.skip_back_secs, Some(20), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_value_outside_what_a_setting_accepts_is_unset_and_the_others_stay() {
+        // A skip of 0 does nothing, and a huge one isn't a skip.
+        for bad in [0, 3601, u32::MAX] {
+            let doc = format!(
+                r#"{{"skip_forward_secs":{bad},"skip_back_secs":{bad},"resume_rewind_secs":5}}"#
+            );
+            let s = Settings::from_json(&doc).unwrap();
+            assert_eq!(s.skip_forward_secs, None, "{bad}");
+            assert_eq!(s.skip_back_secs, None, "{bad}");
+            assert_eq!(s.resume_rewind_secs, Some(5), "{bad}");
+        }
+        let s = Settings::from_json(r#"{"resume_rewind_secs":601,"skip_back_secs":20}"#).unwrap();
+        assert_eq!(s.resume_rewind_secs, None);
+        assert_eq!(s.skip_back_secs, Some(20));
+    }
+
+    #[test]
+    fn the_edges_of_what_a_setting_accepts_are_kept() {
+        let s = Settings::from_json(
+            r#"{"skip_forward_secs":1,"skip_back_secs":3600,"resume_rewind_secs":0}"#,
+        )
+        .unwrap();
+        assert_eq!(s.skip_forward_secs, Some(1));
+        assert_eq!(s.skip_back_secs, Some(3600));
+        // Zero is a value for the rewind: it turns the rewind off.
+        assert_eq!(s.resume_rewind_secs, Some(0));
+        let s = Settings::from_json(r#"{"resume_rewind_secs":600}"#).unwrap();
+        assert_eq!(s.resume_rewind_secs, Some(600));
+    }
+
+    #[test]
+    fn an_out_of_range_value_is_dropped_when_saved_again() {
+        let s = Settings::from_json(r#"{"skip_forward_secs":0,"other":1}"#).unwrap();
+        assert_eq!(s.to_json(), r#"{"other":1}"#);
+    }
+
+    #[test]
+    fn the_presets_the_app_offers_are_all_accepted() {
+        // The shell's presets (skip 10..90, rewind 0..10) and the app defaults.
+        for secs in [
+            10,
+            15,
+            30,
+            45,
+            60,
+            90,
+            SKIP_FORWARD_SECS,
+            SKIP_BACKWARD_SECS,
+        ] {
+            assert!(SKIP_SECS_RANGE.contains(&secs), "{secs}");
+        }
+        for secs in [0, 3, 5, 10, RESUME_REWIND_SECS] {
+            assert!(REWIND_SECS_RANGE.contains(&secs), "{secs}");
         }
     }
 
