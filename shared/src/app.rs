@@ -34,9 +34,16 @@ impl App for Pollux {
     type Effect = Effect;
 
     fn update(&self, event: Event, model: &mut Model) -> Command<Effect, Event> {
+        // Playback that reads the skip or rewind waits for the launch settings read, so the
+        // first press doesn't use the defaults. See `waits_for_settings`.
+        if model.settings_load_pending && waits_for_settings(&event) {
+            model.deferred_playback.push(event);
+            return Command::done();
+        }
         match event {
             Event::Started => {
                 model.loading = true;
+                model.settings_load_pending = true;
                 // Interrupted downloads are deliberately NOT resumed here: the core is
                 // also created when iOS launches the app in the background (for a
                 // refresh task), and that launch must stay metadata-only. They resume
@@ -695,7 +702,16 @@ impl App for Pollux {
                 player::on_response(model, session, *result)
             }
             Event::PlayContextLoaded(result) => player::on_context_loaded(model, *result),
-            Event::SettingsLoaded(result) => settings::on_loaded(model, *result),
+            Event::SettingsLoaded(result) => {
+                let mut cmd = settings::on_loaded(model, *result);
+                // Answered, even if the read failed: playback goes ahead with the defaults
+                // rather than waiting for settings that aren't coming.
+                model.settings_load_pending = false;
+                for event in std::mem::take(&mut model.deferred_playback) {
+                    cmd = cmd.and(self.update(event, model));
+                }
+                cmd
+            }
             Event::SetGlobalSetting(change) => settings::set(model, SettingsScope::Global, change),
             Event::SetSubscriptionSetting {
                 subscription_id,
@@ -747,6 +763,21 @@ impl App for Pollux {
             settings: settings::global_view(model),
         }
     }
+}
+
+/// Whether `event` waits for the launch settings read: the playback events that read the skip
+/// or the rewind, plus pause, so a press and its undo keep their order. Everything else, and
+/// all playback after the read has answered, runs at once.
+fn waits_for_settings(event: &Event) -> bool {
+    matches!(
+        event,
+        Event::PlayEpisode(_)
+            | Event::Play
+            | Event::Pause
+            | Event::TogglePlay
+            | Event::SkipForward
+            | Event::SkipBack
+    )
 }
 
 /// Builds the details-page view from the selected subscription and its episodes.

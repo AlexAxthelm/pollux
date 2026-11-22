@@ -232,3 +232,116 @@ fn changing_and_resetting_a_subscription_setting_applies_to_the_next_skip() {
     assert_eq!(active(&model).position_secs, 90);
     assert_eq!(view_player(&model).skip_forward_secs, 30);
 }
+
+// -- The first press after launch waits for the saved settings --
+
+fn saved_rewind(secs: u32) -> Event {
+    Event::SettingsLoaded(Box::new(crate::StorageResult::AllSettings(vec![
+        crate::SavedSettings {
+            scope: crate::SettingsScope::Subscription("sub".into()),
+            json: format!(r#"{{"resume_rewind_secs":{secs}}}"#),
+        },
+    ])))
+}
+
+fn partly_played(position: u32) -> Model {
+    let mut e = episode("e1");
+    e.playback_status = PlaybackStatus::InProgress;
+    e.playback_position_secs = Some(position);
+    model_with(vec![e])
+}
+
+#[test]
+fn a_play_before_the_settings_arrive_waits_and_then_uses_the_saved_rewind() {
+    let mut model = partly_played(100);
+    send(&mut model, Event::Started);
+
+    let early = send(&mut model, Event::PlayEpisode("e1".into()));
+    assert!(player_ops(&early).is_empty(), "nothing plays yet");
+    assert!(model.active_playback.is_none());
+
+    let effects = send(&mut model, saved_rewind(10));
+    assert!(matches!(
+        player_ops(&effects).as_slice(),
+        [PlayerOperation::Load { start_secs: 90, .. }]
+    ));
+    assert!(model.deferred_playback.is_empty());
+}
+
+#[test]
+fn resuming_before_the_settings_arrive_waits_and_uses_the_saved_rewind() {
+    let mut model = with_settings(Settings::default());
+    send(&mut model, Event::PlayEpisode("e1".into()));
+    tick(&mut model, 50);
+    send(&mut model, Event::Pause);
+    // The app is relaunched: the episode is restored, paused, and the settings are loading.
+    model.settings_load_pending = true;
+
+    let early = send(&mut model, Event::Play);
+    assert!(player_ops(&early).is_empty());
+    assert_eq!(active(&model).position_secs, 50);
+
+    send(&mut model, saved_rewind(10));
+    assert_eq!(active(&model).position_secs, 40);
+}
+
+#[test]
+fn a_failed_read_lets_playback_go_ahead_with_the_defaults() {
+    let mut model = partly_played(100);
+    send(&mut model, Event::Started);
+    send(&mut model, Event::PlayEpisode("e1".into()));
+
+    let effects = send(
+        &mut model,
+        Event::SettingsLoaded(Box::new(crate::StorageResult::Error("db locked".into()))),
+    );
+    assert!(matches!(
+        player_ops(&effects).as_slice(),
+        [PlayerOperation::Load { start_secs: 97, .. }]
+    ));
+    assert!(!model.settings_load_pending);
+}
+
+#[test]
+fn deferred_presses_keep_their_order() {
+    let mut model = with_settings(Settings::default());
+    send(&mut model, Event::PlayEpisode("e1".into()));
+    send(&mut model, Event::Pause);
+    model.settings_load_pending = true;
+
+    send(&mut model, Event::Play);
+    send(&mut model, Event::Pause);
+    send(&mut model, saved_rewind(3));
+    // Play, then Pause: it ends paused, as pressed.
+    assert!(!active(&model).is_playing);
+}
+
+#[test]
+fn nothing_waits_once_the_settings_have_answered_or_when_the_app_never_started() {
+    // A model that never started has nothing pending, so it plays at once.
+    let mut model = with_settings(Settings::default());
+    let effects = send(&mut model, Event::PlayEpisode("e1".into()));
+    assert!(!player_ops(&effects).is_empty());
+
+    // After the read has answered, later presses are not held.
+    let mut model = partly_played(100);
+    send(&mut model, Event::Started);
+    send(&mut model, saved_rewind(10));
+    let effects = send(&mut model, Event::PlayEpisode("e1".into()));
+    assert!(matches!(
+        player_ops(&effects).as_slice(),
+        [PlayerOperation::Load { start_secs: 90, .. }]
+    ));
+}
+
+#[test]
+fn events_that_do_not_read_playback_settings_are_not_held() {
+    let mut model = with_settings(Settings::default());
+    model.settings_load_pending = true;
+    send(
+        &mut model,
+        Event::SetGlobalSetting(crate::SettingChange::SkipForwardSecs(Some(60))),
+    );
+    assert!(model.deferred_playback.is_empty());
+    assert_eq!(model.global_settings.skip_forward_secs, Some(60));
+}

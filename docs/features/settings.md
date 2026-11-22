@@ -83,6 +83,10 @@ a "Reset to 30 s" button instead. Choosing the default's own number is still a c
 counts as set (see [[settings-cascade]]). The core accepts whole seconds within a range (a skip of 1 to 3600, a rewind of 0 to 600; a saved
 value outside it is treated as unset), and the screen only offers the presets.
 
+- **The first press waits for them.** At launch, a play or skip pressed before the saved settings
+  have been read is held for a moment and then runs with them, not the defaults. 
+  Blocking is okay here, because the expected block is on the order of milliseconds.
+  If the read fails, it runs with the defaults.
 - **The player follows them.** The skip buttons and their labels, the rewind when resuming and
   the rewind when starting an episode all read the settings. A change applies at once, to the
   episode that is playing.

@@ -104,6 +104,12 @@ pub struct Model {
     // memory at once, then replayed over what was saved when it arrives, and saved. They stay
     // here, unsaved, if the read failed.
     pub pending_settings: Vec<(SettingsScope, SettingChange)>,
+    // True from `Started` until the launch settings read answers, whether or not it succeeded.
+    // Playback events wait in `deferred_playback` meanwhile, so the first Play uses the saved
+    // skip and rewind instead of the defaults, which a late `SettingsLoaded` could not undo.
+    // False in any model that never started, so nothing waits there.
+    pub settings_load_pending: bool,
+    pub deferred_playback: Vec<crate::Event>,
 }
 
 /// The player's current episode and transport state. Holds its own `Episode` copy so
