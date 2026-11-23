@@ -322,6 +322,11 @@ pub(crate) fn on_saved(_result: StorageResult) -> Cmd {
 mod tests {
     use super::*;
 
+    /// A document the test expects to be readable.
+    fn parsed(json: &str) -> Settings {
+        Settings::from_json(json).expect("the test document is a JSON object")
+    }
+
     fn skip_forward(secs: u32) -> Settings {
         Settings {
             skip_forward_secs: Some(secs),
@@ -479,15 +484,13 @@ mod tests {
             resume_rewind_secs: Some(5),
             ..Settings::default()
         };
-        assert_eq!(Settings::from_json(&s.to_json()).unwrap(), s);
+        assert_eq!(parsed(&s.to_json()), s);
     }
 
     #[test]
     fn one_bad_value_does_not_cost_the_others() {
-        let s = Settings::from_json(
-            r#"{"skip_forward_secs":"sixty","skip_back_secs":20,"resume_rewind_secs":-3}"#,
-        )
-        .unwrap();
+        let s =
+            parsed(r#"{"skip_forward_secs":"sixty","skip_back_secs":20,"resume_rewind_secs":-3}"#);
         assert_eq!(
             s,
             Settings {
@@ -497,7 +500,7 @@ mod tests {
         );
         for bad in ["null", "1.5", "99999999999", "true", "[]"] {
             let doc = format!(r#"{{"skip_forward_secs":{bad},"skip_back_secs":20}}"#);
-            let s = Settings::from_json(&doc).unwrap();
+            let s = parsed(&doc);
             assert_eq!(s.skip_forward_secs, None, "{bad}");
             assert_eq!(s.skip_back_secs, Some(20), "{bad}");
         }
@@ -510,33 +513,30 @@ mod tests {
             let doc = format!(
                 r#"{{"skip_forward_secs":{bad},"skip_back_secs":{bad},"resume_rewind_secs":5}}"#
             );
-            let s = Settings::from_json(&doc).unwrap();
+            let s = parsed(&doc);
             assert_eq!(s.skip_forward_secs, None, "{bad}");
             assert_eq!(s.skip_back_secs, None, "{bad}");
             assert_eq!(s.resume_rewind_secs, Some(5), "{bad}");
         }
-        let s = Settings::from_json(r#"{"resume_rewind_secs":601,"skip_back_secs":20}"#).unwrap();
+        let s = parsed(r#"{"resume_rewind_secs":601,"skip_back_secs":20}"#);
         assert_eq!(s.resume_rewind_secs, None);
         assert_eq!(s.skip_back_secs, Some(20));
     }
 
     #[test]
     fn the_edges_of_what_a_setting_accepts_are_kept() {
-        let s = Settings::from_json(
-            r#"{"skip_forward_secs":1,"skip_back_secs":3600,"resume_rewind_secs":0}"#,
-        )
-        .unwrap();
+        let s = parsed(r#"{"skip_forward_secs":1,"skip_back_secs":3600,"resume_rewind_secs":0}"#);
         assert_eq!(s.skip_forward_secs, Some(1));
         assert_eq!(s.skip_back_secs, Some(3600));
         // Zero is a value for the rewind: it turns the rewind off.
         assert_eq!(s.resume_rewind_secs, Some(0));
-        let s = Settings::from_json(r#"{"resume_rewind_secs":600}"#).unwrap();
+        let s = parsed(r#"{"resume_rewind_secs":600}"#);
         assert_eq!(s.resume_rewind_secs, Some(600));
     }
 
     #[test]
     fn an_out_of_range_value_is_dropped_when_saved_again() {
-        let s = Settings::from_json(r#"{"skip_forward_secs":0,"other":1}"#).unwrap();
+        let s = parsed(r#"{"skip_forward_secs":0,"other":1}"#);
         assert_eq!(s.to_json(), r#"{"other":1}"#);
     }
 
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn missing_keys_are_unset() {
-        let s = Settings::from_json(r#"{"skip_back_secs":20}"#).unwrap();
+        let s = parsed(r#"{"skip_back_secs":20}"#);
         assert_eq!(
             s,
             Settings {
@@ -584,18 +584,17 @@ mod tests {
                 ..Settings::default()
             }
         );
-        assert_eq!(Settings::from_json("{}").unwrap(), Settings::default());
+        assert_eq!(parsed("{}"), Settings::default());
     }
 
     #[test]
     fn unknown_keys_are_kept_when_saved_again() {
-        let mut s = Settings::from_json(
-            r#"{"skip_back_secs":20,"from_a_newer_version":{"on":true},"another":3}"#,
-        )
-        .unwrap();
+        let mut s =
+            parsed(r#"{"skip_back_secs":20,"from_a_newer_version":{"on":true},"another":3}"#);
         assert_eq!(s.skip_back_secs, Some(20));
         s.apply(SettingChange::SkipForwardSecs(Some(60)));
-        let saved: serde_json::Value = serde_json::from_str(&s.to_json()).unwrap();
+        let saved: serde_json::Value =
+            serde_json::from_str(&s.to_json()).expect("to_json writes valid JSON");
         assert_eq!(
             saved,
             serde_json::json!({
@@ -609,14 +608,14 @@ mod tests {
 
     #[test]
     fn resetting_a_known_key_removes_it_but_keeps_the_unknown_ones() {
-        let mut s = Settings::from_json(r#"{"skip_back_secs":20,"other":1}"#).unwrap();
+        let mut s = parsed(r#"{"skip_back_secs":20,"other":1}"#);
         s.apply(SettingChange::SkipBackSecs(None));
         assert_eq!(s.to_json(), r#"{"other":1}"#);
     }
 
     #[test]
     fn a_bad_known_value_is_dropped_when_saved_but_unknown_keys_stay() {
-        let s = Settings::from_json(r#"{"skip_back_secs":"x","other":1}"#).unwrap();
+        let s = parsed(r#"{"skip_back_secs":"x","other":1}"#);
         assert_eq!(s.to_json(), r#"{"other":1}"#);
     }
 
@@ -688,7 +687,7 @@ mod tests {
             panic!("expected one save, got {ops:?}");
         };
         assert_eq!(
-            Settings::from_json(json).unwrap(),
+            parsed(json),
             Settings {
                 skip_back_secs: Some(10),
                 resume_rewind_secs: Some(5),
