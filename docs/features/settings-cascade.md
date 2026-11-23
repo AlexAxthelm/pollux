@@ -122,8 +122,10 @@ the levels that apply, most local first, and returns every setting with a concre
 player calls it with the episode's own subscription's settings, then the global ones, so a
 subscription that sets a skip or rewind beats the global value and one that leaves it unset
 follows it. Adding a level (a playlist on the route) is adding a layer, not changing the
-resolver. Resolution happens on the user's action or when playback starts, never on every
-position tick.
+resolver. Resolution is not cached: it runs where a value is needed (a skip, a resume, starting
+an episode) and when the player view and the settings pages are built, which is on every render,
+position ticks included. It is a few comparisons, so that is fine; if it ever isn't, the resolved
+values can be cached on the active playback.
 
 Each settings page shows, for each setting, the value in effect, what a reset would give, and
 whether it is set:

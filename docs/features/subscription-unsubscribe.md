@@ -42,6 +42,18 @@ A subscription has its own saved settings ([[settings-cascade]], [[ADR-0045 Sett
 drop it, or a later change for the same id would save a document for a subscription that no longer
 exists, and the player could resolve an episode against settings of a show that is gone.
 
+Two guards belong with that flow, because `SetSubscriptionSetting` doesn't check that the id is
+still subscribed:
+
+- A save that is still in flight when the subscription is removed, or any later change for the
+  removed id, would re-create the settings row after the shell deleted it. The row would then be
+  loaded back into `subscription_settings` at every launch, invisible and never deleted. The
+  core should ignore a change for an id that isn't subscribed (the settings page can only be
+  open for a subscription that exists).
+- As a backstop, settings saved for an id with no matching subscription can be dropped when the
+  settings are loaded, once the subscriptions are known. That also cleans up rows left by any
+  other path.
+
 ## User stories
 
 ```base

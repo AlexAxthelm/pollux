@@ -246,8 +246,11 @@ fn is_current(model: &Model, session: u32) -> bool {
 /// playback can start from one, most local first, so callers don't change when they do. The
 /// subscription is the episode's own, which is always in the stack, whatever started playback.
 ///
-/// Resolved where it is used, on the listener's action, not cached: a change to a setting
-/// applies to the next skip or resume. Never call it from the position tick.
+/// Resolved where it is used, not cached, so a change to a setting applies to the next skip or
+/// resume. That includes `player_view`, which runs on every render, position ticks among them:
+/// it is a hash lookup and a few comparisons, nothing next to the rest of the render. If a
+/// measurement ever says otherwise, cache the resolved values on `ActivePlayback` and refresh
+/// them when a setting or the episode changes.
 fn playback_settings(model: &Model, episode: &Episode) -> ResolvedSettings {
     let subscription = model.subscription_settings.get(&episode.subscription_id);
     resolve(subscription.into_iter().chain([&model.global_settings]))

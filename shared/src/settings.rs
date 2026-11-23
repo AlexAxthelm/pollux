@@ -168,8 +168,8 @@ impl Default for ResolvedSettings {
 /// setting the first layer that sets it wins, and a setting no layer sets takes the app
 /// default. Settings resolve independently, so one layer can win some and lose others.
 ///
-/// Cheap enough to call whenever a value is needed, but not from a loop that runs on every
-/// position tick: resolve once when playback starts or on the user's action.
+/// Cheap, a few comparisons per setting, so it is called wherever a value is needed, including
+/// from the player view on every render. Nothing is cached: a change applies on the next call.
 pub fn resolve<'a>(layers: impl IntoIterator<Item = &'a Settings> + Clone) -> ResolvedSettings {
     let defaults = ResolvedSettings::default();
     let first = |field: fn(&Settings) -> Option<u32>, default: u32| {
@@ -299,6 +299,10 @@ pub(crate) fn on_loaded(model: &mut Model, result: StorageResult) -> Cmd {
 /// The user set, or reset, one setting at one level. It takes effect at once, then is saved.
 /// While the saved settings haven't been read yet it is kept to be saved when they have been
 /// (see `on_loaded`); if that read fails it stays in memory only.
+///
+/// A subscription id isn't checked against the subscriptions, so a change for one that has been
+/// removed would create a document for it. Nothing sends that today (there is no unsubscribe);
+/// see "Effect on settings" in `subscription-unsubscribe`.
 pub(crate) fn set(model: &mut Model, scope: SettingsScope, change: SettingChange) -> Cmd {
     level_mut(model, &scope).apply(change);
     if !model.settings_loaded {
