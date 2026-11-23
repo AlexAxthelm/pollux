@@ -57,23 +57,36 @@ actor DatabaseManager {
             try await deleteSubscription(id: id)
         case let .upsertFeedWithEpisodes(subscription, episodes):
             try await upsertFeedWithEpisodes(subscription: subscription, episodes: episodes)
-        case let .savePlayContext(episodeId, source):
-            try await savePlayContext(episodeId: episodeId, source: source)
-        case .loadPlayContext:
-            try loadPlayContext()
-        case .clearPlayContext:
-            try await clearPlayContext()
         case let .updateRefreshState(subscriptionId, lastRefreshed, lastRefreshError, retryAfterUntil):
             try await updateRefreshState(
                 subscriptionId: subscriptionId, lastRefreshed: lastRefreshed,
                 lastRefreshError: lastRefreshError, retryAfterUntil: retryAfterUntil,
             )
         default:
+            try await executeAppState(operation)
+        }
+    }
+
+    /// App-wide state: the saved play context and the user's settings. `execute` routes
+    /// everything it does not handle here, and this routes on to `executeEpisode`.
+    private func executeAppState(_ operation: StorageOperation) async throws -> StorageResult {
+        switch operation {
+        case let .savePlayContext(episodeId, source):
+            try await savePlayContext(episodeId: episodeId, source: source)
+        case .loadPlayContext:
+            try loadPlayContext()
+        case .clearPlayContext:
+            try await clearPlayContext()
+        case let .saveSettings(scope, json):
+            try await saveSettings(scope: scope, json: json)
+        case .loadAllSettings:
+            try loadAllSettings()
+        default:
             try await executeEpisode(operation)
         }
     }
 
-    /// Episode-scoped storage operations. `execute` routes everything it does not
+    /// Episode-scoped storage operations. `executeAppState` routes everything it does not
     /// handle here; the `default` is unreachable (every remaining case is covered).
     private func executeEpisode(_ operation: StorageOperation) async throws -> StorageResult {
         switch operation {
@@ -176,6 +189,11 @@ actor DatabaseManager {
     private func deleteSubscription(id: String) async throws -> StorageResult {
         try await db.write { db in
             try db.execute(sql: "DELETE FROM subscriptions WHERE id = ?", arguments: [id])
+            // The subscription's own settings go with it, in the same transaction.
+            try db.execute(
+                sql: "DELETE FROM settings WHERE scope_kind = 'subscription' AND scope_id = ?",
+                arguments: [id],
+            )
         }
         return .success
     }

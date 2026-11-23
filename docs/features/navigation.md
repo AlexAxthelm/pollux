@@ -28,11 +28,14 @@ Pollux has a minimal top-level navigation model:
 
 ## Open questions
 
-- #needs-decision **Where is Settings reached from?** This note says "accessible from
-  contextual menus throughout the app, not a top-level destination". [[settings]] says
-  "accessible from a gear/settings icon in the library toolbar, or via contextual entry
-  points". The library toolbar in [[library]] lists no Settings button. All three are kept
-  as written.
+- **Where is Settings reached from?** Decided by the maintainer: global settings are reached
+  from a gear at the top right of the library screen; other settings pages are reached contextually and added as they are built. A
+  subscription's settings come from a gear icon on its page, and open a page clearly marked
+  as editing that subscription. This
+  supersedes the earlier "contextual only" wording below, kept as written: this note said
+  "accessible from contextual menus throughout the app, not a top-level destination";
+  [[settings]] said "accessible from a gear/settings icon in the library toolbar, or via
+  contextual entry points".
 
 ## Decisions
 

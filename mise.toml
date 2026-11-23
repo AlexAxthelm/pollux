@@ -1,0 +1,165 @@
+# Developer tools for Pollux. `mise install` fetches them; see docs/HACKING.md.
+# Pinned to the versions the Swift checks were last run with, so lint and format
+# results don't shift under us. Bump deliberately.
+#
+# Rust is not listed here. The setting below makes mise read rust-toolchain.toml (channel,
+# components and targets), so the toolchain is described in one place, and mise installs
+# it through rustup.
+#
+# Not managed here: cargo-swift (cargo-run-bin, pinned in the root Cargo.toml), Xcode and
+# the simulator runtime.
+[settings]
+idiomatic_version_file_enable_tools = ["rust"]
+
+# macOS only: these have no Linux builds, and the Rust CI jobs run on Linux.
+[tools]
+xcodegen = { version = "2.46.0", os = ["macos"] }
+xcbeautify = { version = "3.2.1", os = ["macos"] }
+swiftlint = { version = "0.65.0", os = ["macos"] }
+swiftformat = { version = "0.62.1", os = ["macos"] }
+
+# Shared constants for inline tasks, used as {{vars.name}}. The file tasks in
+# mise-tasks/ are not templated; they read scripts/ios-env.sh instead.
+[vars]
+ios_swift_dir = "iOS/Pollux"
+
+# ── Tasks ─────────────────────────────────────────────────────────────────────
+# Run with `mise run <task>`; list them with `mise tasks`. Short tasks live here, the
+# longer shell recipes are in mise-tasks/ (shared iOS settings in scripts/ios-env.sh).
+# `run` lists are sequential; `depends` may run in parallel, so use a `run` list when
+# order matters (cargo serialises on its build lock anyway).
+
+# Inline `run` strings use plain `sh`. Anything that pipes goes in mise-tasks/, where
+# the script sets `pipefail` itself.
+
+[tasks.check]
+description = "Every check: Rust and Swift"
+run = [{ task = "rust-all-checks" }, { task = "swift-all-checks" }]
+
+[tasks.test]
+description = "Both test suites"
+run = [{ task = "rust-test" }, { task = "ios-test" }]
+
+[tasks.lint]
+description = "Rust and Swift lint"
+run = [{ task = "rust-lint" }, { task = "swift-lint" }]
+
+[tasks.format-check]
+description = "Rust and Swift format check"
+run = [{ task = "rust-format-check" }, { task = "swift-format-check" }]
+
+[tasks.format]
+description = "Format Rust and Swift"
+run = [{ task = "rust-format" }, { task = "swift-format" }]
+
+[tasks.clean]
+description = "Clean Rust and Swift build output"
+run = [{ task = "rust-clean" }, { task = "swift-clean" }]
+
+# -- Rust --
+
+[tasks.rust-all-checks]
+description = "Rust check, test, lint, format check and lock check"
+run = [
+  { task = "rust-check" },
+  { task = "rust-test" },
+  { task = "rust-lint" },
+  { task = "rust-format-check" },
+  { task = "rust-lock-check" },
+]
+
+[tasks.rust-check]
+run = "cargo check"
+
+[tasks.rust-test]
+run = "cargo test"
+
+[tasks.rust-lint]
+run = "cargo clippy -- -D warnings"
+
+[tasks.rust-format]
+run = "cargo fmt"
+
+[tasks.rust-format-check]
+run = "cargo fmt -- --check"
+
+[tasks.rust-lock-check]
+description = "Check Cargo.lock is up to date"
+run = "cargo check --locked"
+
+[tasks.rust-build]
+run = "cargo build"
+
+[tasks.rust-clean]
+run = "cargo clean"
+
+# -- Swift --
+
+[tasks.swift-all-checks]
+description = "Swift lint and format check"
+run = [{ task = "swift-lint" }, { task = "swift-format-check" }]
+
+[tasks.swift-lint]
+run = "swiftlint lint --strict {{vars.ios_swift_dir}}"
+
+[tasks.swift-format]
+run = "swiftformat {{vars.ios_swift_dir}}"
+
+[tasks.swift-format-check]
+run = "swiftformat --lint {{vars.ios_swift_dir}}"
+
+[tasks.swift-clean]
+run = [{ task = "xcode-clean" }, { task = "swift-generated-clean" }]
+
+[tasks.xcode-clean]
+run = "rm -rf iOS/Pollux.xcodeproj"
+
+[tasks.swift-generated-clean]
+run = "rm -rf iOS/generated"
+
+# -- iOS --
+# ios-xcodebuild, ios-sim, ios-device, ios-test and package are in mise-tasks/.
+
+[tasks.typegen]
+description = "Generate Swift types from the shared Rust core"
+env = { RUST_LOG = "info" }
+run = """
+cargo run \
+  --package shared \
+  --bin codegen \
+  --features codegen,facet_typegen \
+  -- \
+    --language swift \
+    --output-dir iOS/generated
+"""
+
+[tasks.generate-project]
+description = "Rebuild the Xcode project from iOS/project.yml (typegen and package first)"
+run = [
+  { task = "typegen" },
+  { task = "package" },
+  "xcodegen --spec iOS/project.yml --project iOS",
+]
+
+[tasks.ios-build]
+description = "Typegen, package and generate the Xcode project"
+depends = ["generate-project"]
+
+[tasks.ios-clean]
+run = [
+  { task = "xcode-clean" },
+  { task = "swift-generated-clean" },
+  "rm -rf build/DerivedData",
+]
+
+[tasks.ios-rebuild]
+description = "Full rebuild from scratch"
+run = [{ task = "ios-clean" }, { task = "ios-build" }]
+
+[tasks.ios-dev]
+description = "ios-build, then open the project in Xcode"
+run = [{ task = "ios-build" }, "xed iOS"]
+
+[tasks.regenerate]
+description = "Wipe generated Swift types and regenerate"
+run = [{ task = "swift-generated-clean" }, { task = "typegen" }]

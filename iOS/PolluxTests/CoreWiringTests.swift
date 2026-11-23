@@ -76,6 +76,11 @@ private func waitForIdle(_ core: Core) async {
     }
 }
 
+private func savedGlobalSettings(_ db: DatabaseManager) async throws -> String? {
+    guard case let .allSettings(saved) = try await db.execute(.loadAllSettings) else { return nil }
+    return saved.first { $0.scope == .global }?.json
+}
+
 private func lastRefreshed(_ db: DatabaseManager, _ id: String) async throws -> Int64? {
     guard case let .subscription(sub) = try await db.execute(.getSubscription(id: id)) else { return nil }
     return sub.lastRefreshed
@@ -87,6 +92,29 @@ private func lastRefreshed(_ db: DatabaseManager, _ id: String) async throws -> 
 @MainActor
 struct CoreWiringTests {
     // MARK: Foreground
+
+    @Test(.timeLimit(.minutes(1)))
+    func aFailedSettingsReadIsRetriedWhenTheAppBecomesActive() async throws {
+        // The launch read finds no settings table, so it fails (in a throwaway database).
+        let rig = try await makeRig { db, _ in
+            try await db.db.write { try $0.execute(sql: "ALTER TABLE settings RENAME TO settings_off") }
+        }
+        await waitForIdle(rig.core)
+        // Give the launch reads, queued behind the library load, time to answer.
+        try await Task.sleep(for: .milliseconds(300))
+
+        // Changed while the saved settings can't be read: in effect, but held back from saving.
+        rig.core.update(.setGlobalSetting(.skipForwardSecs(60)))
+        #expect(rig.core.view.settings.skipForwardSecs.value == 60)
+
+        // The database recovers, and the app next comes to the foreground.
+        try await rig.db.db.write { try $0.execute(sql: "ALTER TABLE settings_off RENAME TO settings") }
+        #expect(try await savedGlobalSettings(rig.db) == nil, "nothing was saved while the read was failing")
+        rig.core.appBecameActive()
+
+        try await waitUntil { try await savedGlobalSettings(rig.db) == #"{"skip_forward_secs":60}"# }
+        #expect(rig.core.view.settings.skipForwardSecs.value == 60)
+    }
 
     @Test(.timeLimit(.minutes(1)))
     func becomingActiveRefreshesDueFeedsUsingTheirStoredValidators() async throws {
@@ -290,7 +318,9 @@ private func seedPlayContext(_ db: DatabaseManager) async throws {
 
     rig.core.update(.togglePlay)
 
-    #expect(rig.core.hasPlaybackEngine)
+    // A press in the first moments after launch waits for the saved settings (so it uses the
+    // saved rewind), so the engine appears a moment later rather than within the call.
+    try await waitUntil { rig.core.hasPlaybackEngine }
 }
 
 // MARK: - The player changes without disturbing the list

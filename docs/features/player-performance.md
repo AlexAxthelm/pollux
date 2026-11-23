@@ -62,10 +62,10 @@ Follow-up, in order:
 
 1. **Measure a release build on a device** (Instruments: Time Profiler and Energy Log)
    while playing with the episode list open, and compare against paused. If it is small,
-   stop here. Note that `make ios-xcodebuild` builds the Rust core without `--release`
-   (the Makefile's `package` target runs `cargo swift package` with no profile flag), so
-   simulator numbers are not representative. A release option in the Makefile would make
-   this repeatable.
+   stop here. Note that `mise run ios-xcodebuild` builds the Rust core without `--release`
+   (the `package` task runs `cargo swift package` with no profile flag), so
+   simulator numbers are not representative. A release option in the `package` task would
+   make this repeatable.
 2. **If it still matters, stop rendering on ticks.** The core would update its position
    without a render (rendering only on checkpoints and state changes), and the shell would
    drive the displayed position from its own clock fed by the engine. In the experiment this

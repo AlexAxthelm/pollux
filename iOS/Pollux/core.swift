@@ -107,6 +107,8 @@ class Core: ObservableObject {
     func appBecameActive() {
         update(.refreshStale)
         update(.resumePendingDownloads)
+        // If the launch read of the saved settings failed, try again; otherwise a no-op.
+        update(.retrySettingsLoad)
     }
 
     /// The app went to the background: flush the playback position (the app may be

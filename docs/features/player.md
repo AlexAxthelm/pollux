@@ -71,7 +71,7 @@ A draggable progress bar showing current position in the episode.
 Forward and back skip buttons, configurable independently:
 
 - **Default**: 30s forward, 15s back
-- **Configurable**: global default, overridable per feed (cascades global → feed)
+- **Configurable**: global default, overridable per subscription (see [[settings-cascade]])
   (see `settings.md`)
 - Button label displays the current increment (e.g. "+30" / "-15")
 - Skipping past the end or beginning of the current file does not overshoot

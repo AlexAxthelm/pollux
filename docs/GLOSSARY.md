@@ -28,8 +28,6 @@ For code-facing definitions and entity relationships, see [[DATA_MODEL]].
       RSS/Atom/JSONFeed document that the app fetches. A subscription is the
       app's record of tracking that feed. Do not use "feed" as a synonym for
       subscription in documentation or code.
-      - #needs-decision Several notes still say "per-feed" for subscription-level settings,
-        for example [[settings-cascade]] and [[subscription]]. Kept as written.
   - See also: [[DATA_MODEL]] — Subscription.
 
 - **Playlist**: a user-created query over one or more sources, with optional
@@ -97,11 +95,10 @@ For code-facing definitions and entity relationships, see [[DATA_MODEL]].
 ## Settings
 
 - **Cascading default**: a setting value inherited from a higher level in the
-  hierarchy (global → subscription → episode) unless explicitly overridden at
-  a lower level. See [[DESIGN_PRINCIPLES]] §3 for the full pattern.
+  hierarchy (global → subscription → playlist(s) → episode) unless explicitly
+  overridden at a lower level. The chain an episode uses is the context it is played
+  from; see [[ADR-0044 An episode's settings come from the context it is played from]]
+  and [[DESIGN_PRINCIPLES]] §3 for the full pattern.
   - In user-facing copy, cascading defaults are surfaced as:
     `[value] (default)` when inherited, `[value]` with a reset affordance
     when overridden.
-  - #needs-decision **Is playlist in the chain?** The definition above reads "(global →
-    subscription → episode)". [[DATA_MODEL]] adds playlist between global and episode, and
-    where playlist and show settings rank is open in [[settings-cascade]]. Kept as written.

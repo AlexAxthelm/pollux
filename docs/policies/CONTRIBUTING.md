@@ -98,7 +98,7 @@ For more information, see RMI's git practices: https://rmi.github.io/practices/g
 Before opening a PR, run checks from the repository root:
 
 ```bash
-make check
+mise run check
 ```
 
 If you need narrower loops, see `HACKING.md` for package-specific lint/test/format commands.

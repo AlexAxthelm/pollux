@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::capabilities::player::MediaSource;
 use crate::domain::{Episode, EpisodeSortOrder, EpisodeSource, Subscription};
+use crate::settings::{SettingChange, Settings, SettingsScope};
 use crate::theme::{ThemeId, ThemeMode};
 use crate::view_model::DownloadNotice;
 
@@ -87,6 +88,30 @@ pub struct Model {
     // appearance section lands and drives `Event::SetTheme`.
     pub theme_id: ThemeId,
     pub theme_mode: ThemeMode,
+
+    // The user's global settings: only the values they have overridden, so an empty one
+    // means every setting is at its app default. Set from the Settings screen. Read through
+    // `crate::settings::resolve`, never directly.
+    pub global_settings: Settings,
+    // Each subscription's overridden settings, by subscription id. A subscription with no
+    // entry has set nothing. Read through `crate::settings::resolve` with the global ones.
+    pub subscription_settings: HashMap<String, Settings>,
+    // True once the saved settings have really been answered (found, not found, or found but
+    // unparseable), and false while the load is pending or the read failed. Saving is held
+    // until then, so a failed read can't be overwritten by the next change (US-0235).
+    pub settings_loaded: bool,
+    // Changes the user made while the launch load was pending, in order. They are applied in
+    // memory at once, then replayed over what was saved when it arrives, and saved. They stay
+    // here, unsaved, if the read failed.
+    pub pending_settings: Vec<(SettingsScope, SettingChange)>,
+    // True from `Started` until the launch settings read answers, whether or not it succeeded.
+    // Playback events wait in `deferred_playback` meanwhile, so the first Play uses the saved
+    // skip and rewind instead of the defaults, which a late `SettingsLoaded` could not undo.
+    // False in any model that never started, so nothing waits there.
+    pub settings_load_pending: bool,
+    // A settings read has been requested and not answered, so a retry doesn't send a second.
+    pub settings_load_in_flight: bool,
+    pub deferred_playback: Vec<crate::Event>,
 }
 
 /// The player's current episode and transport state. Holds its own `Episode` copy so

@@ -83,6 +83,7 @@ This is a global setting (see [[settings]]).
 
 The library toolbar contains:
 - **Add subscription** button — primary entrypoint for subscribing to a new feed
+- **Settings** gear, at the top right — opens the global settings ([[settings]]). *As built:* a gear next to Refresh all, which pushes the Settings screen.
 - *(Later)* **Search / filter** input — find a specific show or playlist by name
 
 If the toolbar is sparse, "Add subscription" placement may be revisited.
