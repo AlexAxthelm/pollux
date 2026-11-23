@@ -71,7 +71,7 @@ The reasoning, and the fact that it is not yet confirmed, are in
 - [[ADR-0027 A playlist is a query over sources]]
 - [[ADR-0028 A subscription is an implicit single-feed playlist]]
 - [[ADR-0030 Playlist resolution is capped at 1,000 episodes instead of detecting cycles]] (draft)
-- [[ADR-0041 Queued episodes play before the active playlist resumes]]
+- [[ADR-0046 Queued episodes play before the active playlist resumes]]
 - [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]
 - [[ADR-0043 Every filter can include or exclude]]
 

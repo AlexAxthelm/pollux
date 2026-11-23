@@ -6,7 +6,7 @@ feature:
   - "[[playlists-rules]]"
 related:
   - "[[US-0202 Add episodes to playlists]]"
-  - "[[US-0233 Order a playlist by hand with top and end pools]]"
+  - "[[US-0242 Order a playlist by hand with top and end pools]]"
   - "[[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]"
 ---
 As a curator

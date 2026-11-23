@@ -6,7 +6,7 @@ feature:
   - "[[episode]]"
   - "[[playlists-editor]]"
 related:
-  - "[[US-0233 Order a playlist by hand with top and end pools]]"
+  - "[[US-0242 Order a playlist by hand with top and end pools]]"
 ---
 As a curator
 I want to reorder specific episodes

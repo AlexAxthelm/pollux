@@ -52,10 +52,10 @@ playback**, not by which playlists happen to contain that episode:
 **Episode ordering note:** There is no drag-to-reorder. Specific episodes are pinned
 with a playlist's hand-picked list: each member sits in a top, one-off or end group, and
 the "Move to top / Move to bottom" menu actions set it (not MVP; drag within the top and
-end groups is a later touch, see [[US-0233 Order a playlist by hand with top and end pools]]). See [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]].
+end groups is a later touch, see [[US-0242 Order a playlist by hand with top and end pools]]). See [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]].
 
 **Queue:** A separate ephemeral queue plays before the active playlist resumes, without
-changing it. See [[ADR-0041 Queued episodes play before the active playlist resumes]].
+changing it. See [[ADR-0046 Queued episodes play before the active playlist resumes]].
 *Not built yet.*
 
 ## Related
@@ -68,14 +68,14 @@ changing it. See [[ADR-0041 Queued episodes play before the active playlist resu
 ## Decisions
 
 - [[ADR-0029 The active playlist is set by where playback started]]
-- [[ADR-0041 Queued episodes play before the active playlist resumes]]
+- [[ADR-0046 Queued episodes play before the active playlist resumes]]
 - [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]
 
 ## Open questions
 
 None open. Reordering by hand is decided in
 [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]; queueing
-in [[ADR-0041 Queued episodes play before the active playlist resumes]].
+in [[ADR-0046 Queued episodes play before the active playlist resumes]].
 
 ## User stories
 
