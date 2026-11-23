@@ -24,6 +24,12 @@ so that the removal is reflected in those too.
 
 see subscription-soft-delete.md for future unsubscribe improvements
 
+## Effect on hand-picked episodes
+
+A playlist's hand-picked list ([[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]])
+holds episode ids. Removing the subscription deletes its episodes, so the hand-picked members for
+those episodes are removed in the same transaction. *Not built yet* (hand-picked lists are not MVP).
+
 ## Effect on playback
 
 There is no unsubscribe flow yet (see ROADMAP Phase 5). When it is built, the player has to

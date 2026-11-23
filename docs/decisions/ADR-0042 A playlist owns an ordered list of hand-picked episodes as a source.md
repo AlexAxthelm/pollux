@@ -33,4 +33,7 @@ A playlist can own a **hand-picked list**: an ordered list of single episodes. I
 - The "Move to top / Move to bottom" menu actions set a member's group, adding it to the hand-picked list if needed.
 - `DATA_MODEL` gains a hand-picked source: a playlist-owned ordered list of episode ids, each with a group.
 - Still pure query on the whole: the hand-picked list is one more `FROM`, with top and end as fixed positions after the sorts.
-- Open for the build: what happens to a member whose episode is deleted (for example on unsubscribe, see [[subscription-unsubscribe]]), and the exact wording and placement of the hidden-by-filter indicator.
+- **Storage:** hand-picked episodes count as members of the playlist. Where the playlist requests retention or downloads ([[ADR-0044 An episode's settings come from the context it is played from]], [[storage-eviction]], [[US-0044 Retention rules interactions]]), those requests cover its hand-picked episodes too, so a hand-picked episode of a show that keeps none is still retained while the playlist asks for it.
+- **Unsubscribe:** when a show is unsubscribed its episodes are deleted, and any hand-picked members for those episodes are dropped in the same transaction, so the list never holds an id with no episode. See [[subscription-unsubscribe]].
+- A hand-picked row can say where it was added from (for example "added from playlist 'foobar favorites'"), a small nicety like the queue's `from:` line ([[ADR-0046 Queued episodes play before the active playlist resumes]]). Not specified further.
+- Open for the build: the exact wording and placement of the hidden-by-filter indicator ([[US-0243 See when a filter hides a hand-picked episode]]).
