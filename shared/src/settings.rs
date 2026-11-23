@@ -91,6 +91,21 @@ pub enum SettingChange {
     ResumeRewindSecs(Option<u32>),
 }
 
+impl SettingChange {
+    /// Whether the new value is one the setting accepts (the same ranges as a saved value, see
+    /// `SKIP_SECS_RANGE` and `REWIND_SECS_RANGE`). A reset (`None`) always is. The shell's
+    /// presets are all inside the ranges, but this is the core's own interface, so it doesn't
+    /// rely on that.
+    pub(crate) fn is_valid(self) -> bool {
+        match self {
+            Self::SkipForwardSecs(v) | Self::SkipBackSecs(v) => {
+                v.is_none_or(|n| SKIP_SECS_RANGE.contains(&n))
+            }
+            Self::ResumeRewindSecs(v) => v.is_none_or(|n| REWIND_SECS_RANGE.contains(&n)),
+        }
+    }
+}
+
 impl Settings {
     /// The JSON the shell stores: the values that are set, plus any keys this build doesn't
     /// know, so nothing set is `{}`. A known key that is unset is left out.
@@ -297,6 +312,7 @@ pub(crate) fn on_loaded(model: &mut Model, result: StorageResult) -> Cmd {
 }
 
 /// The user set, or reset, one setting at one level. It takes effect at once, then is saved.
+/// A value outside the setting's range is ignored.
 /// While the saved settings haven't been read yet it is kept to be saved when they have been
 /// (see `on_loaded`); if that read fails it stays in memory only.
 ///
@@ -304,6 +320,12 @@ pub(crate) fn on_loaded(model: &mut Model, result: StorageResult) -> Cmd {
 /// removed would create a document for it. Nothing sends that today (there is no unsubscribe);
 /// see "Effect on settings" in `subscription-unsubscribe`.
 pub(crate) fn set(model: &mut Model, scope: SettingsScope, change: SettingChange) -> Cmd {
+    // A value outside what the setting accepts is ignored: nothing changes, is queued or is
+    // saved, so a saved value and a live one follow the same rule (it would be dropped as bad
+    // on the next launch otherwise).
+    if !change.is_valid() {
+        return Command::done();
+    }
     level_mut(model, &scope).apply(change);
     if !model.settings_loaded {
         model.pending_settings.push((scope, change));
@@ -1299,5 +1321,62 @@ mod tests {
             load_requests(&send(&mut model, Event::RetrySettingsLoad)),
             0
         );
+    }
+
+    // -- Changes outside what a setting accepts are ignored --
+
+    #[test]
+    fn a_change_outside_what_a_setting_accepts_is_ignored() {
+        let mut model = Model::default();
+        send(&mut model, nothing_saved());
+        for change in [
+            SettingChange::SkipForwardSecs(Some(0)),
+            SettingChange::SkipForwardSecs(Some(3601)),
+            SettingChange::SkipBackSecs(Some(0)),
+            SettingChange::SkipBackSecs(Some(u32::MAX)),
+            SettingChange::ResumeRewindSecs(Some(601)),
+            SettingChange::ResumeRewindSecs(Some(u32::MAX)),
+        ] {
+            for event in [Event::SetGlobalSetting(change), set_sub("a", change)] {
+                let effects = send(&mut model, event);
+                assert!(storage_ops(&effects).is_empty(), "{change:?} was saved");
+            }
+        }
+        // Nothing took effect, at either level, and nothing was created for the subscription.
+        assert_eq!(model.global_settings, Settings::default());
+        assert!(model.subscription_settings.is_empty());
+    }
+
+    #[test]
+    fn an_ignored_change_is_not_queued_while_the_launch_read_is_pending() {
+        let mut model = Model::default();
+        send(
+            &mut model,
+            Event::SetGlobalSetting(SettingChange::SkipForwardSecs(Some(0))),
+        );
+        assert!(model.pending_settings.is_empty());
+        assert_eq!(model.global_settings, Settings::default());
+        // So nothing is saved when the read answers.
+        let effects = send(&mut model, nothing_saved());
+        assert!(saves(&effects).is_empty());
+    }
+
+    #[test]
+    fn the_edges_of_what_a_setting_accepts_and_a_reset_are_applied_and_saved() {
+        let mut model = Model::default();
+        send(&mut model, nothing_saved());
+        for change in [
+            SettingChange::SkipForwardSecs(Some(1)),
+            SettingChange::SkipBackSecs(Some(3600)),
+            SettingChange::ResumeRewindSecs(Some(0)),
+            SettingChange::ResumeRewindSecs(Some(600)),
+            SettingChange::SkipForwardSecs(None),
+        ] {
+            let effects = send(&mut model, Event::SetGlobalSetting(change));
+            assert_eq!(saves(&effects).len(), 1, "{change:?} was not saved");
+        }
+        assert_eq!(model.global_settings.skip_forward_secs, None);
+        assert_eq!(model.global_settings.skip_back_secs, Some(3600));
+        assert_eq!(model.global_settings.resume_rewind_secs, Some(600));
     }
 }
