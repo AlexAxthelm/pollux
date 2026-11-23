@@ -767,8 +767,11 @@ impl App for Pollux {
 }
 
 /// Whether `event` waits for the launch settings read: the playback events that read the skip
-/// or the rewind, plus pause, so a press and its undo keep their order. Everything else, and
-/// all playback after the read has answered, runs at once.
+/// or the rewind, plus the rest of what the listener does to the transport (pause, toggle, seek),
+/// so presses run in the order they were made. A skip runs from the position at the moment it
+/// runs, so a scrub that jumped ahead of a held skip would be overridden by it. Everything else
+/// (engine and system events, which can't come before anything plays at launch), and all
+/// playback after the read has answered, runs at once.
 fn waits_for_settings(event: &Event) -> bool {
     matches!(
         event,
@@ -778,6 +781,7 @@ fn waits_for_settings(event: &Event) -> bool {
             | Event::TogglePlay
             | Event::SkipForward
             | Event::SkipBack
+            | Event::SeekTo(_)
     )
 }
 

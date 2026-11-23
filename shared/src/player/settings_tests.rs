@@ -363,3 +363,26 @@ fn a_retry_of_the_settings_read_never_holds_playback() {
         [PlayerOperation::Load { start_secs: 97, .. }]
     ));
 }
+
+#[test]
+fn a_scrub_after_a_held_skip_keeps_its_place_in_the_order() {
+    let mut model = with_settings(Settings::default());
+    send(&mut model, Event::PlayEpisode("e1".into()));
+    tick(&mut model, 100);
+    send(&mut model, Event::Pause);
+    // Relaunched at 100 s with the settings still loading.
+    model.settings_load_pending = true;
+
+    send(&mut model, Event::SkipForward);
+    let scrub = send(&mut model, Event::SeekTo(200));
+    assert!(
+        player_ops(&scrub).is_empty(),
+        "the scrub waits behind the skip"
+    );
+    assert_eq!(active(&model).position_secs, 100);
+
+    send(&mut model, saved_rewind(3));
+    // The skip ran first and the scrub second, so it ends where the listener scrubbed to,
+    // not 30 s past it.
+    assert_eq!(active(&model).position_secs, 200);
+}
