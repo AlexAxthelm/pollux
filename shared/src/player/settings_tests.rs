@@ -345,3 +345,21 @@ fn events_that_do_not_read_playback_settings_are_not_held() {
     assert!(model.deferred_playback.is_empty());
     assert_eq!(model.global_settings.skip_forward_secs, Some(60));
 }
+
+#[test]
+fn a_retry_of_the_settings_read_never_holds_playback() {
+    let mut model = partly_played(100);
+    send(&mut model, Event::Started);
+    send(
+        &mut model,
+        Event::SettingsLoaded(Box::new(crate::StorageResult::Error("db locked".into()))),
+    );
+    send(&mut model, Event::RetrySettingsLoad);
+
+    // The retry is on its way, but the listener presses Play: it runs at once, with the defaults.
+    let effects = send(&mut model, Event::PlayEpisode("e1".into()));
+    assert!(matches!(
+        player_ops(&effects).as_slice(),
+        [PlayerOperation::Load { start_secs: 97, .. }]
+    ));
+}

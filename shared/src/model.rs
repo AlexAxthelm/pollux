@@ -109,6 +109,8 @@ pub struct Model {
     // skip and rewind instead of the defaults, which a late `SettingsLoaded` could not undo.
     // False in any model that never started, so nothing waits there.
     pub settings_load_pending: bool,
+    // A settings read has been requested and not answered, so a retry doesn't send a second.
+    pub settings_load_in_flight: bool,
     pub deferred_playback: Vec<crate::Event>,
 }
 

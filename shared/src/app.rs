@@ -61,7 +61,7 @@ impl App for Pollux {
                 // first press. A metadata read, safe on a background-refresh launch too.
                 subscriptions
                     .and(context)
-                    .and(settings::load_all())
+                    .and(settings::load_all(model))
                     .and(render())
             }
             Event::ResumePendingDownloads => {
@@ -702,6 +702,7 @@ impl App for Pollux {
                 player::on_response(model, session, *result)
             }
             Event::PlayContextLoaded(result) => player::on_context_loaded(model, *result),
+            Event::RetrySettingsLoad => settings::retry_load(model),
             Event::SettingsLoaded(result) => {
                 let mut cmd = settings::on_loaded(model, *result);
                 // Answered, even if the read failed: playback goes ahead with the defaults
@@ -1459,8 +1460,11 @@ pub enum Event {
     /// The episode saved as active by the previous session, loaded at launch.
     PlayContextLoaded(Box<StorageResult>),
     /// Every setting saved by an earlier session (global and per subscription), loaded at
-    /// launch.
+    /// launch, or by a retry.
     SettingsLoaded(Box<StorageResult>),
+    /// The app came to the foreground: if the launch read of the saved settings failed, read
+    /// them again. Does nothing once a read has succeeded or while one is in flight.
+    RetrySettingsLoad,
     /// The user changed, or reset, one global setting. Takes effect at once and is saved.
     SetGlobalSetting(SettingChange),
     /// The user changed, or reset, one setting of one subscription. Takes effect at once and

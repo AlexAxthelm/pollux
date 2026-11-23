@@ -119,8 +119,9 @@ value outside it is treated as unset), and the screen only offers the presets.
     ([[subscription-unsubscribe]]);
   - telling the user when saved settings can't be read or a change couldn't be saved
     ([[US-0235 Be told when saved settings can't be read]], [[US-0236 Be told when a setting couldn't be saved]]).
-    Until then a failed save is silent and the change is lost at the next launch, and after a
-    failed read changes last for the session only;
+    Until then a failed save is silent and the change is lost at the next launch. After a failed
+    read, changes are kept in memory and the read is retried each time the app comes to the
+    foreground; once it succeeds they are saved, and if it keeps failing they last for the session only;
   - search, export and the new-setting notices ([[settings-ui]]);
   - a VoiceOver pass on the screens ([[settings-ui]]).
 

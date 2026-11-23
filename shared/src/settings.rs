@@ -222,9 +222,22 @@ pub(crate) fn subscription_view(model: &Model, subscription_id: &str) -> Setting
 /// Asks the shell for every saved settings document, at launch; the answer is
 /// `Event::SettingsLoaded`. They are few, and the player needs a subscription's settings the
 /// moment an episode starts, so all of them are read up front rather than on demand.
-pub(crate) fn load_all() -> Cmd {
+pub(crate) fn load_all(model: &mut Model) -> Cmd {
+    model.settings_load_in_flight = true;
     Command::request_from_shell(StorageOperation::LoadAllSettings)
         .then_send(|r| Event::SettingsLoaded(Box::new(r)))
+}
+
+/// The app came to the foreground. If the launch read failed, ask again: a database error is
+/// often brief, and until a read succeeds every change stays in memory only (US-0235). Does
+/// nothing once a read has succeeded, or while one is already on its way, and never holds
+/// playback (that is the launch read's job). A retry that succeeds replays and saves what the
+/// user changed meanwhile, as at launch (see `on_loaded`).
+pub(crate) fn retry_load(model: &mut Model) -> Cmd {
+    if model.settings_loaded || model.settings_load_in_flight {
+        return Command::done();
+    }
+    load_all(model)
 }
 
 /// The settings of one level, created empty if nothing has been set there yet.
@@ -258,6 +271,7 @@ fn save(model: &mut Model, scope: SettingsScope) -> Cmd {
 /// included), and each level they touched is saved once. They are not lost to the saved
 /// document replacing the level, and are saved even when nothing had been saved before.
 pub(crate) fn on_loaded(model: &mut Model, result: StorageResult) -> Cmd {
+    model.settings_load_in_flight = false;
     let StorageResult::AllSettings(saved) = result else {
         return render();
     };
@@ -1182,5 +1196,105 @@ mod tests {
         );
         assert_eq!(saves(&effects).len(), 1);
         assert!(model.pending_settings.is_empty());
+    }
+
+    // -- Retrying a failed launch read --
+
+    fn load_requests(effects: &[Effect]) -> usize {
+        storage_ops(effects)
+            .iter()
+            .filter(|op| matches!(op, StorageOperation::LoadAllSettings))
+            .count()
+    }
+
+    #[test]
+    fn a_failed_launch_read_is_asked_again_when_the_app_next_comes_forward() {
+        let mut model = Model::default();
+        send(&mut model, Event::Started);
+        send(&mut model, read_failed());
+
+        let effects = send(&mut model, Event::RetrySettingsLoad);
+        assert_eq!(load_requests(&effects), 1);
+    }
+
+    #[test]
+    fn nothing_is_asked_again_once_a_read_has_succeeded() {
+        let mut model = Model::default();
+        send(&mut model, Event::Started);
+        send(&mut model, nothing_saved());
+
+        let effects = send(&mut model, Event::RetrySettingsLoad);
+        assert_eq!(load_requests(&effects), 0);
+    }
+
+    #[test]
+    fn nothing_is_asked_again_while_the_launch_read_is_still_on_its_way() {
+        let mut model = Model::default();
+        send(&mut model, Event::Started);
+        // The first activation arrives right after launch, before the read has answered.
+        let effects = send(&mut model, Event::RetrySettingsLoad);
+        assert_eq!(load_requests(&effects), 0);
+    }
+
+    #[test]
+    fn two_activations_before_the_retry_answers_send_one_request() {
+        let mut model = Model::default();
+        send(&mut model, Event::Started);
+        send(&mut model, read_failed());
+
+        let first = send(&mut model, Event::RetrySettingsLoad);
+        let second = send(&mut model, Event::RetrySettingsLoad);
+        assert_eq!(load_requests(&first), 1);
+        assert_eq!(load_requests(&second), 0);
+    }
+
+    #[test]
+    fn a_retry_that_fails_again_is_tried_at_the_next_activation() {
+        let mut model = Model::default();
+        send(&mut model, Event::Started);
+        send(&mut model, read_failed());
+        send(&mut model, Event::RetrySettingsLoad);
+        send(&mut model, read_failed());
+
+        let effects = send(&mut model, Event::RetrySettingsLoad);
+        assert_eq!(load_requests(&effects), 1);
+    }
+
+    #[test]
+    fn a_retry_that_succeeds_saves_what_was_changed_meanwhile_over_what_was_saved() {
+        let mut model = Model::default();
+        send(&mut model, Event::Started);
+        send(&mut model, read_failed());
+        // Changed after the failed read: in effect, but not saved.
+        let held = send(
+            &mut model,
+            Event::SetGlobalSetting(SettingChange::SkipForwardSecs(Some(60))),
+        );
+        assert!(storage_ops(&held).is_empty());
+        send(&mut model, Event::RetrySettingsLoad);
+
+        let effects = send(&mut model, loaded(r#"{"skip_back_secs":10}"#));
+        assert!(model.settings_loaded);
+        assert_eq!(model.global_settings.skip_forward_secs, Some(60));
+        assert_eq!(model.global_settings.skip_back_secs, Some(10));
+        assert_eq!(
+            saves(&effects),
+            vec![(
+                SettingsScope::Global,
+                r#"{"skip_back_secs":10,"skip_forward_secs":60}"#.to_string()
+            )]
+        );
+        assert!(model.pending_settings.is_empty());
+
+        // Saving works as normal from here, and nothing is asked again.
+        let later = send(
+            &mut model,
+            Event::SetGlobalSetting(SettingChange::SkipBackSecs(Some(15))),
+        );
+        assert_eq!(saves(&later).len(), 1);
+        assert_eq!(
+            load_requests(&send(&mut model, Event::RetrySettingsLoad)),
+            0
+        );
     }
 }
