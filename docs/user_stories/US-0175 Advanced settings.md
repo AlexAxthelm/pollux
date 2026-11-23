@@ -3,7 +3,8 @@ type: user-story
 status: accepted
 feature:
   - "[[settings-ui]]"
-related: []
+related:
+  - "[[US-0233 Advanced settings depend on what is being edited]]"
 ---
 As a User
 I want more powerful controls hidden, but accessible

@@ -8,6 +8,7 @@ pub mod ffi;
 mod html;
 pub mod model;
 mod player;
+pub mod settings;
 pub mod theme;
 pub mod view_model;
 
@@ -16,8 +17,9 @@ pub use capabilities::http::{HttpOperation, HttpResult};
 pub use capabilities::storage::{StorageOperation, StorageResult};
 pub use crux_core::Core;
 pub use domain::*;
+pub use settings::{SavedSettings, SettingChange, SettingsScope};
 pub use theme::{Base16Palette, ThemeId, ThemeMode, ThemeView};
-pub use view_model::{LibraryView, SubscriptionSummary, ViewModel};
+pub use view_model::{LibraryView, SettingValue, SettingsView, SubscriptionSummary, ViewModel};
 
 #[cfg(feature = "uniffi")]
 const _: () = assert!(

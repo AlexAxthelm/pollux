@@ -4,6 +4,7 @@ status: accepted
 feature:
   - "[[playlists-playback]]"
 related:
+  - "[[ADR-0044 An episode's settings come from the context it is played from]]"
   - "[[ADR-0007 Playback source is separate from the episode's feed]]"
   - "[[ADR-0006 No auto-advance until playlists exist]]"
 ---
@@ -29,4 +30,5 @@ The active playlist persists through fully closing the app and reappears on next
 
 ## Consequences
 
+- Each episode inherits its settings through the chain from the active playlist, but what plays next is whatever is next in the active playlist. See [[ADR-0044 An episode's settings come from the context it is played from]].
 - Queueing an episode so it plays without changing the playlist ([[US-0152 Queue]]) has no counterpart in this model; see the open question in [[playlists-playback]].

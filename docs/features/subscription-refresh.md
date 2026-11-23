@@ -23,7 +23,7 @@ interval, falling back to the global default if unset.
 Display pattern:
 - Global default unset: `Refresh every 12 hours (default)`
 - Global default changed: `Refresh every 24 hours (default)`
-- Per-feed override: `Refresh every 1 hour (custom)`
+- Per-subscription override: `Refresh every 1 hour (custom)`
 
 Refresh can also be triggered manually from the subscription details page or
 the library view (refresh all).
@@ -78,12 +78,12 @@ The reasoning for each is in the decisions below.
 
 ### Not yet
 
-- Per-feed and global refresh-interval settings. The interval is the hardcoded
+- Per-subscription and global refresh-interval settings. The interval is the hardcoded
   `REFRESH_INTERVAL_HOURS`; the cascading pattern waits on the Settings feature.
 - Re-evaluating download rules after a refresh (no download rules exist yet).
 - The "app only updates while foregrounded" signal when background refresh is
   unavailable (deferred to Settings).
-- A per-feed "refreshing" indicator on the details page beyond the pull-to-refresh
+- A per-subscription "refreshing" indicator on the details page beyond the pull-to-refresh
   spinner; the empty state of a feed with no episodes cannot be pulled to refresh.
 
 ## Decisions

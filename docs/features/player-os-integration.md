@@ -55,6 +55,14 @@ often is not the cause. A restored, paused episode is not on the lock screen unt
 been played once (the audio engine and remote commands are created lazily, so a
 background-refresh launch stays metadata-only).
 
+#needs-decision [[US-0239 Play the mini-player's episode the moment I tap play]] wants the restored
+episode cued up and ready before the listener presses play, which the lazy creation above does not
+give. Both are kept as written; see [[app-startup]].
+
+In the simulator the lock-screen card shows no transport buttons at all, although it
+works on a device; see [[BUG-0002 Lock-screen transport buttons are missing in the simulator]],
+which lists the same two candidate fixes as leads.
+
 ## User stories
 
 ```base

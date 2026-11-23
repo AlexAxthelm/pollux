@@ -25,8 +25,13 @@ struct SubscriptionDetailScreen: View {
         .navigationTitle(liveSummary.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
                 sortMenu
+                NavigationLink {
+                    SubscriptionSettingsScreen(core: core, subscription: liveSummary)
+                } label: {
+                    Label("Podcast settings", systemImage: "gearshape")
+                }
             }
         }
         .navigationDestination(for: EpisodeSummary.self) { episode in

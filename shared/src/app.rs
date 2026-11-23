@@ -17,6 +17,7 @@ use crate::feed_parser::{now_unix, parse_feed};
 use crate::html::strip_html_preview;
 use crate::model::{DownloadProgress, Model, QueuedDownload};
 use crate::player;
+use crate::settings::{self, SettingChange, SettingsScope};
 use crate::theme::{theme_view, ThemeId, ThemeMode};
 use crate::view_model::{
     DownloadNotice, EpisodeSummary, LibraryView, SubscriptionDetailView, SubscriptionSummary,
@@ -33,9 +34,16 @@ impl App for Pollux {
     type Effect = Effect;
 
     fn update(&self, event: Event, model: &mut Model) -> Command<Effect, Event> {
+        // Playback that reads the skip or rewind waits for the launch settings read, so the
+        // first press doesn't use the defaults. See `waits_for_settings`.
+        if model.settings_load_pending && waits_for_settings(&event) {
+            model.deferred_playback.push(event);
+            return Command::done();
+        }
         match event {
             Event::Started => {
                 model.loading = true;
+                model.settings_load_pending = true;
                 // Interrupted downloads are deliberately NOT resumed here: the core is
                 // also created when iOS launches the app in the background (for a
                 // refresh task), and that launch must stay metadata-only. They resume
@@ -49,7 +57,12 @@ impl App for Pollux {
                 // so it is safe on a background-refresh launch too.
                 let context = Command::request_from_shell(StorageOperation::LoadPlayContext)
                     .then_send(|r| Event::PlayContextLoaded(Box::new(r)));
-                subscriptions.and(context).and(render())
+                // The global settings, so the player has the user's skip and rewind from the
+                // first press. A metadata read, safe on a background-refresh launch too.
+                subscriptions
+                    .and(context)
+                    .and(settings::load_all(model))
+                    .and(render())
             }
             Event::ResumePendingDownloads => {
                 // Once per process: the shell sends this on every activation, but the
@@ -689,6 +702,25 @@ impl App for Pollux {
                 player::on_response(model, session, *result)
             }
             Event::PlayContextLoaded(result) => player::on_context_loaded(model, *result),
+            Event::RetrySettingsLoad => settings::retry_load(model),
+            Event::SettingsLoaded(result) => {
+                let mut cmd = settings::on_loaded(model, *result);
+                // Answered, even if the read failed: playback goes ahead with the defaults
+                // rather than waiting for settings that aren't coming.
+                model.settings_load_pending = false;
+                for event in std::mem::take(&mut model.deferred_playback) {
+                    cmd = cmd.and(self.update(event, model));
+                }
+                cmd
+            }
+            Event::SetGlobalSetting(change) => settings::set(model, SettingsScope::Global, change),
+            Event::SetSubscriptionSetting {
+                subscription_id,
+                change,
+            } => settings::set(model, SettingsScope::Subscription(subscription_id), change),
+            // Required resolution sink for the settings write. The change is already in
+            // memory and in effect; see `settings::set` for what a failed write means.
+            Event::SettingsSaved(result) => settings::on_saved(*result),
             // Required resolution sink for playback persistence writes. These are
             // best-effort (the next checkpoint retries), so there is nothing to do.
             Event::PlaybackPersisted(_) => Command::done(),
@@ -729,8 +761,28 @@ impl App for Pollux {
             subscription_detail: build_subscription_detail(model),
             player: player::player_view(model),
             theme: theme_view(model.theme_id, model.theme_mode),
+            settings: settings::global_view(model),
         }
     }
+}
+
+/// Whether `event` waits for the launch settings read: the playback events that read the skip
+/// or the rewind, plus the rest of what the listener does to the transport (pause, toggle, seek),
+/// so presses run in the order they were made. A skip runs from the position at the moment it
+/// runs, so a scrub that jumped ahead of a held skip would be overridden by it. Everything else
+/// (engine and system events, which can't come before anything plays at launch), and all
+/// playback after the read has answered, runs at once.
+fn waits_for_settings(event: &Event) -> bool {
+    matches!(
+        event,
+        Event::PlayEpisode(_)
+            | Event::Play
+            | Event::Pause
+            | Event::TogglePlay
+            | Event::SkipForward
+            | Event::SkipBack
+            | Event::SeekTo(_)
+    )
 }
 
 /// Builds the details-page view from the selected subscription and its episodes.
@@ -764,7 +816,13 @@ fn build_subscription_detail(model: &Model) -> SubscriptionDetailView {
         None => (None, String::new(), None),
     };
 
+    let settings = subscription_id
+        .as_deref()
+        .map(|id| settings::subscription_view(model, id))
+        .unwrap_or_default();
+
     SubscriptionDetailView {
+        settings,
         subscription_id,
         title,
         artwork_url,
@@ -1405,6 +1463,22 @@ pub enum Event {
     },
     /// The episode saved as active by the previous session, loaded at launch.
     PlayContextLoaded(Box<StorageResult>),
+    /// Every setting saved by an earlier session (global and per subscription), loaded at
+    /// launch, or by a retry.
+    SettingsLoaded(Box<StorageResult>),
+    /// The app came to the foreground: if the launch read of the saved settings failed, read
+    /// them again. Does nothing once a read has succeeded or while one is in flight.
+    RetrySettingsLoad,
+    /// The user changed, or reset, one global setting. Takes effect at once and is saved.
+    SetGlobalSetting(SettingChange),
+    /// The user changed, or reset, one setting of one subscription. Takes effect at once and
+    /// is saved.
+    SetSubscriptionSetting {
+        subscription_id: String,
+        change: SettingChange,
+    },
+    /// Resolution sink for the settings write.
+    SettingsSaved(Box<StorageResult>),
     /// Resolution sink for best-effort playback writes (position, play-context clears).
     /// Position writes retry at the next checkpoint, so there is nothing to do.
     PlaybackPersisted(Box<StorageResult>),
@@ -1531,8 +1605,8 @@ mod tests {
         assert!(model.loading);
 
         let effects: Vec<Effect> = cmd.effects().collect();
-        // ListSubscriptions + LoadPlayContext + render.
-        assert_eq!(effects.len(), 3);
+        // ListSubscriptions + LoadPlayContext + LoadAllSettings + render.
+        assert_eq!(effects.len(), 4);
 
         let has_context = effects
             .iter()

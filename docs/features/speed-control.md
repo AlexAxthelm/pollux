@@ -17,8 +17,8 @@ Allow users to adjust playback speed.
   preset (e.g. 1.5x)
 - Common presets: 0.5x, 0.75x, 1x, 1.25x, 1.5x, 1.75x, 2x
 - Accessible from player options menu
-- Should follow cascading defaults pattern (global → feed)
-- Per feed settings is possible 
+- Should follow cascading defaults pattern (see [[settings-cascade]])
+- Per-subscription and per-playlist settings are possible 
 - "smart" speedups (eliminating silence) is a separate feature (much later)
 
 ## User stories
