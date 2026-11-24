@@ -33,8 +33,12 @@ For code-facing definitions and entity relationships, see [[DATA_MODEL]].
 - **Playlist**: a user-created query over one or more sources, with optional
   filters and sorts applied. Produces an ordered episode list.
   - Related terms:
-    - **Smart playlist**, **queue**: avoid these in user-facing copy. The word
-      "playlist" covers all cases.
+    - **Smart playlist**: avoid this in user-facing copy. The word "playlist"
+      covers all cases.
+    - **Queue**: the user-facing term for the short "up next" list that plays
+      before the active playlist resumes. It is not a playlist
+      ([[ADR-0046 Queued episodes play before the active playlist resumes]],
+      [[US-0152 Queue]]).
     - **Convenience playlist**: internal/doc term for system-provided playlists
       that require no configuration ("All Subscriptions", "Downloaded"). Not a
       user-facing distinction — these appear in the UI simply as playlists.

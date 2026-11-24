@@ -122,14 +122,15 @@ its episodes as normal; top and end members are placed after the sorts. See
 ### PlaylistFilter *(Identified)*
 
 A filter rule attached to a Playlist. Carries a type (e.g. playback status,
-recency limit), parameters, include/exclude polarity, and an ordering (filters
-are applied sequentially).
+recency limit, Deduplicate), parameters, include/exclude polarity (not for
+Deduplicate, which is on or off), and a position in the playlist's rule stack.
 
 ### PlaylistSort *(Identified)*
 
-A sort rule attached to a Playlist. Carries a type (e.g. by age, by source),
-parameters, direction (asc/desc), and an ordering (sorts are applied as
-primary → secondary → etc.).
+A sort rule attached to a Playlist. Carries a type (e.g. by age, by source, manual
+ordering), parameters, direction (asc/desc), and a position in the same rule stack as
+the filters. Rules are applied top to bottom, each to the result of the ones above it, so
+the last sort applied is the main order ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]).
 
 ### PlayContext *(Identified)*
 
@@ -143,6 +144,10 @@ user-facing copy until this is resolved.
 
 Relationships: references a Playlist or Subscription (via EpisodeSource), and
 an Episode.
+
+The queue ([[ADR-0046 Queued episodes play before the active playlist resumes]]) also persists
+with the play context: an ordered list of entries, each an episode id plus the context route it was
+queued from. *Not built yet.*
 
 Stored in the single-row `play_context` table as the episode id plus the source as
 a kind and an id (`Subscription` today). Position is not stored here: it lives on
