@@ -71,8 +71,8 @@ and Deduplicate's "first" use ([[playlists-rules]]).
   picker (the Feed Selector below). If an added playlist already includes this one, the editor asks
   first ([[US-0244 Be asked before making a playlist loop]]).
 - **Hand-picked episodes:** shown as one row ("12 other episodes") that is ordered among the other
-  sources like any of them, with a hint that it can be tapped to edit. **+ Episode** adds an episode
-  to it. This is the playlist's own hand-picked list
+  sources like any of them, with a hint that it can be tapped to edit. **+ Episode** (later) and the
+  episode context menu's **Add to playlist** add an episode to it. This is the playlist's own hand-picked list
   ([[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]).
 
 ## Rules
@@ -125,7 +125,7 @@ It updates as sources and rules change. The rows are the same as in the full pla
 
 The picker behind **+ Playlist** and **+ Show** is a reusable view (also used for choosing the sources
 of a "by source" sort) with multi-select checkboxes. It is laid out like the library view. Items already
-in the playlist are pre-checked and floated to the top. **+ Episode** is for later; it will probably open a search or a library-like view for finding episodes.
+in the playlist are pre-checked and floated to the top. **+ Episode** is for later; it will probably open a search or a library-like view for finding episodes. It is the same action as **Add to playlist** in an episode's context menu ([[episode]]), reached from the other side; the context menu is built first.
 
 ---
 

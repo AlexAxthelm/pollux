@@ -25,8 +25,9 @@ exclude ([[ADR-0043 Every filter can include or exclude]]).
 | Rule | Parameters | Notes |
 |---|---|---|
 | Limit by recency | N (count), direction (newest / oldest) | "Most recent 1" or "Oldest 1" are the same operation with different direction |
-| Playback status | unplayed / in-progress / played (multi-select) | Enables "in progress" playlists, unplayed-only queues, etc. |
+| Playback status | unplayed / in-progress / played (multi-select) | Enables "in progress" playlists, unplayed-only queues, etc. In-progress means not played, with the playback position not at the start. |
 | Deduplicate | none | Keeps the first occurrence of each episode at this point in the rules. On by default, at the top of the filters; it can be moved or turned off. It has no include/exclude toggle. See [[US-0217 Playlist deduplication]], [[US-0218 Playlist allows duplicates]]. |
+| Title | text | Includes or excludes episodes whose title contains the given text (a simple match). Not in the original MVP scope, but cheap to include. A general regular-expression filter may follow. See [[US-0224 Playlist filter on titles]]. |
 
 ### Later
 
@@ -77,8 +78,6 @@ A rule applied to a populated source set acts only on that set.
 
 ## Open questions
 
-- #needs-decision **Title filter.** [[US-0224 Playlist filter on titles]] asks for a title
-  filter. It is not in the MVP or Later filter tables.
 - Specific episodes can be added or included by hand
   ([[US-0202 Add episodes to playlists]], [[US-0216 Include episodes in playlist]]). How
   that relates to rules is decided in

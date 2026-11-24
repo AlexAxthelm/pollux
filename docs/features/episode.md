@@ -71,7 +71,7 @@ eviction (see [[storage-protection]]). Additional flag types may be added later.
 - Download / Delete download
 - Mark as played / Mark as unplayed
 - Flag / Unflag *(star or equivalent)*
-- Add to playlist
+- Add to playlist (adds the episode to that playlist's hand-picked list, the same action as **+ Episode** in the playlist editor; [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]])
 - Share link *(system share sheet)*
 - Go to subscription / feed
 - Move to top / Move to bottom *(only shown when viewing episode within a playlist)*

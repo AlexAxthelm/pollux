@@ -15,6 +15,8 @@ depends:
 System-provided playlists that require no configuration:
 - **All subscriptions**: all episodes from all subscribed feeds, no filters
 - **Downloaded / available**: all downloaded episodes, regardless of feed
+- **In progress**: episodes that are not played, with the playback position not at the start,
+  from all subscribed feeds (a playback status filter, [[playlists-rules]])
 - **Random All**: all episodes, random sort *(not MVP — depends on random sort
   in [[playlists-rules]] and [[random]])*
 
@@ -34,7 +36,7 @@ Archive binge is surfaced as a suggested playlist from the create-playlist flow;
 
 ## Open questions
 
-- Is "in progress" a system playlist? The stories name it, but the list above does not. What it means is settled: an episode that is not played, with its playback position not at the start.
+None open.
 
 ## User stories
 

@@ -104,7 +104,7 @@ The core differentiator.
 - **Playlist data model**: query model (sources → filters → sorts), position
   tracking, active queue management (see [[playlists]] and
   [[ADR-0027 A playlist is a query over sources]])
-- **MVP filter operations**: limit by recency (newest/oldest N), playback status
+- **MVP filter operations**: limit by recency (newest/oldest N), playback status, Deduplicate (on by default), title text match
 - **MVP sort operations**: by age (asc/desc), by source (sequential)
 - **Playlist view**: full view with summary stats, compact view
 - **Playlist editor**: rules builder (feeds, filters, sorts), live preview,
