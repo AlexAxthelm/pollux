@@ -16,7 +16,7 @@ related:
 
 ## Decision
 
-There is a separate, ephemeral **queue** ("up next") alongside the active playlist.
+There is a separate **queue** ("up next") alongside the active playlist. It holds only the episodes the user has queued and empties as they play.
 
 - Queued episodes play, in order, before the active playlist resumes.
 - Queueing never changes the active playlist, its source, or its position.

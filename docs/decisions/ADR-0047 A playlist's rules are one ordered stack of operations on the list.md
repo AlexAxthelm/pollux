@@ -27,7 +27,7 @@ A playlist has one ordered stack of rules, applied to the combined list of its s
 
 **Each rule is applied to the list as if all the rules above it had already been evaluated.** A sort orders the list as it stands, so with several sorts the last one applied is the primary order and the ones above it only break ties. A filter such as "first N episodes" or Deduplicate acts on the list in the order it has at that point. The playlist does not have to be evaluated literally in that way, but the result must be the same as if it were.
 
-Example: `sort: newest first`, `filter: first N episodes`, `sort: oldest first` gives the N most recent episodes, shown oldest first.
+Example: `sort: newest first`, `filter: first N episodes` (the "limit total results" filter, a later rule), `sort: oldest first` gives the N most recent episodes, shown oldest first.
 
 **With no sorts, the order is the source order**, each source in its own natural order. Example: all of playlist A, then show B, then playlist C.
 

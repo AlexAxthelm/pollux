@@ -31,5 +31,5 @@ A playlist is fundamentally a **query** over a set of sources, with filters and 
 
 - The model is intentionally complete from the start. MVP scope is limited by which filter and sort *operations* are implemented, not by the model itself.
 - Each new rule type can be added incrementally without changing the underlying data model.
-- Playlists that include playlists make cycles possible; see [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]].
+- Playlists that include playlists make cycles possible; see [[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]] and [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]].
 - The rules form one ordered stack and filters and sorts can be interleaved, as decided in [[ADR-0047 A playlist's rules are one ordered stack of operations on the list]].

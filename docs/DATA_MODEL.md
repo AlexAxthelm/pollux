@@ -101,7 +101,7 @@ whether playback position, played status, and flags survive a refresh.
 
 A query definition: one or more sources, with ordered filters and sorts applied.
 Produces an ordered Episode list at query time — it is not a stored list of
-episodes.
+episodes (apart from the hand-picked list below, which stores episode ids).
 
 One-to-many with PlaylistSource, PlaylistFilter, PlaylistSort.
 
@@ -116,7 +116,8 @@ so that "by source" sorts are deterministic.
 A third kind of source is the playlist's own **hand-picked list**: an ordered list of
 single episode ids, each with a group (top, one-off or end) and the time it was added (the list's natural order, oldest first). It exists only inside the
 playlist that owns it and cannot be used as a source by another playlist. Filters apply to
-its episodes as normal; top and end members are placed after the sorts. See
+its episodes as normal. Top and end members are placed by the playlist's Manual ordering sort,
+which starts at the bottom of the rule stack. See
 [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]. *Not MVP.*
 
 ### PlaylistFilter *(Identified)*

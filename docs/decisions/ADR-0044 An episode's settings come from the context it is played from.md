@@ -7,7 +7,7 @@ related:
   - "[[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]"
   - "[[ADR-0028 A subscription is an implicit single-feed playlist]]"
   - "[[ADR-0029 The active playlist is set by where playback started]]"
-  - "[[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]]"
+  - "[[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]]"
   - "[[US-0167 Playlist settings]]"
   - "[[US-0170 Playlists inherit from show default settings]]"
 ---
@@ -30,7 +30,7 @@ The **active playlist** (the one playback was started from) is the most local co
 - The episode's own subscription is always in the stack, above all the playlists. A playlist value that is set beats the show; an unset playlist value falls through to the next playlist up the route, then the show, then global.
 - An episode override beats everything, including explicit playlist values.
 - Example: A includes B, A sets skip to 60s and B sets it to 20s. Played from A, the episode skips 60s; played from B, it skips 20s. Where A leaves a value unset, B's (or C's, for episodes via C) applies, so sibling sources in one playlist can give their episodes different effective settings.
-- Each occurrence of an episode in a playlist's resolved list uses **its own route**. A playlist's Deduplicate filter is on by default ([[playlists-rules]]), so normally only one occurrence survives: the first at the point where Deduplicate sits in the playlist's rules, which may be a hand-picked copy or one from an included playlist. With Deduplicate off, each copy plays with the settings of its own route. Cycles end because a playlist already on the resolution path is left out, and each playlist is also bounded by its episode limit ([[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]]).
+- Each occurrence of an episode in a playlist's resolved list uses **its own route**. A playlist's Deduplicate filter is on by default ([[playlists-rules]]), so normally only one occurrence survives: the first at the point where Deduplicate sits in the playlist's rules, which may be a hand-picked copy or one from an included playlist. With Deduplicate off, each copy plays with the settings of its own route. Cycles end because a playlist already on the resolution path is left out ([[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]), and each playlist is also bounded by its episode limit ([[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]]).
 - A playlist's settings page cannot show one inherited value, since it varies by source. It shows "Follows each source" for an unset value, and a reset affordance for a set one.
 
 Which settings exist at which level is declared per setting. Playback-time settings (skip, speed, rewind, next-episode behavior) apply to playlists and subscriptions. Storage, download and refresh settings are also valid on playlists, not only subscriptions, and are combined by storage rather than by the context stack (see Consequences) (for example: a show keeps 1 episode, but a playlist makes everything available before a trip). Very few settings are not applicable to a playlist.

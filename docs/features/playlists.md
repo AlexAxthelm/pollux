@@ -62,18 +62,15 @@ building composite listening queues. See [[playlists-archive]].
 
 See [[playlists-circular-dependencies]].
 
-**MVP behavior:** No detection required. Each playlist has an episode limit (default 1,000,
-per-playlist override, hard maximum 50,000 for now). If it is reached, show:
-*"Showing first N episodes."* An included playlist is resolved with its own limit.
-
-The reasoning is in
-[[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]].
+A playlist already on the resolution path is left out ([[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]), and each playlist
+has an episode limit ([[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]]).
 
 ## Decisions
 
 - [[ADR-0027 A playlist is a query over sources]]
 - [[ADR-0028 A subscription is an implicit single-feed playlist]]
-- [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]]
+- [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]]
+- [[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]
 - [[ADR-0046 Queued episodes play before the active playlist resumes]]
 - [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]
 - [[ADR-0043 Every filter can include or exclude]]

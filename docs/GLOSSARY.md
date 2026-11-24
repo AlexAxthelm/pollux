@@ -36,7 +36,7 @@ For code-facing definitions and entity relationships, see [[DATA_MODEL]].
     - **Smart playlist**: avoid this in user-facing copy. The word "playlist"
       covers all cases.
     - **Queue**: the user-facing term for the short "up next" list that plays
-      before the active playlist resumes. It is not a playlist
+      before the active playlist resumes. It is not a playlist, and it is not the download queue ([[downloads-queue]])
       ([[ADR-0046 Queued episodes play before the active playlist resumes]],
       [[US-0152 Queue]]).
     - **Convenience playlist**: internal/doc term for system-provided playlists

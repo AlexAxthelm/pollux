@@ -50,7 +50,7 @@ playback**, not by which playlists happen to contain that episode:
 - Pressing play on a playlist from the library resumes from the current position
   if already active, or begins from the first episode if not
 
-**Episode ordering note:** There is no drag-to-reorder. Specific episodes are pinned
+**Episode ordering note:** The playlist's list is not dragged into order; episodes are pinned instead, and pinned episodes can be dragged within their group (later). Specific episodes are pinned
 with a playlist's hand-picked list: sending one to the top or end adds a "Manual ordering" sort to the
 rules, and the "Move to top / Move to bottom" menu actions do the same (not MVP; see
 [[US-0242 Order a playlist by hand with top and end pools]]). See [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]].
@@ -74,9 +74,9 @@ changing it. See [[ADR-0046 Queued episodes play before the active playlist resu
 
 ## Open questions
 
-None open. Reordering by hand is decided in
+Reordering by hand is decided in
 [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]; queueing
-in [[ADR-0046 Queued episodes play before the active playlist resumes]].
+in [[ADR-0046 Queued episodes play before the active playlist resumes]], which leaves how items are added and cleared open.
 
 ## User stories
 

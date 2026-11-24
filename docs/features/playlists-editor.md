@@ -99,7 +99,7 @@ episodes if unplayed; "unplayed, then most recent 2" gives the 2 most recent of 
 
 Collapsed by default, using the standard settings interface ([[settings-cascade]]). The **Advanced**
 switch in its header shows the advanced settings, such as **Episode limit** (default 1,000, per
-playlist; see [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]]).
+playlist; see [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]]).
 **Play next** ("from top" or in sequence) is the per-playlist setting from [[playlists-playback]].
 
 ## Preview
@@ -118,14 +118,12 @@ It updates as sources and rules change. The rows are the same as in the full pla
   have removed, marked as excluded, with no reason shown
   ([[US-0243 See when a filter hides a hand-picked episode]]). See
   [[US-0246 Choose what the playlist preview shows]].
-- **Limit message:** "Showing first N episodes." appears at the end only if the list is longer than
-  the limit.
+- **Limit message:** "Showing first N episodes." appears at the end only if the limit cut the list.
 
 ## Pickers
 
-The picker behind **+ Playlist** and **+ Show** is a reusable view (also used for choosing the sources
-of a "by source" sort) with multi-select checkboxes. It is laid out like the library view. Items already
-in the playlist are pre-checked and floated to the top. **+ Episode** is for later; it will probably open a search or a library-like view for finding episodes. It is the same action as **Add to playlist** in an episode's context menu ([[episode]]), reached from the other side; the context menu is built first.
+The picker behind **+ Playlist** and **+ Show** is a reusable view with multi-select checkboxes. It is laid out like the library view. Items already
+in the playlist are pre-checked and floated to the top. **+ Episode** is for later; it will probably open a search or a library-like view for finding episodes. It is the same action as **Add to playlist** in an episode's context menu ([[episode]]), reached from the other side. Hand-picked lists are not MVP, so neither entry point is.
 
 ---
 

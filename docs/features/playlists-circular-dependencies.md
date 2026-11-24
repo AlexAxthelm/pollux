@@ -13,34 +13,15 @@ By allowing playlists to include other playlists as sources, circular
 dependencies are possible — a playlist including itself directly, or more likely
 via indirection through other playlists.
 
-## Why It's Usually Fine
-
-Circular dependencies don't usually cause infinite loops in practice, and some users
-may create them on purpose. The reasoning is in
-[[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]].
-
-## MVP Behavior
-
-No detection required. Each playlist resolves up to an episode limit (default **1,000**,
-per-playlist override, hard maximum 50,000 for now). If the limit is reached, the playlist
-displays:
-
-*"Showing first N episodes."*
-
-An included playlist is resolved with its own limit, and the including playlist is the union of
-its sources, then its own rules and limit.
-
-This handles all cases safely — intentional or accidental circular deps both
-resolve to a finite, usable list.
-
-The limit is set under advanced settings. How resolution stops for a real cycle is open; see
-the ADR.
-
 ## Resolution
 
 While a playlist is being resolved, a source already on the current path contributes
 nothing; only that source is cut. If A includes B and C, and B includes A, C and D, then A is
-(C + D) + C. This always ends. See the ADR below.
+(C + D) + C. This always ends, and a loop never repeats episodes. See
+[[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]].
+
+The episode limit (default 1,000, per playlist) is a separate size bound; see
+[[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]].
 
 ## Confirmation when adding a source
 
@@ -56,7 +37,8 @@ alarming; not specified yet.
 
 ## Decisions
 
-- [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]]
+- [[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]
+- [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]]
 
 ## User stories
 

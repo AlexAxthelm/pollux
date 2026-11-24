@@ -49,13 +49,13 @@ Sorts define the order of the filtered episode list.
 | Rule | Parameters | Notes |
 |---|---|---|
 | By age | asc / desc | Chronological or reverse-chronological |
-| Manual ordering | none | Appears when episodes are pinned to the top or end; pinned episodes are moved to the front or back in hand-set order. Starts at the bottom of the stack, so the pins hold; it can be moved. Not MVP. See [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]. |
-| By source | ordered source list | All episodes from source A before source B; enables priority podcasts and composite playlist sequencing. Sequential only for MVP. |
+| By source | none | Groups episodes by the order of the Sources section: all episodes from source A before source B; enables priority podcasts and composite playlist sequencing. Sequential only for MVP. |
 
 ### Later
 
 | Rule | Parameters | Notes |
 |---|---|---|
+| Manual ordering | none | Appears when episodes are pinned to the top or end; pinned episodes are moved to the front or back in hand-set order. Starts at the bottom of the stack, so the pins hold; it can be moved. See [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]. |
 | By source (interleaved) | strategy: round-robin / proportional / date-normalized | Solves the archive-clumping problem; see [[playlists-archive]] |
 | By duration | asc / desc | |
 | By play count | asc / desc | Surfaces favorites or finds unlistened gems |
@@ -65,7 +65,7 @@ Sorts define the order of the filtered episode list.
 
 Rules are stacked and applied in order. The UI should make reordering easy and show a live preview of the resulting episode list.
 
-Filters, sorts and Deduplicate share one stack and can be interleaved ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]). Each rule is applied to the list as if all the rules above it had already been evaluated, so with several sorts the last one wins and the ones above only break ties. For example, `sort: newest first`, `filter: first N episodes`, `sort: oldest first` gives the N most recent episodes, oldest first. With no sorts, the order is the source order, each source in its natural order (all of A, then B, then C).
+Filters, sorts and Deduplicate share one stack and can be interleaved ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]). Each rule is applied to the list as if all the rules above it had already been evaluated, so with several sorts the last one wins and the ones above only break ties. For example, `sort: newest first`, `filter: first N episodes` (the "limit total results" filter, a later rule), `sort: oldest first` gives the N most recent episodes, oldest first. With no sorts, the order is the source order, each source in its natural order (all of A, then B, then C).
 
 An empty source set with a rule applied acts on all episodes from all subscribed feeds.
 
