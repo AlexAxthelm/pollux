@@ -111,8 +111,8 @@ The core differentiator.
   feed selector
 - **Convenience playlists**: All Subscriptions, Downloaded/Available (see
   [[playlists-convenience]])
-- **Circular dependency cap**: 1,000 episode limit, message if reached (see
-  [[ADR-0030 Playlist resolution is capped at 1,000 episodes instead of detecting cycles]],
+- **Circular dependency cap**: per-playlist episode limit (default 1,000), message if reached (see
+  [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]],
   which is still a draft)
 
 Milestone: can create a playlist with rules, play from it, and have it behave

@@ -23,8 +23,9 @@ How a playlist plays, and how one becomes the active playlist. The data model is
 - Pause and resume supported
 - Episodes in a playlist may or may not be downloaded; download status visible
   per episode
-- An episode may appear in a playlist more than once if explicitly added by the
-  user; otherwise duplicates are suppressed (configurable)
+- Duplicates are removed by the playlist's Deduplicate filter, which is on by default and
+  can be moved or turned off ([[playlists-rules]]). With it off an episode can appear more
+  than once, each time with its own settings route ([[ADR-0044 An episode's settings come from the context it is played from]])
 - A playlist with no rules applied includes all episodes from its sources
 
 **Playlist persistence:** The active playlist persists through fully closing the

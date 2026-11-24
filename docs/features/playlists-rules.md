@@ -26,6 +26,7 @@ exclude ([[ADR-0043 Every filter can include or exclude]]).
 |---|---|---|
 | Limit by recency | N (count), direction (newest / oldest) | "Most recent 1" or "Oldest 1" are the same operation with different direction |
 | Playback status | unplayed / in-progress / played (multi-select) | Enables "in progress" playlists, unplayed-only queues, etc. |
+| Deduplicate | none | Keeps the first occurrence of each episode at this point in the rules. On by default, at the top of the filters; it can be moved or turned off. It has no include/exclude toggle. See [[US-0217 Playlist deduplication]], [[US-0218 Playlist allows duplicates]]. |
 
 ### Later
 

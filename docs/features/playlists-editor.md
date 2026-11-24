@@ -59,6 +59,10 @@ other playlists). Clicking "Add feed" opens the **Feed Selector** — a view
 similar to the library with multi-select (checkboxes) across both subscriptions
 and playlists. Selected feeds appear as rows in the feeds section.
 
+If an added playlist already includes this one (directly or through others), the editor asks
+before adding it: the loop leaves that playlist's copy of this one out, and the message links to
+[[playlists-circular-dependencies]]. See [[US-0244 Be asked before making a playlist loop]].
+
 ### Filters
 
 Each filter is a row:
