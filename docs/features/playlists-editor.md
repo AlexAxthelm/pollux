@@ -85,14 +85,14 @@ row has a drag handle and a remove button. **+ Filter** and **+ Sort** add a row
 - **Filters:** `include` or `exclude`, a criterion and a value ([[ADR-0043 Every filter can include or exclude]]).
   Example rows: `include · playback status · unplayed`, `exclude · duration · > 2:00:00`,
   `include · most recent · 2`.
-- **Sorts:** a direction, a key and, for some keys, parameters. Sort rows are keys, with the first
-  sort in the list as the primary key.
+- **Sorts:** a direction, a key and, for some keys, parameters. Each sort orders the list as it stands at
+  that point, so the last sort is the main order and the ones above it break ties.
 - **Manual ordering:** a sort row that appears by itself once the user has pinned episodes (see the
-  preview), starts at the top of the stack, can be moved like the others, and goes away when nothing
-  is pinned any more.
+  preview), starts at the top of the stack, can be moved like the others, and can be removed once nothing
+  is pinned. (Whether the top is the right starting place is open in ADR-0047.)
 
 **Order matters.** Deduplicate keeps the first occurrence in the order the list has at that point,
-which is set by the sorts above it. Example: "most recent 2, then unplayed" gives the 2 most recent
+which is the result of the rules above it. Example: "most recent 2, then unplayed" gives the 2 most recent
 episodes if unplayed; "unplayed, then most recent 2" gives the 2 most recent of the unplayed set.
 
 ## Settings
@@ -125,8 +125,7 @@ It updates as sources and rules change. The rows are the same as in the full pla
 
 The picker behind **+ Playlist** and **+ Show** is a reusable view (also used for choosing the sources
 of a "by source" sort) with multi-select checkboxes. It is laid out like the library view. Items already
-in the playlist are pre-checked and floated to the top. What **+ Episode** opens (an episode search or
-browse) is not specified yet.
+in the playlist are pre-checked and floated to the top. **+ Episode** is for later; it will probably open a search or a library-like view for finding episodes.
 
 ---
 
