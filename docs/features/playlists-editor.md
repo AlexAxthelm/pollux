@@ -88,8 +88,8 @@ row has a drag handle and a remove button. **+ Filter** and **+ Sort** add a row
 - **Sorts:** a direction, a key and, for some keys, parameters. Each sort orders the list as it stands at
   that point, so the last sort is the main order and the ones above it break ties.
 - **Manual ordering:** a sort row that appears by itself once the user has pinned episodes (see the
-  preview), starts at the top of the stack, can be moved like the others, and can be removed once nothing
-  is pinned. (Whether the top is the right starting place is open in ADR-0047.)
+  preview), starts at the bottom of the stack so the pins hold, can be moved like the others, and can be removed
+  once nothing is pinned.
 
 **Order matters.** Deduplicate keeps the first occurrence in the order the list has at that point,
 which is the result of the rules above it. Example: "most recent 2, then unplayed" gives the 2 most recent
