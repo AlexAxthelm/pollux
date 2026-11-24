@@ -68,7 +68,8 @@ Each source is a row with a drag handle. Sources are ordered: the order is what 
 and Deduplicate's "first" use ([[playlists-rules]]).
 
 - **Playlists and shows:** added with **+ Playlist** and **+ Show**, each opening a multi-select
-  picker (the Feed Selector below). If an added playlist already includes this one, the editor asks
+  picker (the Feed Selector below). The shows picker has an **Add all shows** button at the top
+  ([[ADR-0050 A playlist with no sources is empty]]). A playlist with no sources is empty. If an added playlist already includes this one, the editor asks
   first ([[US-0244 Be asked before making a playlist loop]]).
 - **Hand-picked episodes:** shown as one row ("12 other episodes") that is ordered among the other
   sources like any of them, with a hint that it can be tapped to edit. **+ Episode** (later) and the
@@ -84,7 +85,7 @@ row has a drag handle and a remove button. **+ Filter** and **+ Sort** add a row
 - **Deduplicate:** present and on for a new playlist, at the top. It takes no criteria.
 - **Filters:** `include` or `exclude`, a criterion and a value ([[ADR-0043 Every filter can include or exclude]]).
   Example rows: `include · playback status · unplayed`, `exclude · duration · > 2:00:00`,
-  `include · most recent · 2`.
+  `include · limit · 20`.
 - **Sorts:** a direction, a key and, for some keys, parameters. Each sort orders the list as it stands at
   that point, so the last sort is the main order and the ones above it break ties.
 - **Manual ordering:** a sort row that appears by itself once the user has pinned episodes (see the
@@ -92,8 +93,8 @@ row has a drag handle and a remove button. **+ Filter** and **+ Sort** add a row
   once nothing is pinned.
 
 **Order matters.** Deduplicate keeps the first occurrence in the order the list has at that point,
-which is the result of the rules above it. Example: "most recent 2, then unplayed" gives the 2 most recent
-episodes if unplayed; "unplayed, then most recent 2" gives the 2 most recent of the unplayed set.
+which is the result of the rules above it. Example: "limit 2, then unplayed" gives the first 2 episodes if unplayed;
+"unplayed, then limit 2" gives the first 2 of the unplayed set.
 
 ## Settings
 

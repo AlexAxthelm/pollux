@@ -27,7 +27,7 @@ A playlist has one ordered stack of rules, applied to the combined list of its s
 
 **Each rule is applied to the list as if all the rules above it had already been evaluated.** A sort orders the list as it stands, so with several sorts the last one applied is the primary order and the ones above it only break ties. A filter such as "first N episodes" or Deduplicate acts on the list in the order it has at that point. The playlist does not have to be evaluated literally in that way, but the result must be the same as if it were.
 
-Example: `sort: newest first`, `filter: first N episodes` (the "limit total results" filter, a later rule), `sort: oldest first` gives the N most recent episodes, shown oldest first.
+Example: `sort: newest first`, `filter: first N episodes`, `sort: oldest first` gives the N most recent episodes, shown oldest first.
 
 **With no sorts, the order is the source order**, each source in its own natural order. Example: all of playlist A, then show B, then playlist C.
 
@@ -38,5 +38,5 @@ Deduplicate keeps the first occurrence in the order the list has at its place in
 - This changes ADR-0027's "filters, then sorts", which has been updated to match.
 - Deduplicate has no include/exclude toggle: it is on or off, not an exception to [[ADR-0043 Every filter can include or exclude]].
 - **Manual ordering starts at the bottom of the stack.** Because each rule is applied to the result above it, a sort lower down would re-order the pins, so the row starts last, where it is applied after every other sort and the pins hold. The user can move it up, and then later sorts apply to the pinned result like any other.
-- Which filters depend on the order of the list (Deduplicate, and later "limit total results") is where position in the stack matters. Most filters, such as "most recent N", use a field of the episode and not its position.
+- Which filters depend on the order of the list (Deduplicate and Limit) is where position in the stack matters. Most filters, such as "N per source" or playback status, use a field of the episode and not its position.
 - A source's **natural order** is: for a playlist, whatever its own rules resolve to; for a show, newest first by default; for the hand-picked list, the order the episodes were added, oldest first, so the most recent addition is last. The hand-picked list therefore stores when each episode was added.

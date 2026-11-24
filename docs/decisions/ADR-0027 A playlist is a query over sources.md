@@ -5,6 +5,7 @@ feature:
   - "[[playlists]]"
   - "[[playlists-rules]]"
 related:
+  - "[[ADR-0050 A playlist with no sources is empty]]"
   - "[[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]"
   - "[[US-0201 Playlists can be filtered]]"
 ---
@@ -24,7 +25,7 @@ A playlist is fundamentally a **query** over a set of sources, with filters and 
 
 - **Sources** are one or more feed subscriptions, one or more other playlists (composite / meta-playlists), or a mix of both.
 - **Filters** narrow which episodes are included; **sorts** order the result. Rules are applied in sequence, each to the result of the ones above it, and order matters. Filters and sorts can be interleaved ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]).
-- A playlist with no rules includes all episodes from its sources. An empty source set with a rule applied acts on all episodes from all subscribed feeds; a rule applied to a populated source set acts only on that set.
+- A playlist with no rules includes all episodes from its sources. A playlist with no sources is an empty list ([[ADR-0050 A playlist with no sources is empty]]; this replaced the earlier rule that an empty source set acts on all subscribed feeds).
 - The rule system is intentionally analogous to a SQL SELECT: sources = FROM, filters = WHERE, sorts = ORDER BY, though rules can be interleaved in a stack.
 
 ## Consequences

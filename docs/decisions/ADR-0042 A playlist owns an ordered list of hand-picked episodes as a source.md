@@ -7,6 +7,7 @@ feature:
   - "[[playlists-playback]]"
   - "[[playlists-editor]]"
 related:
+  - "[[US-0248 Be warned when an episode I add is hidden by the rules]]"
   - "[[ADR-0027 A playlist is a query over sources]]"
   - "[[US-0202 Add episodes to playlists]]"
   - "[[US-0204 Episodes can be reordered in playlists]]"

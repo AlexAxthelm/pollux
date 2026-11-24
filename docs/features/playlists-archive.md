@@ -24,13 +24,13 @@ A composite playlist built from two sub-playlists:
 
 **"Latest" sub-playlist** (per feed):
 - Source: selected feed(s)
-- Filter: most recent 1 episode, unplayed
+- Rules: N per source, most recent 1; include unplayed
+- #needs-decision **Rule order.** "Most recent 1 per source, then unplayed" gives the latest episode of each show if it is unplayed. "Unplayed, then most recent 1 per source" gives the latest unplayed episode of each show. The text as first written does not say which is meant.
 - Sort: by age (desc)
 
 **"Archive" sub-playlist** (per feed):
 - Source: selected feed(s)
-- Filter: unplayed, oldest-first
-- Sort: by age (asc)
+- Rules: include unplayed; sort by age (oldest first)
 
 **Composite playlist:**
 - Sources: Latest playlist, then Archive playlist

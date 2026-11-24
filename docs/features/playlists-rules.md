@@ -24,7 +24,8 @@ exclude ([[ADR-0043 Every filter can include or exclude]]).
 
 | Rule | Parameters | Notes |
 |---|---|---|
-| Limit by recency | N (count), direction (newest / oldest) | "Most recent 1" or "Oldest 1" are the same operation with different direction |
+| Limit | N (count) | Keeps the first N episodes of the list as it stands at this point. "The N most recent" is a sort by age, newest first, then Limit. |
+| N per source | N (count), direction (newest / oldest) | Keeps the N most recent or the N oldest episodes of each source in the Sources section, by release date. "Most recent 1" per source is one episode from each show. Each source counts separately; an included playlist is one source. |
 | Playback status | unplayed / in-progress / played (multi-select) | Enables "in progress" playlists, unplayed-only queues, etc. In-progress means not played, with the playback position not at the start. |
 | Deduplicate | none | Keeps the first occurrence of each episode at this point in the rules. On by default, at the top of the filters; it can be moved or turned off. It has no include/exclude toggle. See [[US-0217 Playlist deduplication]], [[US-0218 Playlist allows duplicates]]. |
 | Title | text | Includes or excludes episodes whose title contains the given text (a simple match). Not in the original MVP scope, but cheap to include. A general regular-expression filter may follow. See [[US-0224 Playlist filter on titles]]. |
@@ -33,7 +34,6 @@ exclude ([[ADR-0043 Every filter can include or exclude]]).
 
 | Rule | Parameters | Notes |
 |---|---|---|
-| Limit total results | N (count) | Caps playlist length after other filters; high value for large archives |
 | Date range | start / end date | "Episodes released after X" |
 | Duration | min / max seconds | Short-form only, long-form only, etc. |
 | Starred / favorited | — | Only episodes the user has flagged |
@@ -65,11 +65,11 @@ Sorts define the order of the filtered episode list.
 
 Rules are stacked and applied in order. The UI should make reordering easy and show a live preview of the resulting episode list.
 
-Filters, sorts and Deduplicate share one stack and can be interleaved ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]). Each rule is applied to the list as if all the rules above it had already been evaluated, so with several sorts the last one wins and the ones above only break ties. For example, `sort: newest first`, `filter: first N episodes` (the "limit total results" filter, a later rule), `sort: oldest first` gives the N most recent episodes, oldest first. With no sorts, the order is the source order, each source in its natural order (all of A, then B, then C).
+Filters, sorts and Deduplicate share one stack and can be interleaved ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]). Each rule is applied to the list as if all the rules above it had already been evaluated, so with several sorts the last one wins and the ones above only break ties. For example, `sort: newest first`, `filter: first N episodes`, `sort: oldest first` gives the N most recent episodes, oldest first. With no sorts, the order is the source order, each source in its natural order (all of A, then B, then C).
 
-An empty source set with a rule applied acts on all episodes from all subscribed feeds.
+A playlist with no sources is empty ([[ADR-0050 A playlist with no sources is empty]]).
 
-A rule applied to a populated source set acts only on that set.
+A rule acts on the combined list of the playlist's sources.
 
 ## Notes
 

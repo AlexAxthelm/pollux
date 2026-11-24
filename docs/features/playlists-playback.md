@@ -15,7 +15,7 @@ How a playlist plays, and how one becomes the active playlist. The data model is
 
 ## Behavior
 
-- Sequential playback through episodes, in playlist order
+- Sequential playback through episodes, in playlist order. The playlist is resolved again each time playback moves on, and the next episode is the one after the episode that just finished, which counts as still in its place even if it has just been marked played ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]])
     - Alternate behavior (configurable): play first unplayed episode in playlist
       on next-episode, rather than play next in sequence ("play from top" rather
       than "play next")
@@ -69,6 +69,7 @@ changing it. See [[ADR-0046 Queued episodes play before the active playlist resu
 ## Decisions
 
 - [[ADR-0029 The active playlist is set by where playback started]]
+- [[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]
 - [[ADR-0046 Queued episodes play before the active playlist resumes]]
 - [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]
 
