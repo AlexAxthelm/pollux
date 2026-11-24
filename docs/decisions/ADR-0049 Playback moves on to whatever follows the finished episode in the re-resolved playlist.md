@@ -4,8 +4,10 @@ status: accepted
 feature:
   - "[[playlists-playback]]"
 related:
+  - "[[US-0250 Be warned before removing the playing episode from its playlist]]"
   - "[[ADR-0029 The active playlist is set by where playback started]]"
   - "[[ADR-0006 No auto-advance until playlists exist]]"
+  - "[[ADR-0044 An episode's settings come from the context it is played from]]"
   - "[[ADR-0046 Queued episodes play before the active playlist resumes]]"
   - "[[US-0139 Auto play next episode]]"
 ---
@@ -23,10 +25,11 @@ Each time playback moves on automatically, the playlist is **resolved again** an
 - Episodes added right after the current one play next. If the current episode is moved to the top, whatever follows it in the new order plays next.
 - Queued episodes play before this, as in [[ADR-0046 Queued episodes play before the active playlist resumes]].
 - The playlist becomes inactive when nothing follows the finished episode.
+- **If an edit removes the playing episode from the list**, it keeps playing with the context it started with, so its settings do not change part-way through, and playback ends when it finishes. The playlist is no longer a context for anything after it.
 - The alternate setting "play next: from top" plays the first episode in the re-resolved list instead of the one after the finished episode ([[playlists-playback]]).
 
 ## Consequences
 
 - Resolution runs on each advance, so it has to be fast for lists up to the episode limit ([[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]]).
 - The auto-advance in [[ADR-0006 No auto-advance until playlists exist]] is replaced by this rule once playlist playback is built. That ADR is left as it stands until then.
-- #needs-decision **What follows an episode that an edit removed from the list?** If the user edits the playlist so that the current episode is no longer in it, there is no position to continue from. Not decided.
+- The playing episode's context route is fixed when it starts and stays fixed until it ends ([[ADR-0044 An episode's settings come from the context it is played from]]), so an edit cannot change its settings mid-episode.
