@@ -25,7 +25,7 @@ A playlist can own a **hand-picked list**: an ordered list of single episodes. I
 
 - Each member has a position group: **top**, **one-off** (the default for an episode added by hand) or **end**. Order within the top and end groups is set by hand.
 - **Filters apply to hand-picked episodes as normal.** A filter can remove one. The user needs to be able to see that it has happened ([[US-0243 See when a filter hides a hand-picked episode]]).
-- The sorts order the rest of the playlist. Top members are then placed before everything else, and end members after everything else, so the pins are not reordered by the sorts. One-offs are ordered by the sorts like any other episode.
+- The sorts order the rest of the playlist. Top members are then placed before everything else, and end members after everything else, so the pins are not reordered by the sorts. #needs-decision Draft [[ADR-0047 A playlist's rules are one ordered stack of operations on the list]] would make pins operations in the rule stack, not fixed positions after the sorts; kept as written until decided. One-offs are ordered by the sorts like any other episode.
 - Dragging and reordering are not MVP. Hand-picked lists as a whole are not MVP, as [[playlists-playback]] already says.
 
 ## Consequences
