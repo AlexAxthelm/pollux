@@ -1,6 +1,6 @@
 ---
 type: decision
-status: draft
+status: accepted
 feature:
   - "[[playlists-circular-dependencies]]"
 related:

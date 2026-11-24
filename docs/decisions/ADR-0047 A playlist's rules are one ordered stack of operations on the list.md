@@ -1,6 +1,6 @@
 ---
 type: decision
-status: draft
+status: accepted
 feature:
   - "[[playlists-rules]]"
   - "[[playlists-editor]]"
@@ -15,9 +15,9 @@ related:
 
 ## Context
 
-[[ADR-0027 A playlist is a query over sources]] describes a playlist as sources, then filters, then sorts. The user's editor sketch shows one stack in which Deduplicate, filters and sorts can be dragged past each other, with a **Manual ordering** sort that appears, at the bottom, when episodes are pinned ([[playlists-editor]]). This matters for Deduplicate, because "first" means the first occurrence in the order the list has at that point in the stack.
+[[ADR-0027 A playlist is a query over sources]] describes a playlist as sources, then filters, then sorts. One stack in which Deduplicate, filters and sorts can be dragged past each other, with a **Manual ordering** sort that appears, at the bottom (by default), when episodes are pinned ([[playlists-editor]]). This matters for Deduplicate, because "first" means the first occurrence in the order the list has at that point in the stack.
 
-## Decision (draft, not settled)
+## Decision
 
 A playlist has one ordered stack of rules, applied to the combined list of its sources:
 
@@ -35,7 +35,7 @@ Deduplicate keeps the first occurrence in the order the list has at its place in
 
 ## Consequences
 
-- If accepted, this changes ADR-0027's "filters, then sorts". It is flagged there.
+- This changes ADR-0027's "filters, then sorts", which has been updated to match.
 - Deduplicate has no include/exclude toggle: it is on or off, not an exception to [[ADR-0043 Every filter can include or exclude]].
 - **Manual ordering starts at the bottom of the stack.** Because each rule is applied to the result above it, a sort lower down would re-order the pins, so the row starts last, where it is applied after every other sort and the pins hold. The user can move it up, and then later sorts apply to the pinned result like any other.
 - Which filters depend on the order of the list (Deduplicate, and later "limit total results") is where position in the stack matters. Most filters, such as "most recent N", use a field of the episode and not its position.

@@ -56,7 +56,7 @@ alarming; not specified yet.
 
 ## Decisions
 
-- [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]] (draft)
+- [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]]
 
 ## User stories
 

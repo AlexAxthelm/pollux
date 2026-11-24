@@ -112,8 +112,7 @@ The core differentiator.
 - **Convenience playlists**: All Subscriptions, Downloaded/Available (see
   [[playlists-convenience]])
 - **Circular dependency cap**: per-playlist episode limit (default 1,000), message if reached (see
-  [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]],
-  which is still a draft)
+  [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]])
 
 Milestone: can create a playlist with rules, play from it, and have it behave
 as the active queue.

@@ -28,13 +28,15 @@ Playlists are the primary way users organize and consume episodes in Pollux.
 A playlist is fundamentally a **query** over a set of sources, with filters and sorts applied:
 
 ```
-(sources) → [filters] → [sorts] → ordered episode list
+(sources) → [rules: filters, sorts, deduplicate, in one ordered stack] → ordered episode list
 ```
 
 **Sources** may be:
 - One or more feed subscriptions
 - One or more other playlists (enabling composite / meta-playlists)
 - A mix of both
+- The playlist's own hand-picked episodes, a source that exists only inside that playlist
+  ([[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]; not MVP)
 
 **Filters** narrow which episodes are included (see [[playlists-rules]])
 
@@ -64,14 +66,14 @@ See [[playlists-circular-dependencies]].
 per-playlist override, hard maximum 50,000 for now). If it is reached, show:
 *"Showing first N episodes."* An included playlist is resolved with its own limit.
 
-The reasoning, and the fact that it is not yet confirmed, are in
+The reasoning is in
 [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]].
 
 ## Decisions
 
 - [[ADR-0027 A playlist is a query over sources]]
 - [[ADR-0028 A subscription is an implicit single-feed playlist]]
-- [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]] (draft)
+- [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]]
 - [[ADR-0046 Queued episodes play before the active playlist resumes]]
 - [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]
 - [[ADR-0043 Every filter can include or exclude]]

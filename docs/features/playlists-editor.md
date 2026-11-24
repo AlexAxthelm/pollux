@@ -78,7 +78,7 @@ and Deduplicate's "first" use ([[playlists-rules]]).
 ## Rules
 
 One list of operations on the playlist, applied top to bottom: Deduplicate, filters and sorts, in any
-order ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]], draft). Each
+order ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]). Each
 row has a drag handle and a remove button. **+ Filter** and **+ Sort** add a row at the bottom.
 
 - **Deduplicate:** present and on for a new playlist, at the top. It takes no criteria.
