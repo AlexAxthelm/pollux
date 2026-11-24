@@ -50,12 +50,11 @@ playback**, not by which playlists happen to contain that episode:
 - Pressing play on a playlist from the library resumes from the current position
   if already active, or begins from the first episode if not
 
-**Episode ordering note:** The playlist's list is not dragged into order; episodes are pinned instead, and pinned episodes can be dragged within their group (later). Specific episodes are pinned
-with a playlist's hand-picked list: sending one to the top or end adds a "Manual ordering" sort to the
-rules, and the "Move to top / Move to bottom" menu actions do the same (not MVP; see
-[[US-0242 Order a playlist by hand with top and end pools]]). See [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]].
+**Episode ordering note:** The playlist's list is not dragged into order; episodes are pinned instead, and pinned episodes can be dragged within their group (later). Episodes are pinned to the top
+or end with "Move to top / Move to bottom", which adds a "Manual ordering" sort to the rules (not MVP;
+see [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]] and [[US-0242 Order a playlist by hand with top and end pools]]).
 
-**Queue:** A separate ephemeral queue plays before the active playlist resumes, without
+**Queue:** A separate queue plays before the active playlist resumes, without
 changing it. See [[ADR-0046 Queued episodes play before the active playlist resumes]].
 *Not built yet.*
 
@@ -72,6 +71,7 @@ changing it. See [[ADR-0046 Queued episodes play before the active playlist resu
 - [[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]
 - [[ADR-0046 Queued episodes play before the active playlist resumes]]
 - [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]
+- [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]
 
 ## Open questions
 

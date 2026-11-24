@@ -73,6 +73,7 @@ has an episode limit ([[ADR-0030 Playlist resolution is capped by a per-playlist
 - [[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]
 - [[ADR-0046 Queued episodes play before the active playlist resumes]]
 - [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]
+- [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]
 - [[ADR-0043 Every filter can include or exclude]]
 
 ## User stories

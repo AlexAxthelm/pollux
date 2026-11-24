@@ -55,7 +55,7 @@ Sorts define the order of the filtered episode list.
 
 | Rule | Parameters | Notes |
 |---|---|---|
-| Manual ordering | none | Appears when episodes are pinned to the top or end; pinned episodes are moved to the front or back in hand-set order. Starts at the bottom of the stack, so the pins hold; it can be moved. See [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]. |
+| Manual ordering | none | Appears when the playlist has pinned episodes; pinned episodes are moved to the front or back in hand-set order. Starts at the bottom of the stack, so the pins hold; it can be moved. See [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]. |
 | By source (interleaved) | strategy: round-robin / proportional / date-normalized | Solves the archive-clumping problem; see [[playlists-archive]] |
 | By duration | asc / desc | |
 | By play count | asc / desc | Surfaces favorites or finds unlistened gems |

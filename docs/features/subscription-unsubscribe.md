@@ -28,7 +28,7 @@ see subscription-soft-delete.md for future unsubscribe improvements
 
 A playlist's hand-picked list ([[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]])
 holds episode ids. Removing the subscription deletes its episodes, so the hand-picked members for
-those episodes are removed in the same transaction. *Not built yet* (hand-picked lists are not MVP).
+those episodes are removed in the same transaction, and so are any pins for them ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]). *Not built yet* (hand-picked lists and pins are not MVP).
 
 ## Effect on playback
 

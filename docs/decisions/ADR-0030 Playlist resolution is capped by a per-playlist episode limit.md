@@ -28,6 +28,6 @@ Every playlist is bounded by an **episode limit**.
 ## Consequences
 
 - The hard maximum needs performance testing before it is final.
-- The limit cuts the end of the list. With "send to end" pins ([[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]), an end-pinned episode can be cut when the limit is reached. This is accepted.
+- The limit cuts the end of the list. With "send to end" pins ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]), an end-pinned episode can be cut when the limit is reached. This is accepted.
 - An included playlist that was cut by its own limit is not marked as cut in the playlists that include it.
 - With Deduplicate off, repeated copies count toward the limit.

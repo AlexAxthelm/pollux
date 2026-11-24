@@ -113,12 +113,17 @@ A join entity between a Playlist and one of its sources. A source may be a
 Subscription, another Playlist (enabling meta-playlists), or the convenience **All shows** source that follows the library. Carries an ordering
 so that "by source" sorts are deterministic.
 
-A third kind of source is the playlist's own **hand-picked list**: an ordered list of
-single episode ids, each with a group (top, one-off or end) and the time it was added (the list's natural order, oldest first). It exists only inside the
-playlist that owns it and cannot be used as a source by another playlist. Filters apply to
-its episodes as normal. Top and end members are placed by the playlist's Manual ordering sort,
-which starts at the bottom of the rule stack. See
-[[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]. *Not MVP.*
+A further kind of source is the playlist's own **hand-picked list**: single episode ids,
+each with the time it was added (the list's natural order, oldest first). It exists only
+inside the playlist that owns it and cannot be used as a source by another playlist. Filters
+apply to its episodes as normal. See [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]. *Not MVP.*
+
+### PlaylistPin *(Identified)*
+
+An occurrence of an episode that the user has moved to the top or the end of a playlist:
+the playlist, the episode id, the source it came through, a group (top or end) and its place in
+that group. It is independent of the source kinds, so a pin works on an episode from a show, an
+included playlist or the hand-picked list, and only that occurrence moves. The Manual ordering sort uses the pins. See [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]. *Not MVP.*
 
 ### PlaylistFilter *(Identified)*
 
