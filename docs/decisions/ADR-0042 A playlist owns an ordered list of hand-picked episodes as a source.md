@@ -21,19 +21,19 @@ An earlier draft of this decision expressed one-off episodes and pinning as rule
 
 ## Decision
 
-A playlist can own a **hand-picked list**: an ordered list of single episodes. It is a source in the query ([[ADR-0027 A playlist is a query over sources]]), but it exists only inside its playlist. It is not selectable as a source by other playlists, and it does not appear in the library or the Feed Selector. The editor shows it as a "Hand-picked" section inside the playlist.
+A playlist can own a **hand-picked list**: an ordered list of single episodes. It is a source in the query ([[ADR-0027 A playlist is a query over sources]]), but it exists only inside its playlist. It is not selectable as a source by other playlists, and it does not appear in the library or the Feed Selector. The editor shows it as a row in the sources, such as "12 other episodes", that can be ordered like any other source and tapped to edit ([[playlists-editor]]).
 
 - Each member has a position group: **top**, **one-off** (the default for an episode added by hand) or **end**. Order within the top and end groups is set by hand.
 - **Filters apply to hand-picked episodes as normal.** A filter can remove one. The user needs to be able to see that it has happened ([[US-0243 See when a filter hides a hand-picked episode]]).
-- The sorts order the rest of the playlist. Top members are then placed before everything else, and end members after everything else, so the pins are not reordered by the sorts. #needs-decision Draft [[ADR-0047 A playlist's rules are one ordered stack of operations on the list]] would make pins operations in the rule stack, not fixed positions after the sorts; kept as written until decided. One-offs are ordered by the sorts like any other episode.
+- **Manual ordering is a sort.** Sending an episode to the top or the end of the playlist makes the playlist show a **Manual ordering** sort row. Pinned episodes sort to the front or the back of the list in the order set by hand; unpinned episodes tie, and the sorts below it order them. The row starts at the top of the sort stack, can be moved like any other sort, and goes away when nothing is pinned. A reset button on a pinned episode unpins it. One-offs that are not pinned are ordered by the sorts like any other episode. See [[ADR-0047 A playlist's rules are one ordered stack of operations on the list]].
 - Dragging and reordering are not MVP. Hand-picked lists as a whole are not MVP, as [[playlists-playback]] already says.
 
 ## Consequences
 
 - The "Move to top / Move to bottom" menu actions set a member's group, adding it to the hand-picked list if needed.
 - `DATA_MODEL` gains a hand-picked source: a playlist-owned ordered list of episode ids, each with a group.
-- Still pure query on the whole: the hand-picked list is one more `FROM`, with top and end as fixed positions after the sorts.
+- Still pure query on the whole: the hand-picked list is one more `FROM`, and pinning is one more sort.
 - **Storage:** hand-picked episodes count as members of the playlist. Where the playlist requests retention or downloads ([[ADR-0044 An episode's settings come from the context it is played from]], [[storage-eviction]], [[US-0044 Retention rules interactions]]), those requests cover its hand-picked episodes too, so a hand-picked episode of a show that keeps none is still retained while the playlist asks for it.
 - **Unsubscribe:** when a show is unsubscribed its episodes are deleted, and any hand-picked members for those episodes are dropped in the same transaction, so the list never holds an id with no episode. See [[subscription-unsubscribe]].
 - A hand-picked row can say where it was added from (for example "added from playlist 'foobar favorites'"), a small nicety like the queue's `from:` line ([[ADR-0046 Queued episodes play before the active playlist resumes]]). Not specified further.
-- Open for the build: the exact wording and placement of the hidden-by-filter indicator ([[US-0243 See when a filter hides a hand-picked episode]]).
+- Open for the build: how the hand-picked list is edited when its row is tapped.

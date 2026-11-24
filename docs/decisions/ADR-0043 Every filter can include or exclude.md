@@ -23,3 +23,4 @@ Every filter carries an include/exclude polarity. The user is responsible for se
 
 - MVP filters are "include/exclude playback status" and "include/exclude most recent / oldest N".
 - The polarity is part of the stored filter from the start, so exclusion stories need no model change.
+- Deduplicate ([[playlists-rules]]) is a filter with no criteria. It is on or off and has no include/exclude toggle.

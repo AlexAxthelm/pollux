@@ -12,141 +12,121 @@ depends:
 ---
 # Playlist Editor
 
-The playlist editor is the interface for creating and editing playlists. It
-combines a rules builder with a live preview of the resulting episode list.
+The playlist editor is the interface for creating and editing a playlist. It combines the
+sources, a stack of rules and a live preview of the resulting episode list.
+
+*Not built yet.* The layout below comes from the user's sketch (November 2026).
 
 ## Layout
 
-Two stacked components on mobile (each ~1/2 screen), columns on larger layouts.
-A navbar provides Back/Cancel and Save actions.
+One scrolling screen with four parts. Sources, Rules and Settings are collapsible; the preview
+follows them.
 
 ```
-NavBar: [Cancel] [Playlist Title]  [Save]
-────────────────────────────────────────
-Component 1: Rules & Settings  (~½)
-────────────────────────────────────────
-Component 2: Live Preview      (~½)
+[‹ Back]  Playlist name  [Save]  [↶ Undo] [↷ Redo]
+────────────────────────────────────────────────
+▾ Sources
+   ≡ Playlist A
+   ≡ Show B
+   ≡ Playlist C
+   ≡ 12 other episodes  (tap to edit)
+  [+ Playlist] [+ Show] [+ Episode]
+
+▾ Rules
+   ≡ Deduplicate                    ⊖
+   ≡ filter: unplayed               ⊖
+   ≡ filter: duration < 2h          ⊖
+   ≡ sort: oldest first             ⊖
+  [+ Filter] [+ Sort]
+
+▾ Settings                 [Advanced ◯]
+   Episode limit 5k   (advanced)
+   Play next: from top
+
+Preview                    [⋯ details]
+   Episode 1            [↑][↓]
+     from A
+   Episode 2            [↑][↓]
+     from A
+   Episode 3            [↑][↓]
+     from B
+   Episode 4            [↺][≡]   pinned to end
+   Episode 5            [↺][≡]
 ```
 
-When canceling, warn user if unsaved changes.
-Clicking the playlist title allows for renaming.
+## Top bar
 
----
+- **Back** on the left. Leaving with unsaved changes warns first.
+- Tapping the playlist name renames it.
+- **Save** saves the playlist.
+- **Undo** reverts the last editor action, repeatedly (a stack). Once something has been undone, **Redo**
+  appears. See [[US-0245 Undo and redo in the playlist editor]].
 
-## Component 1: Rules & Settings
+## Sources
 
-### Empty State
+Each source is a row with a drag handle. Sources are ordered: the order is what the "by source" sort
+and Deduplicate's "first" use ([[playlists-rules]]).
 
-When no rules have been added:
+- **Playlists and shows:** added with **+ Playlist** and **+ Show**, each opening a multi-select
+  picker (the Feed Selector below). If an added playlist already includes this one, the editor asks
+  first ([[US-0244 Be asked before making a playlist loop]]).
+- **Hand-picked episodes:** shown as one row ("12 other episodes") that is ordered among the other
+  sources like any of them, with a hint that it can be tapped to edit. **+ Episode** adds an episode
+  to it. This is the playlist's own hand-picked list
+  ([[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]).
 
-```
-Feeds
-  (+) Add feed
+## Rules
 
-Filters
-  (+) Add filter
+One list of operations on the playlist, applied top to bottom: Deduplicate, filters and sorts, in any
+order ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]], draft). Each
+row has a drag handle and a remove button. **+ Filter** and **+ Sort** add a row at the bottom.
 
-Sort
-  (+) Add sort
+- **Deduplicate:** present and on for a new playlist, at the top. It takes no criteria.
+- **Filters:** `include` or `exclude`, a criterion and a value ([[ADR-0043 Every filter can include or exclude]]).
+  Example rows: `include · playback status · unplayed`, `exclude · duration · > 2:00:00`,
+  `include · most recent · 2`.
+- **Sorts:** a direction, a key and, for some keys, parameters. Sort rows are keys, with the first
+  sort in the list as the primary key.
+- **Manual ordering:** a sort row that appears by itself once the user has pinned episodes (see the
+  preview), starts at the top of the stack, can be moved like the others, and goes away when nothing
+  is pinned any more.
 
-▸ Settings  (collapsed)
-```
+**Order matters.** Deduplicate keeps the first occurrence in the order the list has at that point,
+which is set by the sorts above it. Example: "most recent 2, then unplayed" gives the 2 most recent
+episodes if unplayed; "unplayed, then most recent 2" gives the 2 most recent of the unplayed set.
 
-### Feeds
+## Settings
 
-The feeds section lists the sources for this playlist (subscriptions and/or
-other playlists). Clicking "Add feed" opens the **Feed Selector** — a view
-similar to the library with multi-select (checkboxes) across both subscriptions
-and playlists. Selected feeds appear as rows in the feeds section.
+Collapsed by default, using the standard settings interface ([[settings-cascade]]). The **Advanced**
+switch in its header shows the advanced settings, such as **Episode limit** (default 1,000, per
+playlist; see [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit instead of detecting cycles]]).
+**Play next** ("from top" or in sequence) is the per-playlist setting from [[playlists-playback]].
 
-If an added playlist already includes this one (directly or through others), the editor asks
-before adding it: the loop leaves that playlist's copy of this one out, and the message links to
-[[playlists-circular-dependencies]]. See [[US-0244 Be asked before making a playlist loop]].
+## Preview
 
-### Filters
+A scrollable episode list showing the result of the current rules as if the playlist were saved now.
+It updates as sources and rules change. The rows are the same as in the full playlist view
+([[playlists-ui]]), not a simplified list. If nothing matches, an empty state says why (for example
+"No unplayed episodes match these filters").
 
-Each filter is a row:
+- **Order buttons:** an unpinned row has up and down buttons that send the episode to the top or the
+  end of the list. A pinned row has a drag handle to order it within its group, and a reset button
+  that unpins it and returns it to its natural place. A group at the top only shows when something is
+  pinned to the top. ([[US-0242 Order a playlist by hand with top and end pools]])
+- **Details menu:** the preview has its own options. **Show source** adds the `from A` line to each
+  row (optional, off or on as the user chooses). **Show excluded** includes episodes that the rules
+  have removed, marked as excluded, with no reason shown
+  ([[US-0243 See when a filter hides a hand-picked episode]]). See
+  [[US-0246 Choose what the playlist preview shows]].
+- **Limit message:** "Showing first N episodes." appears at the end only if the list is longer than
+  the limit.
 
-```
-[≡ drag] [include/exclude] [criteria type     ] [criteria value]
-```
+## Pickers
 
-Example rows:
-```
-[≡] [include] [playback status] [unplayed      ]
-[≡] [exclude] [duration       ] [> 2:00:00     ]
-[≡] [include] [most recent    ] [2             ]
-```
-
-- **Drag handle** (≡): reorder filters by dragging
-- **include/exclude toggle**: all filter types support this; user is responsible
-  for sensible combinations
-- **Criteria type**: selector for the filter operation (playback status,
-  duration, most recent N, oldest N, etc.)
-- **Criteria value**: parameter(s) for the selected operation
-
-The "Add filter" button sits below all current filter rows and moves down as
-rows are added.
-
-**Filter order matters**: filters are applied top-to-bottom. Reordering changes
-the result. The live preview reflects the current order.
-
-Example: "most recent 2, then unplayed" gives the 2 most recent episodes if
-unplayed. "unplayed, then most recent 2" gives the 2 most recent from the
-unplayed set.
-
-### Sort
-
-Each sort is a row:
-
-```
-[≡ drag] [asc/desc] [sort key          ] [parameters  ]
-```
-
-Example rows:
-```
-[≡] [⬆] [in feeds ] [(feed list) →  ]
-[≡] [⬆] [has flag  ] [(flag type) → ]
-[≡] [⬇] [date      ] [              ]
-```
-
-- **asc/desc**: for boolean keys (e.g. "has flag"), desc = truthy first
-- **sort key**: the field to sort on
-- **parameters**: some sort keys open a sub-selector (e.g. "in feeds" and
-  "has flag" open the Feed Selector and flag type picker respectively);
-  "date" has no parameters
-
-Sort rows are applied in order (primary → secondary → tertiary, etc.).
-
-### Settings
-
-A collapsed section at the bottom of Component 1, using the standard feed
-settings interface (see [[settings-cascade]]). Expanded on tap. Not distracting in
-the default collapsed state.
-
----
-
-## Component 2: Live Preview
-
-A scrollable episode list showing the result of the current rules as if the
-playlist were saved now. Updates in real-time as rules are added, removed,
-reordered, or changed.
-
-The episode rows in the preview are the same format as in the full playlist
-view (see [[playlists-ui]]) — this is not a simplified list, it's the real thing.
-
-If the rule set produces no episodes, show an empty state explaining why
-(e.g. "No unplayed episodes match these filters").
-
----
-
-## Feed Selector
-
-A reusable view (also used for feed sort parameter selection) showing all
-subscriptions and playlists with multi-select checkboxes. Structure matches
-the library view (sections: Playlists, Shows, no suggestions). Previously selected items are
-pre-checked on open. Feeds that are in the playlist sources are floated to the
-top
+The picker behind **+ Playlist** and **+ Show** is a reusable view (also used for choosing the sources
+of a "by source" sort) with multi-select checkboxes. It is laid out like the library view. Items already
+in the playlist are pre-checked and floated to the top. What **+ Episode** opens (an episode search or
+browse) is not specified yet.
 
 ---
 

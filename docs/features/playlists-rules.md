@@ -48,6 +48,7 @@ Sorts define the order of the filtered episode list.
 | Rule | Parameters | Notes |
 |---|---|---|
 | By age | asc / desc | Chronological or reverse-chronological |
+| Manual ordering | none | Appears when episodes are pinned to the top or end; pinned episodes sort to the front or back in hand-set order, others tie. Starts at the top of the sorts. Not MVP. See [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]. |
 | By source | ordered source list | All episodes from source A before source B; enables priority podcasts and composite playlist sequencing. Sequential only for MVP. |
 
 ### Later
@@ -62,6 +63,8 @@ Sorts define the order of the filtered episode list.
 ## Rule Composition
 
 Rules are stacked and applied in order. The UI should make reordering easy and show a live preview of the resulting episode list.
+
+Filters, sorts and Deduplicate share one stack and can be interleaved (draft: [[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]). The first sort is the primary key; that is not yet confirmed.
 
 An empty source set with a rule applied acts on all episodes from all subscribed feeds.
 
