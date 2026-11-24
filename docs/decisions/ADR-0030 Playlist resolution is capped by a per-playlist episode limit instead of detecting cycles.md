@@ -1,6 +1,6 @@
 ---
 type: decision
-status: accepted
+status: draft
 feature:
   - "[[playlists-circular-dependencies]]"
 related:
@@ -33,4 +33,4 @@ No cycle detection for MVP. Every playlist is bounded by an **episode limit**, s
 - Detection and a warning in the playlist config UI are deferred. They need cycle detection in the playlist source graph and a clear, non-alarming way to surface it, which is non-trivial to communicate well, so the spec defers it until there is a clear UX approach.
 - The hard maximum needs performance testing before it is final.
 - Because a playlist on the path is left out, an included playlist resolves differently inside a loop than on its own. B inside A leaves out A, while B on its own includes A. This only happens in loops, and the confirmation before creating one is the place to say so. Playlists that arrive through import or sync skip that confirmation, so the editor can also mark a source that sits in a loop as one that leaves something out; the wording is not settled.
-- #needs-decision **The limit cuts the end of the list.** With "send to end" pins ([[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]), an end-pinned episode is the first to fall off when the limit is reached. Not decided.
+- The limit cuts the end of the list. With "send to end" pins ([[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]), an end-pinned episode can be cut when the limit is reached. This is accepted.

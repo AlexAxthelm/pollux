@@ -29,4 +29,5 @@ There is a separate, ephemeral **queue** ("up next") alongside the active playli
 
 - ADR-0029 is unchanged. The queue sits beside it rather than replacing any part of it.
 - The saved play context needs a queue as well as the active source: an ordered list of entries, each an episode id plus its context route.
-- Open for the build: whether the queue survives a cold start (the active playlist does), and how the user adds and clears items. Settle these when the queue is specified.
+- The queue persists across restarts, like the active playlist. After a restart with episodes in the queue they are still there. On a first launch it is empty.
+- Open for the build: how the user adds and clears items. Settle this when the queue is specified.

@@ -34,7 +34,7 @@ Archive binge is surfaced as a suggested playlist from the create-playlist flow;
 
 ## Open questions
 
-- Is "in progress" a system playlist? The stories name it, but the list above does not.
+- Is "in progress" a system playlist? The stories name it, but the list above does not. What it means is settled: an episode that is not played, with its playback position not at the start.
 
 ## User stories
 
