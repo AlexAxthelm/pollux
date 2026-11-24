@@ -68,7 +68,7 @@ Each source is a row with a drag handle. Sources are ordered: the order is what 
 and Deduplicate's "first" use ([[playlists-rules]]).
 
 - **Playlists and shows:** added with **+ Playlist** and **+ Show**, each opening a multi-select
-  picker (the Feed Selector below). The shows picker has an **Add all shows** button at the top
+  picker (the Feed Selector below). The shows picker has an **All shows** item at the top, one source that follows the library
   ([[ADR-0050 A playlist with no sources is empty]]). A playlist with no sources is empty. If an added playlist already includes this one, the editor asks
   first ([[US-0244 Be asked before making a playlist loop]]).
 - **Hand-picked episodes:** shown as one row ("12 other episodes") that is ordered among the other

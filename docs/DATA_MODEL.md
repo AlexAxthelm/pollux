@@ -110,7 +110,7 @@ See also: [[GLOSSARY]] — Playlist.
 ### PlaylistSource *(Identified)*
 
 A join entity between a Playlist and one of its sources. A source may be a
-Subscription or another Playlist (enabling meta-playlists). Carries an ordering
+Subscription, another Playlist (enabling meta-playlists), or the convenience **All shows** source that follows the library. Carries an ordering
 so that "by source" sorts are deterministic.
 
 A third kind of source is the playlist's own **hand-picked list**: an ordered list of

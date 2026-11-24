@@ -13,7 +13,7 @@ depends:
 ## Convenience Playlists
 
 System-provided playlists that require no configuration:
-- **All subscriptions**: all episodes from all subscribed feeds, no filters
+- **All subscriptions**: all episodes from all subscribed feeds, no filters (a playlist whose only source is the All shows source, [[ADR-0050 A playlist with no sources is empty]])
 - **Downloaded / available**: all downloaded episodes, regardless of feed
 - **In progress**: episodes that are not played, with the playback position not at the start,
   from all subscribed feeds (a playback status filter, [[playlists-rules]])

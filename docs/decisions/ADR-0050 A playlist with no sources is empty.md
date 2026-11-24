@@ -6,6 +6,7 @@ feature:
   - "[[playlists-rules]]"
   - "[[playlists-editor]]"
 related:
+  - "[[US-0249 Use all my shows as one source]]"
   - "[[ADR-0027 A playlist is a query over sources]]"
   - "[[ADR-0028 A subscription is an implicit single-feed playlist]]"
 ---
@@ -17,9 +18,10 @@ related:
 
 ## Decision
 
-A playlist with no sources is an empty list. To use every show, the user adds them as sources. The list of shows in the editor has an **Add all shows** button at the top.
+A playlist with no sources is an empty list. To use every show, the user adds the convenience **All shows** source, which is the first item in the list of shows in the editor. It is one source that always follows the library: shows subscribed later are included and unsubscribed ones drop out.
 
 ## Consequences
 
 - This replaces the "empty source set" rule in ADR-0027. The library and the "All subscriptions" convenience playlist stay as they are ([[ADR-0028 A subscription is an implicit single-feed playlist]]).
-- #needs-decision **What does "Add all shows" add?** It could add every current show as its own source row, so shows subscribed later are not included. Or it could add one "All shows" source that always follows the library. Not decided.
+- The "All subscriptions" convenience playlist ([[playlists-convenience]]) is a playlist whose only source is All shows.
+- For the per-source rules ("N per source" and "by source", [[playlists-rules]]), the All shows source counts as one source for each show, so "most recent 1 per source" gives one episode from every show, as if each show had been added on its own.
