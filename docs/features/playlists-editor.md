@@ -58,7 +58,7 @@ Preview                    [⋯ details]
 
 - **Back** on the left. Leaving with unsaved changes warns first.
 - Tapping the playlist name renames it.
-- **Save** saves the playlist.
+- **Save** saves the playlist. It is disabled until the playlist has a name. A playlist with no sources, or with no rules, is valid: no sources is an empty playlist, no rules is source order. Edits take effect on Save. If the playlist is playing, a change to sources or rules first shows at the next automatic advance, and a change to settings straight away ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).
 - **Undo** reverts the last editor action, repeatedly (a stack). Once something has been undone, **Redo**
   appears. See [[US-0245 Undo and redo in the playlist editor]].
 
@@ -82,7 +82,7 @@ One list of operations on the playlist, applied top to bottom: Deduplicate, filt
 order ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]). Each
 row has a drag handle and a remove button. **+ Filter** and **+ Sort** add a row at the bottom.
 
-- **Deduplicate:** present and on for a new playlist, at the top. It takes no criteria.
+- **Deduplicate:** present and on for a new playlist, at the top. It takes no criteria. There is at most one: **+ Filter** does not offer it while it is in the stack, and adding it back after removal puts it at the top.
 - **Filters:** `include` or `exclude`, a criterion and a value ([[ADR-0043 Every filter can include or exclude]]).
   Example rows: `include · playback status · unplayed`, `exclude · duration · > 2:00:00`,
   `include · limit · 20`.
@@ -119,7 +119,12 @@ It updates as sources and rules change. The rows are the same as in the full pla
   have removed, marked as excluded, with no reason shown
   ([[US-0243 See when a filter hides a hand-picked episode]]). See
   [[US-0246 Choose what the playlist preview shows]].
+- **Remove button:** a row from the hand-picked list can show a **Remove** button, which can be hidden ([[US-0252 Remove a hand-picked episode from the preview]]). Later, with the hand-picked list.
 - **Limit message:** "Showing first N episodes." appears at the end only if the limit cut the list.
+
+## Removing things other playlists depend on
+
+Deleting a playlist that other playlists include, and unsubscribing from a show that playlists use as a source, both confirm first with a message such as "This playlist is included in 5 other playlists", with a preview of those playlists ([[US-0251 See which playlists use a show or playlist before removing it]]). On confirm the source is dropped from each of them, and pins that came through it are removed ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]). "By source" needs nothing extra, because it reads the current Sources order.
 
 ## Pickers
 

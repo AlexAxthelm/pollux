@@ -26,6 +26,7 @@ Each time playback moves on automatically, the playlist is **resolved again** an
 - Queued episodes play before this, as in [[ADR-0046 Queued episodes play before the active playlist resumes]].
 - The playlist becomes inactive when nothing follows the finished episode.
 - **If an edit removes the playing episode from the list**, it keeps playing with the context it started with, so its settings do not change part-way through, and playback ends when it finishes. The playlist is no longer a context for anything after it.
+- **Edits take effect on Save.** A change to sources or rules first changes playback at the next automatic advance. A change to settings is visible straight away.
 - The alternate setting "play next: from top" plays the first episode in the re-resolved list instead of the one after the finished episode ([[playlists-playback]]).
 
 ## Consequences

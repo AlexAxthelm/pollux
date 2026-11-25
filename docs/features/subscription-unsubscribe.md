@@ -20,7 +20,7 @@ have been flagged to be saved ("this will delete 27 episodes, including 3 saved
 ones")
 
 When a subscription is removed, playlists should have their rule re-evaluated,
-so that the removal is reflected in those too.
+so that the removal is reflected in those too. If playlists use the show as a source, the unsubscribe confirmation says how many and previews them; the show is then dropped from each ([[US-0251 See which playlists use a show or playlist before removing it]]).
 
 see subscription-soft-delete.md for future unsubscribe improvements
 
