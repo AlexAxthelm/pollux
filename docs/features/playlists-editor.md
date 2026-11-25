@@ -58,7 +58,7 @@ Preview                    [⋯ details]
 
 - **Back** on the left. Leaving with unsaved changes warns first.
 - Tapping the playlist name renames it.
-- **Save** saves the playlist. It is disabled until the playlist has a name. A playlist with no sources, or with no rules, is valid: no sources is an empty playlist, no rules is source order. Edits take effect on Save. If the playlist is playing, a change to sources or rules first shows at the next automatic advance, and a change to settings straight away ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).
+- **Save** saves the playlist. It is disabled until the playlist has a name. A playlist with no sources, or with no rules, is valid: no sources is an empty playlist, no rules is source order. Edits take effect on Save. If the playlist is playing, a change to sources or rules first shows at the next automatic advance, and a change to settings shows straight away, reaching the playing episode at once only when it is at a level on that episode's route ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).
 - **Undo** reverts the last editor action, repeatedly (a stack). Once something has been undone, **Redo**
   appears. See [[US-0245 Undo and redo in the playlist editor]].
 

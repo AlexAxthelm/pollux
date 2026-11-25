@@ -28,6 +28,7 @@ There is a separate **queue** ("up next") alongside the active playlist. It hold
 ## Consequences
 
 - ADR-0029 is unchanged. The queue sits beside it rather than replacing any part of it.
+- A queue entry's route is fixed when it is queued and may be old by the time it plays. If a playlist on it has since been deleted or dropped as a source, that level is skipped and the rest of the route is used, so a queued episode keeps the settings of where the user picked it. Nothing is re-resolved at play time.
 - The saved play context needs a queue as well as the active source: an ordered list of entries, each an episode id plus its context route.
 - The queue persists across restarts, like the active playlist. After a restart with episodes in the queue they are still there. On a first launch it is empty.
 - Open for the build: how the user adds and clears items. Settle this when the queue is specified.
