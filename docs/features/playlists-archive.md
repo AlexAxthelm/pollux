@@ -24,8 +24,8 @@ A composite playlist built from two sub-playlists:
 
 **"Latest" sub-playlist** (per feed):
 - Source: selected feed(s)
-- Rules: N per source, most recent 1; include unplayed
-- #needs-decision **Rule order.** "Most recent 1 per source, then unplayed" gives the latest episode of each show if it is unplayed. "Unplayed, then most recent 1 per source" gives the latest unplayed episode of each show. The text as first written does not say which is meant.
+- Rules, in this order: **N per source** (most recent, 1), then **include** playback status **unplayed**
+- **Why this order.** "Most recent 1, then unplayed" gives the latest episode of each show if it is unplayed, and nothing once it has been played. That is the intent: a new episode surfaces, and when it has been heard the Latest list is empty and the archive carries on. The reverse order ("unplayed, then most recent 1") would give the newest *unplayed* episode of each show, so after the user plays the newest, the second newest would jump to the front of the queue and break the archive's oldest-first order.
 - Sort: by age (desc)
 
 **"Archive" sub-playlist** (per feed):
