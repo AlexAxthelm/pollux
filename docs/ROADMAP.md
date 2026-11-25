@@ -117,6 +117,12 @@ The core differentiator.
 Milestone: can create a playlist with rules, play from it, and have it behave
 as the active queue.
 
+The slice that is built for this milestone, and what waits, is in [[playlists]] ("MVP slice").
+
+After the milestone: the hand-picked list and Add to playlist, pins and Manual ordering, the
+queue ([[ADR-0046 Queued episodes play before the active playlist resumes]]), undo and redo in the
+editor, loop confirmation and removal warnings, the Downloaded playlist.
+
 ---
 
 ## Phase 5 — Polish + Remaining MVP
