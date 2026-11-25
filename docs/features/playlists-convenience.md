@@ -20,6 +20,8 @@ System-provided playlists that require no configuration:
 - **Random All**: all episodes, random sort *(not MVP — depends on random sort
   in [[playlists-rules]] and [[random]])*
 
+Convenience playlists have filters and sorts but no settings of their own, so an episode played from one resolves its settings from its show, then global, as it does when played from the library ([[ADR-0044 An episode's settings come from the context it is played from]]). Exceptions can be made if a need turns up.
+
 ## Quick options
 
 The stories ask for two related things, and the same solution may serve both:

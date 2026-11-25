@@ -22,6 +22,7 @@ Playlists are the primary way users organize and consume episodes in Pollux.
 - [[playlists-editor]]: creating and editing a playlist
 - [[playlists-archive]]: archive binge playlists
 - [[playlists-circular-dependencies]]: playlists that include each other
+- [[playlists-how-it-works]]: a plain-language guide, a draft for the in-app help
 
 ## Data Model
 

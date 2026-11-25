@@ -32,7 +32,7 @@ How a playlist plays, and how one becomes the active playlist. The data model is
 app and reappears on next open. The active playlist becomes inactive only when it
 reaches its end.
 
-## Active Queue
+## Active playlist
 
 There is one active playlist at a time. Activating a new playlist evicts the
 previous one.

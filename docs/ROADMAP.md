@@ -102,7 +102,7 @@ where you left off.
 The core differentiator.
 
 - **Playlist data model**: query model (sources → filters → sorts), position
-  tracking, active queue management (see [[playlists]] and
+  tracking, active playlist management (see [[playlists]] and
   [[ADR-0027 A playlist is a query over sources]])
 - **MVP filter operations**: "First N episodes", "N per source", playback status, Deduplicate (on by default), title text match
 - **MVP sort operations**: by age (asc/desc), by source (sequential)
@@ -115,7 +115,7 @@ The core differentiator.
   [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]])
 
 Milestone: can create a playlist with rules, play from it, and have it behave
-as the active queue.
+as the active playlist.
 
 The slice that is built for this milestone, and what waits, is in [[playlists]] ("MVP slice").
 
