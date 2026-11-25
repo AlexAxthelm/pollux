@@ -23,6 +23,8 @@ nothing; only that source is cut. If A includes B and C, and B includes A, C and
 The episode limit is a separate size bound; see
 [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]].
 
+Resolution cost in a densely cross-linked cluster is a known risk, with a trigger for adding a work budget; see [[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]].
+
 ## Confirmation when adding a source
 
 When the user adds a source that already includes this playlist (directly or through other
