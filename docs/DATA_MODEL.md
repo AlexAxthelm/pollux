@@ -103,7 +103,7 @@ A query definition: one or more sources, with ordered filters and sorts applied.
 Produces an ordered Episode list at query time — it is not a stored list of
 episodes (apart from the hand-picked list below, which stores episode ids).
 
-One-to-many with PlaylistSource, PlaylistFilter, PlaylistSort.
+One-to-many with PlaylistSource, PlaylistRule and PlaylistPin.
 
 See also: [[GLOSSARY]] — Playlist.
 
@@ -125,18 +125,17 @@ the playlist, the episode id, the source it came through, a group (top or end) a
 that group. It is independent of the source kinds, so a pin works on an episode from a show, an
 included playlist or the hand-picked list, and only that occurrence moves. The Manual ordering sort uses the pins. See [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]. *Not MVP.*
 
-### PlaylistFilter *(Identified)*
+### PlaylistRule *(Identified)*
 
-A filter rule attached to a Playlist. Carries a type (e.g. playback status,
-"First N episodes", Deduplicate), parameters, include/exclude polarity (not for
-Deduplicate, which is on or off), and a position in the playlist's rule stack.
+One row of a playlist's rule stack ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]). Filters, sorts, Deduplicate and Manual ordering are all rules in the same stack, so there is one entity and one `position` that is unique within the playlist. Reordering is one update.
 
-### PlaylistSort *(Identified)*
+- `kind` and `type`: a filter (for example playback status, "First N episodes", "N per source", Title), a sort (by age, by source), Deduplicate, or Manual ordering.
+- `parameters`: the rule's own values, stored as JSON. The shape depends on the type and is checked in code, as with the settings objects below. In Rust the rule is an enum with a variant per type.
+- `polarity` (include or exclude): filters only, except Deduplicate, which is on or off ([[ADR-0043 Every filter can include or exclude]]).
+- `direction` (asc or desc): sorts that have one.
+- `position`: its place in the stack. Rules are applied top to bottom, each to the result of the ones above, so the last sort applied is the main order.
 
-A sort rule attached to a Playlist. Carries a type (e.g. by age, by source, manual
-ordering), parameters, direction (asc/desc), and a position in the same rule stack as
-the filters. Rules are applied top to bottom, each to the result of the ones above it, so
-the last sort applied is the main order ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]).
+A playlist has at most one Deduplicate and at most one Manual ordering (which exists while the playlist has pins, PlaylistPin above). The Sources section is a different ordered list: PlaylistSource keeps its own order, which the "by source" sort and Deduplicate's "first" read.
 
 ### PlayContext *(Identified)*
 

@@ -13,7 +13,7 @@ related:
 
 ## Context
 
-The editor spec puts an include/exclude toggle on every filter, and `DATA_MODEL` gives `PlaylistFilter` an include/exclude polarity. The filter tables in [[playlists-rules]] had neither. Several stories ask to include or exclude by status, date, duration, stars and title.
+The editor spec puts an include/exclude toggle on every filter, and `DATA_MODEL` gives a filter rule (`PlaylistRule`) an include/exclude polarity. The filter tables in [[playlists-rules]] had neither. Several stories ask to include or exclude by status, date, duration, stars and title.
 
 ## Decision
 

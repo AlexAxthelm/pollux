@@ -42,8 +42,8 @@ For code-facing definitions and entity relationships, see [[DATA_MODEL]].
     - **Convenience playlist**: internal/doc term for system-provided playlists
       that require no configuration ("All Subscriptions", "Downloaded"). Not a
       user-facing distinction — these appear in the UI simply as playlists.
-  - See also: [[DATA_MODEL]] — Playlist, PlaylistSource, PlaylistFilter,
-    PlaylistSort.
+  - See also: [[DATA_MODEL]] — Playlist, PlaylistSource, PlaylistRule,
+    PlaylistPin.
 
 - **EpisodeSource** *(placeholder — not a finalized term)*: the internal
   abstraction representing either a subscription or a playlist. Used in the
