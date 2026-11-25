@@ -89,7 +89,7 @@ row has a drag handle and a remove button. **+ Filter** and **+ Sort** add a row
 - **Sorts:** a direction, a key and, for some keys, parameters. Each sort orders the list as it stands at
   that point, so the last sort is the main order and the ones above it break ties.
 - **Manual ordering:** a sort row that appears by itself once the user has pinned episodes (see the
-  preview). It can be moved and removed like the others, once nothing is pinned ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]).
+  preview). It can be moved and removed like the others, once nothing is pinned. When a sort is below it, the row says so ("Sorts below this will reorder pinned episodes"), and when First N episodes is below it, that pins apply before the cut. Fixed at the bottom is the fallback if this confuses ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]).
 
 **Order matters.** Deduplicate keeps the first occurrence in the order the list has at that point,
 which is the result of the rules above it. Example: "first 2, then unplayed" gives the first 2 episodes if unplayed;
