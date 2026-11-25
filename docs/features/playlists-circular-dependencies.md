@@ -20,7 +20,7 @@ nothing; only that source is cut. If A includes B and C, and B includes A, C and
 (C + D) + C. This always ends, and a loop never repeats episodes. See
 [[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]].
 
-The episode limit (default 1,000, per playlist) is a separate size bound; see
+The episode limit is a separate size bound; see
 [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]].
 
 ## Confirmation when adding a source

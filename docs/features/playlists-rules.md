@@ -56,7 +56,7 @@ Sorts define the order of the filtered episode list.
 
 | Rule | Parameters | Notes |
 |---|---|---|
-| Manual ordering | none | Appears when the playlist has pinned episodes; pinned episodes are moved to the front or back in hand-set order. Starts at the bottom of the stack, so the pins hold; it can be moved. See [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]. |
+| Manual ordering | none | Appears when the playlist has pins and puts them at the front or back in hand-set order. See [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]. |
 | By source (interleaved) | strategy: round-robin / proportional / date-normalized | Solves the archive-clumping problem; see [[playlists-archive]] |
 | By duration | asc / desc | |
 | By play count | asc / desc | Surfaces favorites or finds unlistened gems |
@@ -66,7 +66,7 @@ Sorts define the order of the filtered episode list.
 
 Rules are stacked and applied in order. Filters only intersect: each narrows what the ones above left, and there is no OR between filters (add sources for that). The UI should make reordering easy and show a live preview of the resulting episode list.
 
-Filters, sorts and Deduplicate share one stack and can be interleaved ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]). Each rule is applied to the list as if all the rules above it had already been evaluated, so with several sorts the last one wins and the ones above only break ties. For example, `sort: newest first`, `filter: first N episodes`, `sort: oldest first` gives the N most recent episodes, oldest first. With no sorts, the order is the source order, each source in its natural order (all of A, then B, then C).
+Filters, sorts and Deduplicate share one stack and can be interleaved ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]). Each rule is applied to the result of the ones above it. For example, `sort: newest first`, `filter: first N episodes`, `sort: oldest first` gives the N most recent episodes, oldest first.
 
 A playlist with no sources is empty ([[ADR-0050 A playlist with no sources is empty]]).
 

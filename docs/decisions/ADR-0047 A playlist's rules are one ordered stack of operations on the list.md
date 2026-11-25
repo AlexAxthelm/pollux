@@ -15,7 +15,7 @@ related:
 
 ## Context
 
-[[ADR-0027 A playlist is a query over sources]] describes a playlist as sources, then filters, then sorts. One stack in which Deduplicate, filters and sorts can be dragged past each other, with a **Manual ordering** sort that appears, at the bottom (by default), when episodes are pinned ([[playlists-editor]]). This matters for Deduplicate, because "first" means the first occurrence in the order the list has at that point in the stack.
+[[ADR-0027 A playlist is a query over sources]] describes a playlist as sources, then filters, then sorts. One stack in which Deduplicate, filters and sorts can be dragged past each other, with a **Manual ordering** sort for pins ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]). This matters for Deduplicate, because "first" means the first occurrence in the order the list has at that point in the stack.
 
 ## Decision
 
@@ -31,7 +31,7 @@ Example: `sort: newest first`, `filter: first N episodes`, `sort: oldest first` 
 
 **With no sorts, the order is the source order**, each source in its own natural order. Example: all of playlist A, then show B, then playlist C.
 
-Deduplicate keeps the first occurrence in the order the list has at its place in the stack. At the top of the stack that is source order. A pin belongs to one occurrence of an episode, the one that came through a given source ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]), so with Deduplicate on it holds as long as that occurrence is the one that survives.
+At the top of the stack, Deduplicate's "first" is source order. How a pin interacts with it is in [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]].
 
 ## Consequences
 
