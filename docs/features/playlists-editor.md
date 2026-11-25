@@ -95,6 +95,11 @@ row has a drag handle and a remove button. **+ Filter** and **+ Sort** add a row
 which is the result of the rules above it. Example: "first 2, then unplayed" gives the first 2 episodes if unplayed;
 "unplayed, then first 2" gives the first 2 of the unplayed set.
 
+Two aids make the order readable (they are part of the MVP editor):
+
+- **Count under each rule:** every rule row shows how many episodes are left after it ("→ 37 episodes"), so the effect of a rule and of moving it is visible. The full preview at any point in the stack is later ([[US-0247 Preview the rules at any point in the stack]]).
+- **Helper text on the Rules section:** "Rules apply top to bottom. With several sorts, the last one is the main order and the ones above it break ties."
+
 ## Settings
 
 Collapsed by default, using the standard settings interface ([[settings-cascade]]). The **Advanced**

@@ -72,7 +72,7 @@ The model is complete from the start; the slice is which parts get built first. 
 **In**
 
 - **Sources:** subscriptions and other playlists. The **All shows** source is in, because the All Subscriptions convenience playlist is one; its entry in the editor's picker can follow.
-- **Rules:** one stack with include/exclude, drag to reorder and remove. Filters: "First N episodes", "N per source", "Playback status", Deduplicate (on by default, at most one), Title. Sorts: by age, by source. No sorts means source order.
+- **Rules:** one stack with include/exclude, drag to reorder and remove, a result count under each rule and a line of helper text on the tie-break order ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]). Filters: "First N episodes", "N per source", "Playback status", Deduplicate (on by default, at most one), Title. Sorts: by age, by source. No sorts means source order.
 - **Resolution:** the episode limit (under Advanced), and a playlist already on the path is omitted from resolution ([[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]), since both are needed for resolution to end.
 - **Playback:** the playlist is the active context, with automatic advance on the re-resolved list, and an edit that removes the playing episode lets it finish ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]). This replaces [[ADR-0006 No auto-advance until playlists exist]]. The play context carries a `Playlist` source and a route.
 - **Convenience playlists:** All Subscriptions, In progress.
