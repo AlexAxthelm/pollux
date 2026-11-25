@@ -85,15 +85,15 @@ row has a drag handle and a remove button. **+ Filter** and **+ Sort** add a row
 - **Deduplicate:** present and on for a new playlist, at the top. It takes no criteria. There is at most one: **+ Filter** does not offer it while it is in the stack, and adding it back after removal puts it at the top.
 - **Filters:** `include` or `exclude`, a criterion and a value ([[ADR-0043 Every filter can include or exclude]]).
   Example rows: `include · playback status · unplayed`, `exclude · duration · > 2:00:00`,
-  `include · limit · 20`.
+  `include · "first N episodes" · 20`.
 - **Sorts:** a direction, a key and, for some keys, parameters. Each sort orders the list as it stands at
   that point, so the last sort is the main order and the ones above it break ties.
 - **Manual ordering:** a sort row that appears by itself once the user has pinned episodes (see the
   preview). It can be moved and removed like the others, once nothing is pinned ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]).
 
 **Order matters.** Deduplicate keeps the first occurrence in the order the list has at that point,
-which is the result of the rules above it. Example: "limit 2, then unplayed" gives the first 2 episodes if unplayed;
-"unplayed, then limit 2" gives the first 2 of the unplayed set.
+which is the result of the rules above it. Example: "first 2, then unplayed" gives the first 2 episodes if unplayed;
+"unplayed, then first 2" gives the first 2 of the unplayed set.
 
 ## Settings
 
@@ -118,7 +118,7 @@ It updates as sources and rules change. The rows are the same as in the full pla
   ([[US-0243 See when a filter hides a hand-picked episode]]). See
   [[US-0246 Choose what the playlist preview shows]].
 - **Remove button:** a row from the hand-picked list can show a **Remove** button, which can be hidden ([[US-0252 Remove a hand-picked episode from the preview]]). Later, with the hand-picked list.
-- **Limit message:** "Showing first N episodes." appears at the end only if the limit cut the list.
+- **Episode limit message:** "Showing first N episodes." appears at the end only if the episode limit cut the list.
 
 ## Removing things other playlists depend on
 

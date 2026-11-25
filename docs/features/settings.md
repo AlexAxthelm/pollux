@@ -66,7 +66,7 @@ Settings are organized into sections on a single scrollable screen.
 
 Settings for power-users. Should be hidden by default, but can be shown
 
-* Limit for playlist episodes (default 1000, per-playlist override, hard maximum 50,000 for now; see [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]])
+* Episode limit (default 1000, per-playlist override, hard maximum 50,000 for now; see [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]])
 
 ## As built
 

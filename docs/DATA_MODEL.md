@@ -128,7 +128,7 @@ included playlist or the hand-picked list, and only that occurrence moves. The M
 ### PlaylistFilter *(Identified)*
 
 A filter rule attached to a Playlist. Carries a type (e.g. playback status,
-recency limit, Deduplicate), parameters, include/exclude polarity (not for
+"First N episodes", Deduplicate), parameters, include/exclude polarity (not for
 Deduplicate, which is on or off), and a position in the playlist's rule stack.
 
 ### PlaylistSort *(Identified)*

@@ -37,8 +37,8 @@ At the top of the stack, Deduplicate's "first" is source order. How a pin intera
 
 - This changes ADR-0027's "filters, then sorts", which has been updated to match.
 - Filters only intersect: each one narrows what the rules above it left, so there is no OR between filters. To get "A or B", add both as sources. An OR between filters can be specified later.
-- A playlist has at most one Deduplicate. It is idempotent, so a second one would only differ if a Limit sat between them. "+ Filter" does not offer it while one is in the stack; if it is removed and added again, it goes back at the top, as in a new playlist.
+- A playlist has at most one Deduplicate. It is idempotent, so a second one would only differ if a "First N episodes" filter sat between them. "+ Filter" does not offer it while one is in the stack; if it is removed and added again, it goes back at the top, as in a new playlist.
 - Deduplicate has no include/exclude toggle: it is on or off, not an exception to [[ADR-0043 Every filter can include or exclude]].
 - **Manual ordering starts at the bottom of the stack.** Because each rule is applied to the result above it, a sort lower down would re-order the pins, so the row starts last, where it is applied after every other sort and the pins hold. The user can move it up, and then later sorts apply to the pinned result like any other.
-- Which filters depend on the order of the list (Deduplicate and Limit) is where position in the stack matters. Most filters, such as "N per source" or playback status, use a field of the episode and not its position.
+- Which filters depend on the order of the list (Deduplicate and "First N episodes") is where position in the stack matters. Most filters, such as "N per source" or playback status, use a field of the episode and not its position.
 - A source's **natural order** is: for a playlist, whatever its own rules resolve to; for a show, newest first by default; for the hand-picked list, the order the episodes were added, oldest first, so the most recent addition is last. The hand-picked list therefore stores when each episode was added.

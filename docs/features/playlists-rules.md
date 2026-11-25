@@ -24,7 +24,7 @@ exclude ([[ADR-0043 Every filter can include or exclude]]).
 
 | Rule | Parameters | Notes |
 |---|---|---|
-| Limit | N (count) | Keeps the first N episodes of the list as it stands at this point. "The N most recent" is a sort by age, newest first, then Limit. |
+| First N episodes | N (count) | Keeps the first N episodes of the list as it stands at this point. "The N most recent" is a sort by age, newest first, then First N episodes. Not the same as the episode limit, the per-playlist safety cap ([[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]]). |
 | N per source | N (count), direction (newest / oldest) | Keeps the N most recent or the N oldest episodes of each source in the Sources section, by release date. "Most recent 1" per source is one episode from each show. Each source counts separately; an included playlist is one source, and the All shows source counts as one source for each show ([[ADR-0050 A playlist with no sources is empty]]). |
 | Playback status | unplayed / in-progress / played (multi-select) | Enables "in progress" playlists, unplayed-only queues, etc. In-progress means not played, with the playback position not at the start. |
 | Deduplicate | none | Keeps the first occurrence of each episode at this point in the rules. On by default, at the top of the filters; it can be moved or turned off. It has no include/exclude toggle. A playlist has at most one, and it can be added again at the top after removal. See [[US-0217 Playlist deduplication]], [[US-0218 Playlist allows duplicates]]. |
