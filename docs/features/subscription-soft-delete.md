@@ -26,6 +26,17 @@ files will be eviction candidates.
 A "Delete now" button is available for users who want immediate hard deletion.
 "Delete now" also immediately removes all associated content files.
 
+## Playlists, hand-picked episodes and pins
+
+*Not decided; for when soft-delete is built.* Today an unsubscribe drops the show's hand-picked members, pins and source rows at once ([[subscription-unsubscribe]], [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]], [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]), because the MVP deletes the show with its episodes. With a grace period the summary above promises that "playlist membership" is restored, so one option is:
+
+- During the 30 days the soft-deleted show counts as absent: its episodes are in no playlist (also not through the All shows source), and the hand-picked page and count skip its members.
+- Its hand-picked members, pins and source rows stay stored without effect, and come back if the user resubscribes.
+- At hard delete (30 days, or "Delete now") they are dropped, as today.
+- The unsubscribe confirmation then says that playlists stop using the show now, and that it comes back if the user resubscribes in time.
+
+Nothing decided today blocks this: it only moves the drop from the unsubscribe to the hard delete.
+
 ## User stories
 
 ```base
