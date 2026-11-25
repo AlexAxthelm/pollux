@@ -19,7 +19,7 @@ Because playlists can include other playlists, loops are possible: a playlist in
 ## Decision
 
 - **A playlist already being resolved is left out.** While resolving a playlist, a source that is already on the current resolution path contributes nothing. Only that source is cut; siblings and everything else are kept. Example: A includes B and C, and B includes A, C and D. Resolving A resolves B with A on the path, so B's reference to A is cut and B gives C + D. A is then (C + D) + C, which is C, D once Deduplicate has run. A path cannot repeat a playlist, so resolution always ends. Because of that, a loop never repeats episodes, and the episode limit is a size bound, not what ends resolution.
-- **The editor asks before a loop is created.** Adding a source that already includes this playlist, directly or through other playlists, stops with a confirmation (for example "[source] already includes this playlist. Including it makes a loop, and [source]'s copy of this playlist is left out. Add anyway?") that links to the documentation on loops. See [[playlists-editor]] and [[US-0244 Be asked before making a playlist loop]].
+- **The editor asks before a loop is created** (later, not in the MVP slice). Adding a source that already includes this playlist, directly or through other playlists, stops with a confirmation (for example "[source] already includes this playlist. Including it makes a loop, and [source]'s copy of this playlist is left out. Add anyway?") that links to the documentation on loops. See [[playlists-editor]] and [[US-0244 Be asked before making a playlist loop]].
 
 ## Consequences
 

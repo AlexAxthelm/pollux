@@ -32,12 +32,7 @@ A playlist is fundamentally a **query** over a set of sources, with filters and 
 (sources) → [rules: filters, sorts, deduplicate, in one ordered stack] → ordered episode list
 ```
 
-**Sources** may be:
-- One or more feed subscriptions
-- One or more other playlists (enabling composite / meta-playlists)
-- A mix of both
-- The playlist's own hand-picked episodes, a source that exists only inside that playlist
-  ([[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]; not MVP)
+**Sources** are shows, other playlists, the All shows source, and (later) the playlist's own hand-picked list; see [[ADR-0027 A playlist is a query over sources]].
 
 **Filters** narrow which episodes are included (see [[playlists-rules]])
 

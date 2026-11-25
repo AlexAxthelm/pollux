@@ -15,7 +15,7 @@ related:
 
 ## Context
 
-[[ADR-0027 A playlist is a query over sources]] describes a playlist as sources, then filters, then sorts. One stack in which Deduplicate, filters and sorts can be dragged past each other, with a **Manual ordering** sort for pins ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]). This matters for Deduplicate, because "first" means the first occurrence in the order the list has at that point in the stack.
+[[ADR-0027 A playlist is a query over sources]] describes a playlist as sources, then filters, then sorts. This ADR makes it one stack, in which Deduplicate, filters and sorts can be dragged past each other, with a **Manual ordering** sort for pins ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]). This matters for Deduplicate, because "first" means the first occurrence in the order the list has at that point in the stack.
 
 ## Decision
 

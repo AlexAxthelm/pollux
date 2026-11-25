@@ -54,11 +54,13 @@ Preview                    [⋯ details]
    Episode 5            [↺][≡]
 ```
 
+In the first version the sketch has no Undo/Redo, no **+ Episode**, no hand-picked row, no pinned rows and no **⋯ details** menu; see the MVP slice in [[playlists]].
+
 ## Top bar
 
 - **Back** on the left. Leaving with unsaved changes warns first.
 - Tapping the playlist name renames it.
-- **Save** saves the playlist. It is disabled until the playlist has a name. A playlist with no sources, or with no rules, is valid: no sources is an empty playlist, no rules is source order. Edits take effect on Save. If the playlist is playing, a change to sources or rules first shows at the next automatic advance, and a change to settings shows straight away, reaching the playing episode at once only when it is at a level on that episode's route ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).
+- **Save** saves the playlist. It is disabled until the playlist has a name. A playlist with no sources, or with no rules, is valid: no sources is an empty playlist, no rules is source order. Edits take effect on Save; when they reach an episode that is playing is in [[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]].
 - **Undo** reverts the last editor action, repeatedly (a stack). Once something has been undone, **Redo**
   appears. See [[US-0245 Undo and redo in the playlist editor]].
 
@@ -69,7 +71,7 @@ and Deduplicate's "first" use ([[playlists-rules]]).
 
 - **Playlists and shows:** added with **+ Playlist** and **+ Show**, each opening a multi-select
   picker (the Feed Selector below). The shows picker has an **All shows** item at the top, one source that follows the library
-  ([[ADR-0050 A playlist with no sources is empty]]). A playlist with no sources is empty. If an added playlist already includes this one, the editor asks
+  ([[ADR-0050 A playlist with no sources is empty]]). A playlist with no sources is empty. If an added playlist already includes this one, the editor asks (later)
   first ([[US-0244 Be asked before making a playlist loop]]).
 - **Hand-picked episodes:** shown as one row ("12 other episodes") that is ordered among the other
   sources like any of them, with a hint that it can be tapped to edit. **+ Episode** (later) and the
@@ -126,6 +128,8 @@ It updates as sources and rules change. The rows are the same as in the full pla
 - **Episode limit message:** "Showing first N episodes." appears at the end only if the episode limit cut the list.
 
 ## Removing things other playlists depend on
+
+*Later. The first version uses the ordinary delete and unsubscribe confirmations and drops the source from the playlists that use it.*
 
 Deleting a playlist that other playlists include, and unsubscribing from a show that playlists use as a source, both confirm first with a message such as "This playlist is included in 5 other playlists", with a preview of those playlists ([[US-0251 See which playlists use a show or playlist before removing it]]). On confirm the source is dropped from each of them, and pins that came through it are removed ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]). "By source" needs nothing extra, because it reads the current Sources order.
 

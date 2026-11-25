@@ -77,14 +77,14 @@ A rule acts on the combined list of the playlist's sources.
 - The rule system is intentionally analogous to a SQL SELECT: sources = FROM, filters = WHERE, sorts = ORDER BY
 - Each new rule type can be added incrementally without changing the underlying data model
 
-## Open questions
+## Hand-picked episodes
 
-- Specific episodes can be added or included by hand
+Specific episodes can be added or included by hand
   ([[US-0202 Add episodes to playlists]], [[US-0216 Include episodes in playlist]]). How
   that relates to rules is decided in
   [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]:
   a hand-picked source owned by the playlist, not MVP. Filters apply to hand-picked
-  episodes as normal.
+  episodes as normal. Nothing is open here.
 
 ## User stories
 

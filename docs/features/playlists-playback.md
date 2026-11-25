@@ -15,7 +15,7 @@ How a playlist plays, and how one becomes the active playlist. The data model is
 
 ## Behavior
 
-- Sequential playback through episodes, in playlist order. The playlist is resolved again each time playback moves on, and the next episode is the one after the episode that just finished, which counts as still in its place even if it has just been marked played. If an edit removes the playing episode, it finishes with the context it started with and playback then ends ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]])
+- Sequential playback through episodes, in playlist order. The playlist is resolved again each time playback moves on, and "next" is what follows the episode that just finished ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).
     - Alternate behavior (configurable per playlist, default from global): **From the top** plays the first
       episode of the re-resolved list on advance, instead of **Play next**. It is the active
       playlist's own value and does not follow the settings route ([[ADR-0044 An episode's settings come from the context it is played from]])
@@ -60,8 +60,8 @@ changing it. See [[ADR-0046 Queued episodes play before the active playlist resu
 
 ## Related
 
-- The player has no auto-advance until playlists exist:
-  [[ADR-0006 No auto-advance until playlists exist]].
+- Until playlist playback is built the player does not auto-advance
+  ([[ADR-0006 No auto-advance until playlists exist]]); [[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]] replaces that.
 - Playback remembers what it was started from:
   [[ADR-0007 Playback source is separate from the episode's feed]].
 

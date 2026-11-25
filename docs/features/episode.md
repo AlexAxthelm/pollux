@@ -74,7 +74,7 @@ eviction (see [[storage-protection]]). Additional flag types may be added later.
 - Add to playlist (adds the episode to that playlist's hand-picked list, the same action as **+ Episode** in the playlist editor; not MVP, since hand-picked lists are not; [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]])
 - Share link *(system share sheet)*
 - Go to subscription / feed
-- Move to top / Move to bottom *(only shown when viewing episode within a playlist)*
+- Move to top / Move to bottom *(only shown when viewing episode within a playlist; not MVP, it needs pins, [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]])*
 - *(future)* Add / remove tags
 
 ## UI

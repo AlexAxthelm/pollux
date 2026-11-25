@@ -22,13 +22,13 @@ Additionally, when binging multiple feeds simultaneously, episodes from the olde
 
 A composite playlist built from two sub-playlists:
 
-**"Latest" sub-playlist** (per feed):
+**"Latest" sub-playlist** (one for all the selected feeds; N per source counts each feed separately):
 - Source: selected feed(s)
 - Rules, in this order: **N per source** (most recent, 1), then **include** playback status **unplayed**
 - **Why this order.** "Most recent 1, then unplayed" gives the latest episode of each show if it is unplayed, and nothing once it has been played. That is the intent: a new episode surfaces, and when it has been heard the Latest list is empty and the archive carries on. The reverse order ("unplayed, then most recent 1") would give the newest *unplayed* episode of each show, so after the user plays the newest, the second newest would jump to the front of the queue and break the archive's oldest-first order.
 - Sort: by age (desc)
 
-**"Archive" sub-playlist** (per feed):
+**"Archive" sub-playlist** (one for all the selected feeds):
 - Source: selected feed(s)
 - Rules: include unplayed; sort by age (oldest first)
 

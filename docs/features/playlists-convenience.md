@@ -15,8 +15,7 @@ depends:
 System-provided playlists that require no configuration:
 - **All subscriptions**: all episodes from all subscribed feeds, no filters (a playlist whose only source is the All shows source, [[ADR-0050 A playlist with no sources is empty]])
 - **Downloaded / available**: all downloaded episodes, regardless of feed (needs the Download status filter, [[playlists-rules]])
-- **In progress**: episodes that are not played, with the playback position not at the start,
-  from all subscribed feeds (a playback status filter, [[playlists-rules]])
+- **In progress**: episodes in progress, from all subscribed feeds (a playback status filter; the definition is in [[playlists-rules]])
 - **Random All**: all episodes, random sort *(not MVP — depends on random sort
   in [[playlists-rules]] and [[random]])*
 
