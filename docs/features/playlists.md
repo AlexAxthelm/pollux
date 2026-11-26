@@ -73,7 +73,7 @@ The model is complete from the start; the slice is which parts get built first. 
 - **Playback:** the playlist is the active context, with automatic advance on the re-resolved list, and an edit that removes the playing episode lets it finish ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]). This replaces [[ADR-0006 No auto-advance until playlists exist]]. The play context carries a `Playlist` source and a route.
 - **Convenience playlists:** All Subscriptions, In progress.
 - **Editor:** name, Save, Back with an unsaved-changes warning, Sources, Rules, Settings (Advanced switch, episode limit), a preview that matches the playlist view, and the empty state. Delete a playlist.
-- **Playlist views:** full and compact ([[playlists-ui]]).
+- **Playlist views:** full and compact ([[playlists-ui]]). Deleting the playlist that is playing lets its current episode finish, then playback ends ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).
 
 **Out (later)**
 
