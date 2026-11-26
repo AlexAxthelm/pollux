@@ -25,6 +25,8 @@ A mutable field representing the user's current relationship with the episode:
 - **In-progress**: started but not finished
 - **Played**: completed (or manually marked as such)
 
+In playlist filters, "unplayed" means not played, so it includes started episodes ([[playlists-rules]]).
+
 Status is set automatically by playback (reaching the end of an episode, within a
 small tolerance, marks it as played). Users may also set status manually at any
 time, regardless of actual listening history.

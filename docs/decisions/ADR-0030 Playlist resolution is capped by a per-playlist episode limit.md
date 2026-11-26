@@ -27,6 +27,8 @@ Every playlist is bounded by an **episode limit**.
 
 - Subscriptions (and the All shows source) are not capped. Only a playlist has an episode limit, until a reason turns up to cap them too.
 
+- **Resolution has a work bound that is separate from the episode limit.** The episode limit caps a playlist's output, not the work to produce it, and resolution also runs when the player is restored at launch, where a runaway resolution would hang the app. So a resolution counts the playlists it expands, and when the count passes a fixed bound it stops expanding further included playlists and the playlist shows "Some included playlists were not fully loaded", in the same way as "Showing first N episodes." The number is chosen when the resolver is built, by measuring. Caching playlists that are outside any loop is an optimisation for the build, not a rule here. How the cost grows, and what to decide when import is built, is in [[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]], which is left as it is.
+
 ## Consequences
 
 - The hard maximum needs performance testing before it is final.

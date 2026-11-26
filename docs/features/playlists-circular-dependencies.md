@@ -17,13 +17,13 @@ via indirection through other playlists.
 
 While a playlist is being resolved, a source already on the current path contributes
 nothing; only that source is cut. If A includes B and C, and B includes A, C and D, then A is
-(C + D) + C. This always ends, and a loop never repeats episodes. See
+(C + D) + C. This always ends. Episodes that arrive by two routes can still appear twice if Deduplicate is off. See
 [[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]].
 
 The episode limit is a separate size bound; see
 [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]].
 
-Resolution cost in a densely cross-linked cluster is a known risk, with a trigger for adding a work budget; see [[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]].
+Resolution cost in a densely cross-linked cluster is a known risk. A bound on the work a resolution does stops a runaway ([[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]]); the trigger for a smarter budget is in [[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]].
 
 ## Confirmation when adding a source
 

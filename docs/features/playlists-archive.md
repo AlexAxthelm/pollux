@@ -20,6 +20,8 @@ Additionally, when binging multiple feeds simultaneously, episodes from the olde
 
 ## The Solution
 
+*The first template is only the **Archive** playlist below. The Latest playlist and the composite are described here for later and are specified once the components are built.*
+
 A composite playlist built from two sub-playlists:
 
 **"Latest" sub-playlist** (one for all the selected feeds; N per source counts each feed separately):
@@ -52,11 +54,11 @@ For MVP, sequential sort by source is acceptable. Document this as a known limit
 
 ## UI Suggestion
 
-Archive binge should be surfaced as a template in the create-playlist flow ([[playlists-editor]]), opening as a normal editable playlist with a blank sources list. The underlying rules should be visible and editable, but the template should make setup a one-tap action.
+Archive should be surfaced as a template in the create-playlist flow ([[playlists-editor]]), opening as a normal editable playlist with a blank sources list. The underlying rules should be visible and editable, but the template should make setup a one-tap action.
 
 ## Example
 
-User subscribes to three music podcasts. Two have archives from 2016, one from 2018. They want to hear new episodes weekly and work through all archives.
+User subscribes to three music podcasts. Two have archives from 2016, one from 2018. They want to hear new episodes weekly and work through all archives. (The Latest and Archive playlists and the composite below are the later, fuller setup.)
 
 Desired behavior:
 1. Any new episode this week plays first
