@@ -38,6 +38,8 @@ A composite playlist built from two sub-playlists:
 
 This ensures new episodes surface immediately, and archive listening resumes naturally after.
 
+**Known issue: new episodes do not surface at once.** With the default "Play next", a new episode lands at the top of the list, above where the listener is, and only plays after the rest of the list. "New episodes surface immediately" holds only if the composite playlist is set to **From the top** (the first unplayed episode, [[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]). The cost of that setting is that an episode left half-played is picked again whenever it is the first unplayed one. For now the template keeps the default behavior and this is noted for use.
+
 ## Clumping Problem (Later)
 
 When multiple feeds are included and their archives are at different points in history, earlier-archive feeds dominate the front of the queue. Future sort strategies to address this:
