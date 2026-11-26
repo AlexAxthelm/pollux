@@ -41,4 +41,4 @@ Each time playback moves on automatically, the playlist is **resolved again** an
 
 - Resolution runs on each advance, so it has to be fast for lists up to the episode limit ([[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]]).
 - The auto-advance in [[ADR-0006 No auto-advance until playlists exist]] is replaced by this rule once playlist playback is built. That ADR is left as it stands until then.
-- The playing episode's context route is fixed when it starts and stays fixed until it ends ([[ADR-0044 An episode's settings come from the context it is played from]]), so an edit cannot change its settings mid-episode.
+- The playing episode's context route is fixed when it starts and stays fixed until it ends ([[ADR-0044 An episode's settings come from the context it is played from]]), so an edit that changes the route cannot change its settings mid-episode. A settings edit at a level on the route does reach it at once, which re-resolves along the same route.

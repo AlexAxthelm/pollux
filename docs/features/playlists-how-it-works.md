@@ -40,7 +40,7 @@ Swap the last two and you get something different: the first 20 episodes, of whi
 
 When an episode ends, Pollux rebuilds the list and plays the episode **after the one that just finished**. You can edit the playlist while it plays; the change shows from the next episode on. If your edit removes the episode that is playing, it finishes, and then playback stops.
 
-Settings for an episode come from where you started playing it: the playlist, then the show, then your global settings. The playing episode keeps its settings until it ends, so nothing changes under you mid-episode.
+Settings for an episode come from where you started playing it: the playlist, then the show, then your global settings. The playing episode keeps the route it started with. A change to a setting at a level on that route, such as the show's skip time, takes effect straight away; anything that would change the route, such as reordering the sources, waits for the next episode.
 
 ## Playlists inside playlists
 

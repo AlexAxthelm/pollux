@@ -14,7 +14,7 @@ related:
 
 ## Context
 
-The hand-picked list ([[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]) decides which extra episodes are in a playlist. Moving an episode to the top or the end is a different thing: it decides the order of episodes that are already in the list. When the pin was stored on a hand-picked member, pinning an episode that comes from a show added a second copy of it to the hand-picked list. With Deduplicate on, the show's copy could survive and the pin was lost with the dropped copy; with it off, the episode appeared twice.
+The hand-picked list ([[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]) decides which extra episodes are in a playlist. Moving an episode to the top or the end is a different thing: it decides the order of episodes that are already in the list. When the pin was stored on a hand-picked member, pinning an episode that comes from a show added a second copy of it to the hand-picked list. With Deduplicate on, the show's copy could survive and the pin was lost with the dropped copy; with it off, the episode appeared twice. Pins are now their own list, keyed by the episode.
 
 ## Decision
 
@@ -28,7 +28,7 @@ Hand-picked is a source and pinning is a sort, and they are kept apart.
 
 ## Consequences
 
-- `DATA_MODEL` gains a pin entity: playlist, episode id, source, group and order.
+- `DATA_MODEL` gains a pin entity: playlist, episode id, group and order.
 - When a show is unsubscribed, its episodes are deleted and any pins for them are removed in the same transaction ([[subscription-unsubscribe]]).
 - Pins do not count as members for retention or downloads. Hand-picked episodes do ([[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]).
 - **A pin is removed when no source provides the episode any more:** the source that supplied it is removed from the playlist, the episode leaves every source (for example its show is unsubscribed), or an included playlist stops providing it. A pin that is only hidden, because a filter or Deduplicate drops the episode in this playlist, stays and comes back into effect when the episode returns.

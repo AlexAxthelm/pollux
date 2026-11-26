@@ -41,7 +41,7 @@ follows them.
 
 ▾ Settings                 [Advanced ◯]
    Episode limit 5k   (advanced)
-   Play next: from top
+   Next episode: Play next
 
 Preview                    [⋯ details]
    Episode 1            [↑][↓]
@@ -115,7 +115,7 @@ Two aids make the order readable (they are part of the MVP editor):
 
 Collapsed by default, using the standard settings interface ([[settings-cascade]]). The **Advanced**
 switch in its header shows the advanced settings, such as **Episode limit** (see [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]]).
-**Play next** ("from top" or in sequence) is the per-playlist setting from [[playlists-playback]].
+**Next episode** (**Play next** or **From the top**, the first unplayed episode) is the per-playlist setting from [[playlists-playback]].
 
 ## Preview
 
