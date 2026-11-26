@@ -151,7 +151,7 @@ When an episode starts, the context also holds its route and the resolved settin
 
 The queue ([[ADR-0046 Queued episodes play before the active playlist resumes]]) also persists
 with the play context: an ordered list of entries, each an episode id plus the context route it was
-queued from. *Not built yet.*
+queued from, plus the anchor the playlist resumes after when the queue empties (an episode id and its route). *Not built yet.*
 
 Stored in the single-row `play_context` table as the episode id plus the source as
 a kind and an id (`Subscription` today). Position is not stored here: it lives on
