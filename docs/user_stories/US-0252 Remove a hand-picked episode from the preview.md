@@ -14,5 +14,5 @@ so that I can take one out without leaving the editor
 Notes (later, not specified further):
 
 - The button shows only on rows that came from the hand-picked list, and can be hidden (a preview option, see [[US-0246 Choose what the playlist preview shows]]).
-- It does the same as **Remove from playlist** on the episode menu, and removes the episode's pins too.
+- It does the same as **Remove from playlist** on the episode menu, and removes the episode's pin too if no other source provides the episode.
 - To be done with the hand-picked list.

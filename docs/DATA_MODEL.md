@@ -120,10 +120,7 @@ apply to its episodes as normal. See [[ADR-0042 A playlist owns an ordered list 
 
 ### PlaylistPin *(Identified)*
 
-An occurrence of an episode that the user has moved to the top or the end of a playlist:
-the playlist, the episode id, the source it came through, a group (top or end) and its place in
-that group. It is independent of the source kinds, so a pin works on an episode from a show, an
-included playlist or the hand-picked list, and only that occurrence moves. The Manual ordering sort uses the pins. See [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]. *Not MVP.*
+An episode that the user has moved to the top or the end of a playlist: the playlist, the episode id, a group (top or end) and its place in that group. It is keyed by the episode, not by the source it came through, so a pin works on an episode from a show, an included playlist or the hand-picked list. The Manual ordering sort uses the pins. See [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]. *Not MVP.*
 
 ### PlaylistRule *(Identified)*
 
