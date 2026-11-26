@@ -23,7 +23,7 @@ The active context is determined by **where in the UI the user initiated playbac
 
 - Playing from a playlist view makes that playlist active.
 - Playing from a subscription view makes that subscription (the implicit playlist) active.
-- Playing from the library makes the library (the implicit all-subscriptions playlist) active.
+- Playing from the library makes the **All subscriptions** convenience playlist active ([[playlists-convenience]]); the library is that playlist, not a separate implicit one.
 
 Pressing play on an episode within a playlist view sets that playlist as active and begins playback at that episode. Pressing play on a playlist from the library resumes from the current position if it is already active, or begins from the first episode if not.
 

@@ -14,7 +14,7 @@ Playback logic should only have to understand playlists, not whether the source 
 
 ## Decision
 
-A feed subscription behaves as an implicit single-feed playlist. It responds to the same play and queue actions as any other playlist. The library likewise behaves as an implicit all-subscriptions playlist.
+A feed subscription behaves as an implicit single-feed playlist. It responds to the same play and queue actions as any other playlist. Playing from the library plays the All subscriptions convenience playlist ([[playlists-convenience]]).
 
 ## Consequences
 
