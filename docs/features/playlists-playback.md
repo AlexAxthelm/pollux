@@ -19,6 +19,7 @@ How a playlist plays, and how one becomes the active playlist. The data model is
     - Alternate behavior (configurable per playlist, default from global): **From the top** plays the first
       unplayed episode of the re-resolved list on advance (and ends if all are played), instead of **Play next**. It is the active
       playlist's own value and does not follow the settings route ([[ADR-0044 An episode's settings come from the context it is played from]])
+- No manual Next or Previous in the first version, in the app or on the lock screen; the 30s and 15s skips stay and do not move into another episode ([[ADR-0009 Next and previous track are disabled on the lock screen]]). See [[US-0257 Go to the next or previous episode by hand]].
 - Current position tracked (which episode, timestamp within episode)
 - Pause and resume supported
 - Episodes in a playlist may or may not be downloaded; download status visible
