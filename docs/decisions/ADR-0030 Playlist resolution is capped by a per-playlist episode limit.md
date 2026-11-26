@@ -25,6 +25,8 @@ Every playlist is bounded by an **episode limit**.
 - An included playlist is resolved with **its own limit**. A playlist is the union of its sources' lists, each already limited, and then its own filters, sorts and limit are applied. Example: a playlist limited to 10,000 includes one limited to 2,000 and one limited to 5,000, so it holds up to 7,000 episodes if there are no duplicates.
 - The limit is a property of a playlist's own resolution, not of playback, so it does not follow the context route of [[ADR-0044 An episode's settings come from the context it is played from]]. Its effective value is the playlist's override, else the global default.
 
+- Subscriptions (and the All shows source) are not capped. Only a playlist has an episode limit, until a reason turns up to cap them too.
+
 ## Consequences
 
 - The hard maximum needs performance testing before it is final.
