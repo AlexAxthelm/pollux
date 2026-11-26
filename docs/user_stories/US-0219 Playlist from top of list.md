@@ -13,3 +13,5 @@ As a curator
 I want to decide if a playlist plays next episode from the top of list, or next
 in list (if I'm listening in the middle)
 so that I know what to expect
+
+Note: "from the top" means the first unplayed episode of the list ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).

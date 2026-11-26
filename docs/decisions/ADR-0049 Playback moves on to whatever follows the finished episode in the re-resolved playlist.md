@@ -28,7 +28,7 @@ Each time playback moves on automatically, the playlist is **resolved again** an
 - **If an edit removes the playing episode from the list**, it keeps playing with the context it started with, so its settings do not change part-way through, and playback ends when it finishes. The playlist is no longer a context for anything after it.
 - **Edits take effect on Save.** A change to sources or rules first changes playback at the next automatic advance. A change to settings shows in the editor straight away; it reaches the playing episode at once only if it is at a level on that episode's route, and otherwise from the next episode ([[ADR-0044 An episode's settings come from the context it is played from]]).
 - **Which copy of the finished episode counts.** With Deduplicate off an episode can appear twice. "After the finished episode" means after the occurrence with the same episode and route, or after the first occurrence if that route is gone.
-- The alternate setting "play next: from top" plays the first episode in the re-resolved list instead of the one after the finished episode ([[playlists-playback]]).
+- The alternate setting "From the top" plays the first **unplayed** episode in the re-resolved list instead of the one after the finished episode, and playback ends if every episode is played. Skipping played episodes is what stops it replaying the first episode forever ([[playlists-playback]], [[US-0254 Be warned about settings that make a playlist replay]]).
 
 ## Consequences
 

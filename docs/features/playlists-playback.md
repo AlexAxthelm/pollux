@@ -17,7 +17,7 @@ How a playlist plays, and how one becomes the active playlist. The data model is
 
 - Sequential playback through episodes, in playlist order. The playlist is resolved again each time playback moves on, and "next" is what follows the episode that just finished ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).
     - Alternate behavior (configurable per playlist, default from global): **From the top** plays the first
-      episode of the re-resolved list on advance, instead of **Play next**. It is the active
+      unplayed episode of the re-resolved list on advance (and ends if all are played), instead of **Play next**. It is the active
       playlist's own value and does not follow the settings route ([[ADR-0044 An episode's settings come from the context it is played from]])
 - Current position tracked (which episode, timestamp within episode)
 - Pause and resume supported
