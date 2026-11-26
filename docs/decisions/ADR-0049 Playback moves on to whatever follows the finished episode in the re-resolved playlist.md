@@ -19,7 +19,12 @@ A playlist is a query, so its list changes while the user listens. A playback-st
 
 ## Decision
 
-Each time playback moves on automatically, the playlist is **resolved again** and the next episode is the one that comes **after the episode that just finished, in the active playlist's order**. The finished episode is treated as still being in its place, so being marked played does not make it drop out first.
+Each time playback moves on automatically, the playlist is **resolved again** and the next episode is the one that comes **after the episode that just finished, in the active playlist's order**. The list is resolved at **the last moment the finished episode was still active**: just before it is marked played, and with every edit made while it played already in effect. "Next" is read from that list, so being marked played does not make the episode drop out first. It is not read from the moment the episode was loaded.
+
+**Worked examples.** The playlist has an "unplayed" filter, so each episode drops out of the list once it is played.
+
+- The list is `[A, B, C, D, E]` and C is playing. When C finishes, D plays next. If, while C played, the user rearranged it to `[A, C, E, D, B]`, then E plays next: C is still in the list at that moment, and E is what follows it.
+- With Deduplicate off an episode can appear twice, and the playing copy is the one with the same route. The list is `[A, B, C1, D, E, C2, F, G]` and C1 is playing: D plays next. If it is rearranged to `[C2, A, B, D, E, F, C1, G]`, then G plays next, because C1 is the copy that is playing and G follows it. C2 is not.
 
 - Starting an episode from the middle of a playlist makes that playlist active and plays from that episode's position ([[ADR-0029 The active playlist is set by where playback started]]).
 - Episodes added right after the current one play next. If the current episode is moved to the top, whatever follows it in the new order plays next.
