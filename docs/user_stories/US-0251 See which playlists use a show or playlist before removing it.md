@@ -16,4 +16,4 @@ Notes (later, not specified further):
 
 - The confirmation says how many playlists use it ("This playlist is included in 5 other playlists") and previews them.
 - It applies to deleting a playlist that others include, and to unsubscribing from a show used as a source.
-- On confirm the source is dropped from each of them, and the pins that came through it are removed.
+- On confirm the source is dropped from each of them, and a pin goes only if no other source still provides its episode.

@@ -14,7 +14,7 @@ A playlist has three parts:
 
 1. **Sources**: where episodes come from. Shows, other playlists, or **All shows** (everything you subscribe to, including shows you add later).
 2. **Rules**: what to keep and how to order it.
-3. **Settings**: how the episodes play (for example skip time) and the playlist's episode limit.
+3. **Settings**: how the episodes play (for example skip time).
 
 A playlist with no sources is empty. A playlist with sources and no rules plays every episode of those sources, one source after another.
 
@@ -32,7 +32,7 @@ Each rule works on what the rules above it left behind. That one idea explains e
 
 Swap the last two and you get something different: the first 20 episodes, of which only the unplayed are kept, which may be just a few. Each rule row shows how many episodes are left after it, so you can see the difference as you drag.
 
-**Several sorts.** The last sort is the main order. The ones above it only decide ties. If you sort by show and then by age, the list is in age order, and episodes from the same day stay grouped by show.
+**Several sorts.** The last sort is the main order. The ones above it only decide ties. If you sort by show and then by age, the list is in age order, and episodes published at exactly the same time stay grouped by show.
 
 **Duplicates.** If an episode comes in from two sources, **Deduplicate** keeps the first one. It starts at the top of a new playlist and you can move it or turn it off.
 
@@ -40,11 +40,11 @@ Swap the last two and you get something different: the first 20 episodes, of whi
 
 When an episode ends, Pollux rebuilds the list and plays the episode **after the one that just finished**. You can edit the playlist while it plays; the change shows from the next episode on. If your edit removes the episode that is playing, it finishes, and then playback stops.
 
-Settings for an episode come from where you started playing it: the playlist, then the show, then your global settings. The playing episode keeps the route it started with. A change to a setting at a level on that route, such as the show's skip time, takes effect straight away; anything that would change the route, such as reordering the sources, waits for the next episode.
+Settings for an episode come from where you started playing it: the playlist (and any playlists it includes), then the show, then your global settings, with an override on the episode itself winning over all of them. The playing episode keeps the route it started with. A change to a setting at a level on that route, such as the show's skip time, takes effect straight away; anything that would change the route, such as reordering the sources, waits for the next episode.
 
 ## Playlists inside playlists
 
-A playlist can use other playlists as sources. If playlists would include each other in a circle, Pollux leaves out the playlist it is already inside, so a loop never repeats episodes and never runs forever. The editor asks you before you make a loop (later).
+A playlist can use other playlists as sources. If playlists would include each other in a circle, Pollux leaves out the playlist it is already inside, so resolution never runs forever, though an episode that arrives by two routes can appear twice if Deduplicate is off. The editor asks you before you make a loop (later).
 
 ## Sorting by hand (later)
 

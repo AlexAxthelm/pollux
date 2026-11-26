@@ -40,7 +40,6 @@ follows them.
   [+ Filter] [+ Sort]
 
 ▾ Settings                 [Advanced ◯]
-   Episode limit 5k   (advanced)
    Next episode: Play next
 
 Preview                    [⋯ details]
@@ -61,7 +60,7 @@ In the first version the sketch has no Undo/Redo, no **+ Episode**, no hand-pick
 A **+** in the library's Playlists section starts a new playlist ([[US-0196 Create playlist]]). It first offers starting points: **Blank**, or a template (later), with **Archive binge** as the first one ([[playlists-archive]]).
 
 - **Blank** opens the editor with an empty name, no sources and Deduplicate at the top. Save is disabled until it is named.
-- **A template** opens the same editor with its rules filled in as an ordinary, editable playlist and a blank sources list. It does not ask which shows to use. For Archive binge, which is a composite of a Latest and an Archive playlist, the shows then have to be added to each of the sub-playlists; how to make that one step is for later.
+- **A template** opens the same editor with its rules filled in as an ordinary, editable playlist and a blank sources list. It does not ask which shows to use. The first template is **Archive** (one playlist, [[playlists-archive]]); the composite with a Latest playlist is specified once the components are built.
 - Duplicating a playlist, system ones included, is the other way to start from something that exists ([[US-0255 Duplicate a playlist]]).
 - **MVP:** the **+** and Blank only. Templates come later.
 
@@ -113,14 +112,14 @@ Two aids make the order readable (they are part of the MVP editor):
 
 ## Settings
 
-Collapsed by default, using the standard settings interface ([[settings-cascade]]). The **Advanced**
-switch in its header shows the advanced settings, such as **Episode limit** (see [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]]).
+Collapsed by default, using the standard settings interface ([[settings-cascade]]). Settings take effect when the playlist is saved; unsaved controls change only the editor's draft. The **Advanced**
+switch in its header shows the less common settings, when there are any.
 **Next episode** (**Play next** or **From the top**, the first unplayed episode) is the per-playlist setting from [[playlists-playback]].
 
 ## Preview
 
 A scrollable episode list showing the result of the current rules as if the playlist were saved now.
-It updates as sources and rules change. The rows are the same as in the full playlist view
+It updates as sources and rules change. The rows are the same as in the full playlist view, except that there is no Play button (the preview is not playable)
 ([[playlists-ui]]), not a simplified list. If nothing matches, an empty state says why (for example
 "No unplayed episodes match these filters").
 
@@ -134,13 +133,13 @@ It updates as sources and rules change. The rows are the same as in the full pla
   ([[US-0243 See when a filter hides a hand-picked episode]]). See
   [[US-0246 Choose what the playlist preview shows]].
 - **Remove button:** a row from the hand-picked list can show a **Remove** button, which can be hidden ([[US-0252 Remove a hand-picked episode from the preview]]). Later, with the hand-picked list.
-- **Episode limit message:** "Showing first N episodes." appears at the end only if the episode limit cut the list.
+- **Work-bound message:** "This playlist was not fully loaded" appears at the end only if the work bound cut the resolution ([[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]]).
 
 ## Removing things other playlists depend on
 
 *Later. The first version uses the ordinary delete and unsubscribe confirmations and drops the source from the playlists that use it.*
 
-Deleting a playlist that other playlists include, and unsubscribing from a show that playlists use as a source, both confirm first with a message such as "This playlist is included in 5 other playlists", with a preview of those playlists ([[US-0251 See which playlists use a show or playlist before removing it]]). On confirm the source is dropped from each of them, and pins that came through it are removed ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]). "By source" needs nothing extra, because it reads the current Sources order.
+Deleting a playlist that other playlists include, and unsubscribing from a show that playlists use as a source, both confirm first with a message such as "This playlist is included in 5 other playlists", with a preview of those playlists ([[US-0251 See which playlists use a show or playlist before removing it]]). On confirm the source is dropped from each of them. A pin stays unless no other source still provides its episode ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]). "By source" needs nothing extra, because it reads the current Sources order.
 
 ## Pickers
 

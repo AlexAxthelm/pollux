@@ -58,8 +58,8 @@ building composite listening queues. See [[playlists-archive]].
 
 See [[playlists-circular-dependencies]].
 
-A playlist already on the resolution path is left out ([[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]), and each playlist
-has an episode limit ([[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]]).
+A playlist already on the resolution path is left out ([[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]), and a bound on the work a
+resolution does stops a runaway ([[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]]).
 
 ## MVP slice
 
@@ -69,10 +69,10 @@ The model is complete from the start; the slice is which parts get built first. 
 
 - **Sources:** subscriptions and other playlists. The **All shows** source is in, because the All Subscriptions convenience playlist is one; its entry in the editor's picker can follow.
 - **Rules:** one stack with include/exclude, drag to reorder and remove, a result count under each rule and a line of helper text on the tie-break order ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]). Filters: "First N episodes", "N per source", "Playback status", Deduplicate (on by default, at most one), Title. Sorts: by age, by source. No sorts means source order.
-- **Resolution:** the episode limit (under Advanced), and a playlist already on the path is omitted from resolution ([[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]), since both are needed for resolution to end.
+- **Resolution:** a bound on the work a resolution does ([[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]]), and a playlist already on the path is omitted from resolution ([[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]), since both are needed for resolution to end.
 - **Playback:** the playlist is the active context, with automatic advance on the re-resolved list, and an edit that removes the playing episode lets it finish ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]). This replaces [[ADR-0006 No auto-advance until playlists exist]]. The play context carries a `Playlist` source and a route.
 - **Convenience playlists:** All Subscriptions, In progress.
-- **Editor:** name, Save, Back with an unsaved-changes warning, Sources, Rules, Settings (Advanced switch, episode limit), a preview that matches the playlist view, and the empty state. Delete a playlist.
+- **Editor:** name, Save, Back with an unsaved-changes warning, Sources, Rules, Settings, a preview that matches the playlist view, and the empty state. Delete a playlist.
 - **Playlist views:** full and compact ([[playlists-ui]]). Deleting the playlist that is playing lets its current episode finish, then playback ends ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).
 
 **Out (later)**
@@ -91,7 +91,7 @@ The model is complete from the start; the slice is which parts get built first. 
 
 - [[ADR-0027 A playlist is a query over sources]]
 - [[ADR-0028 A subscription is an implicit single-feed playlist]]
-- [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]]
+- [[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]]
 - [[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]
 - [[ADR-0046 Queued episodes play before the active playlist resumes]]
 - [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]

@@ -17,6 +17,8 @@ see [[playlists-editor]]
 
 ## Filters
 
+Details of each rule are settled as it is built. One is fixed already: rules that use dates or times compare the full timestamp, even where only the date is shown.
+
 Filters narrow the set of episodes included in the playlist. Every filter can include or
 exclude ([[ADR-0043 Every filter can include or exclude]]).
 
@@ -24,11 +26,11 @@ exclude ([[ADR-0043 Every filter can include or exclude]]).
 
 | Rule | Parameters | Notes |
 |---|---|---|
-| First N episodes | N (count) | Keeps the first N episodes of the list as it stands at this point. "The N most recent" is a sort by age, newest first, then First N episodes. Not the same as the episode limit, the per-playlist safety cap ([[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]]). |
+| First N episodes | N (count) | Keeps the first N episodes of the list as it stands at this point. "The N most recent" is a sort by age, newest first, then First N episodes. This is also how to cap a playlist's length: put it last. |
 | N per source | N (count), direction (newest / oldest) | Keeps the N most recent or the N oldest episodes of each source in the Sources section, by release date. "Most recent 1" per source is one episode from each show. Each source counts separately; an included playlist is one source, and the All shows source counts as one source for each show ([[ADR-0050 A playlist with no sources is empty]]). |
-| Playback status | unplayed / in-progress / played (multi-select) | Enables "in progress" playlists, unplayed-only queues, etc. In-progress means not played, with the playback position not at the start. |
+| Playback status | unplayed / in-progress / played (multi-select) | Enables "in progress" playlists, unplayed-only queues, etc. **Unplayed** means not marked played, whether or not it has been started: played is set at the end of an episode or by hand, never at first play, so an episode stays in an unplayed-filtered list while it plays. **In-progress** is derived: not played, with the playback position not at the start (rewinding to the start takes it out). |
 | Deduplicate | none | Keeps the first occurrence of each episode at this point in the rules. On by default, at the top of the filters; it can be moved or turned off. It has no include/exclude toggle. A playlist has at most one, and it can be added again at the top after removal. See [[US-0217 Playlist deduplication]], [[US-0218 Playlist allows duplicates]]. |
-| Title | text | Includes or excludes episodes whose title contains the given text (a simple match). Not in the original MVP scope, but cheap to include. A general regular-expression filter may follow. See [[US-0224 Playlist filter on titles]]. |
+| Title | text | Includes or excludes episodes whose title contains the given text (a simple match; case sensitivity is an option of the rule). Not in the original MVP scope, but cheap to include. A general regular-expression filter may follow. See [[US-0224 Playlist filter on titles]]. |
 
 ### Later
 
@@ -50,7 +52,7 @@ Sorts define the order of the filtered episode list.
 | Rule | Parameters | Notes |
 |---|---|---|
 | By age | asc / desc | Chronological or reverse-chronological |
-| By source | none | Groups episodes by the order of the Sources section: all episodes from source A before source B; enables priority podcasts and composite playlist sequencing. Sequential only for MVP. |
+| By source | none | Groups episodes by the order of the Sources section: all episodes from source A before source B; enables priority podcasts and composite playlist sequencing. Sequential only for MVP. Shows taken from the All shows source are in the library's order (alphabetical). |
 
 ### Later
 

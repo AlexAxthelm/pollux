@@ -101,7 +101,7 @@ where you left off.
 
 The core differentiator.
 
-- **Playlist data model**: query model (sources → filters → sorts), position
+- **Playlist data model**: query model (sources → one ordered stack of filters and sorts), position
   tracking, active playlist management (see [[playlists]] and
   [[ADR-0027 A playlist is a query over sources]])
 - **MVP filter operations**: "First N episodes", "N per source", playback status, Deduplicate (on by default), title text match
@@ -109,10 +109,10 @@ The core differentiator.
 - **Playlist view**: full view with summary stats, compact view
 - **Playlist editor**: rules builder (feeds, filters, sorts), live preview,
   feed selector
-- **Convenience playlists**: All Subscriptions, Downloaded/Available (see
+- **Convenience playlists**: All Subscriptions, In progress (Downloaded/Available later, see
   [[playlists-convenience]])
-- **Circular dependency cap**: per-playlist episode limit (default 1,000), message if reached (see
-  [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]])
+- **Playlist limits**: leaving out a playlist already on the path ends loops, and a bound on the work a resolution does stops a runaway (see
+  [[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]])
 
 Milestone: can create a playlist with rules, play from it, and have it behave
 as the active playlist.
