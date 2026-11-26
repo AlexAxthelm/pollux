@@ -125,7 +125,7 @@ follows it. Adding a level (a playlist on the route) is adding a layer, not chan
 resolver. Resolution is not cached: it runs where a value is needed (a skip, a resume, starting
 an episode) and when the player view and the settings pages are built, which is on every render,
 position ticks included. It is a few comparisons, so that is fine; if it ever isn't, the resolved
-values can be cached on the active playback.
+values can be cached on the active playback. This is how it works today, with the two levels that are built. Once playlists exist, the route and the resolved values are taken when an episode starts and kept with the play context, and the player uses that copy, which re-resolves along the same route when a setting at a level on it is edited ([[ADR-0044 An episode's settings come from the context it is played from]]).
 
 Each settings page shows, for each setting, the value in effect, what a reset would give, and
 whether it is set:

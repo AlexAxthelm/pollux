@@ -52,7 +52,7 @@ For MVP, sequential sort by source is acceptable. Document this as a known limit
 
 ## UI Suggestion
 
-Archive binge should be surfaced as a suggested playlist from a "create playlist" flow. The underlying rules should be visible and editable, but the template should make setup a one-tap action.
+Archive binge should be surfaced as a template in the create-playlist flow ([[playlists-editor]]), opening as a normal editable playlist with a blank sources list. The underlying rules should be visible and editable, but the template should make setup a one-tap action.
 
 ## Example
 

@@ -56,6 +56,15 @@ Preview                    [⋯ details]
 
 In the first version the sketch has no Undo/Redo, no **+ Episode**, no hand-picked row, no pinned rows and no **⋯ details** menu; see the MVP slice in [[playlists]].
 
+## Creating a playlist
+
+A **+** in the library's Playlists section starts a new playlist ([[US-0196 Create playlist]]). It first offers starting points: **Blank**, or a template (later), with **Archive binge** as the first one ([[playlists-archive]]).
+
+- **Blank** opens the editor with an empty name, no sources and Deduplicate at the top. Save is disabled until it is named.
+- **A template** opens the same editor with its rules filled in as an ordinary, editable playlist and a blank sources list. It does not ask which shows to use. For Archive binge, which is a composite of a Latest and an Archive playlist, the shows then have to be added to each of the sub-playlists; how to make that one step is for later.
+- Duplicating a playlist, system ones included, is the other way to start from something that exists ([[US-0255 Duplicate a playlist]]).
+- **MVP:** the **+** and Blank only. Templates come later.
+
 ## Top bar
 
 - **Back** on the left. Leaving with unsaved changes warns first.
