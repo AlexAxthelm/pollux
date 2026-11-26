@@ -103,7 +103,7 @@ A query definition: one or more sources, with ordered filters and sorts applied.
 Produces an ordered Episode list at query time — it is not a stored list of
 episodes (apart from the hand-picked list below, which stores episode ids).
 
-One-to-many with PlaylistSource, PlaylistRule and PlaylistPin.
+One-to-many with PlaylistSource, PlaylistRule and PlaylistPin. A **system** playlist (a convenience playlist, [[playlists-convenience]]) is a real row with a fixed id, flagged as system; its sources and rules come from the app and are not stored.
 
 See also: [[GLOSSARY]] — Playlist.
 

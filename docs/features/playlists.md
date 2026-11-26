@@ -82,6 +82,7 @@ The model is complete from the start; the slice is which parts get built first. 
 - The queue ([[ADR-0046 Queued episodes play before the active playlist resumes]]).
 - Undo and redo ([[US-0245 Undo and redo in the playlist editor]]), the preview's details menu and Show excluded ([[US-0246 Choose what the playlist preview shows]], [[US-0247 Preview the rules at any point in the stack]]).
 - Loop confirmation in the editor ([[US-0244 Be asked before making a playlist loop]]), the warnings in [[US-0250 Be warned before removing the playing episode from its playlist]] and [[US-0251 See which playlists use a show or playlist before removing it]] (plain deletes and unsubscribes still work, with the ordinary confirmation).
+- Duplicate a playlist ([[US-0255 Duplicate a playlist]]), soon after the MVP because it is the way to customise a system playlist.
 - The Downloaded convenience playlist (needs the Download status filter), the later filters and sorts in [[playlists-rules]], "Play next: from top", the archive template, import and export, playlist reordering.
 
 **Settings in the slice.** The play context carries the route, and the settings resolver walks it ([[ADR-0044 An episode's settings come from the context it is played from]]). Playlist-level settings are wired up for a minimal set only, such as skip time; the other settings join as they are built on the settings branch. Building the resolver over the route is part of this slice. Settings not yet wired up fall through to the subscription and global levels, as they do today.

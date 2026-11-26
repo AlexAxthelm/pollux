@@ -41,7 +41,7 @@ The active context is determined by **where in the UI the user initiated
 playback**, not by which playlists happen to contain that episode:
 - Playing from a playlist view → that playlist becomes active
 - Playing from a subscription view → that subscription (implicit playlist) becomes active
-- Playing from the library → the library (implicit all-subscriptions playlist)
+- Playing from the library → the All subscriptions convenience playlist ([[playlists-convenience]])
   becomes active
 
 **Activating a playlist:**
