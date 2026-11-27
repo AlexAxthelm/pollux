@@ -45,7 +45,7 @@ The full rules and the reasons are in
 
 ## Not yet
 
-The episode list does not yet hide removed episodes or offer the "Show unavailable
+The episode list does not yet hide removed episodes or offer the "Show unavailable *To settle with the hiding toggle:* whether hiding is display only or changes what a playlist can play. If a de-listed episode is hidden from the show's list but still part of its implicit playlist, it can auto-play unseen, and an oldest-first archive may start on a record that no longer plays. Keep the visible list and playback in agreement, or say how they differ ([[playlists]]).
 episodes" toggle.
 
 ## Decisions
