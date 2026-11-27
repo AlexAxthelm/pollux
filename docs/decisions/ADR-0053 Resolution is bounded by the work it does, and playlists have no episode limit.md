@@ -31,4 +31,4 @@ related:
 - Nothing cuts an included playlist unless its own rules say so, so the silent truncation a cap on an included playlist would cause never arises. End-pinned episodes ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]) are no longer cut by a limit.
 - With Deduplicate off, repeated copies count toward the work bound.
 - The "three kinds of limit" overlap is gone: First N episodes is the only cut by count.
-- Open for the build: the bound's number, set by performance testing.
+- Open for the build: the bound's number, set by performance testing. The testing covers more than one large playlist: the library's rows can resolve many overlapping playlists at once, and editing can request repeated previews. A high bound per resolution does not by itself keep those combined flows responsive, so measure them together.

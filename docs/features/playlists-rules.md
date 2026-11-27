@@ -32,6 +32,15 @@ exclude ([[ADR-0043 Every filter can include or exclude]]).
 | Deduplicate | none | Keeps the first occurrence of each episode at this point in the rules. On by default, at the top of the filters; it can be moved or turned off. It has no include/exclude toggle. A playlist has at most one, and it can be added again at the top after removal. See [[US-0217 Playlist deduplication]], [[US-0218 Playlist allows duplicates]]. |
 | Title | text | Includes or excludes episodes whose title contains the given text (a simple match; case sensitivity is an option of the rule). Not in the original MVP scope, but cheap to include. A general regular-expression filter may follow. See [[US-0224 Playlist filter on titles]]. |
 
+**All shows and the All subscriptions playlist are not interchangeable inside another playlist.** Both look like "everything I subscribe to", but "N per source" counts them differently: the All shows source counts as one source for each show, and an included playlist, All subscriptions among them, counts as one source ([[ADR-0050 A playlist with no sources is empty]]).
+
+| The playlist's source | `N per source: newest 1` gives |
+|---|---|
+| All shows | One episode from each show |
+| The All subscriptions playlist | One episode from the whole library |
+
+The editor shows which one a source is, in its label, so that the user can tell them apart.
+
 **First N episodes is a rolling window, not a limit on how much plays.** Example: the library is `[A, B, C, D, E]`, all not played, and the rules are *include Not played*, *sort oldest first*, *First N episodes*. Start playing A. Each advance resolves the list again, and the episode that has just finished is held in place ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).
 
 | N | What plays |
