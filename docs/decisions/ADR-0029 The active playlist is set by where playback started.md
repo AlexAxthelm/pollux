@@ -23,9 +23,9 @@ The active context is determined by **where in the UI the user initiated playbac
 
 - Playing from a playlist view makes that playlist active.
 - Playing from a subscription view makes that subscription (the implicit playlist) active.
-- Playing from the library makes the **All subscriptions** convenience playlist active ([[playlists-convenience]]); the library is that playlist, not a separate implicit one.
+- Pressing play on a row in the library makes that row's playlist or show active. All subscriptions is a playlist like any other, so there is no separate "play from the library" ([[playlists-convenience]]).
 
-Pressing play on an episode within a playlist view sets that playlist as active and begins playback at that episode. Pressing play on a playlist from the library resumes from the current position if it is already active, or begins from the first episode if not.
+Pressing play on an episode within a playlist view sets that playlist as active and begins playback at that episode. Pressing play on a playlist or show row in the library resumes from the current position if it is already active, or activates it and begins at the first episode of its list if not (played or not: "From the top" only applies to advancing). Whether a library row has a play control is part of the library design.
 
 The active playlist persists through fully closing the app and reappears on next open. It becomes inactive when playback ends, which [[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]] describes.
 

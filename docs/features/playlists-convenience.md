@@ -13,7 +13,7 @@ depends:
 ## Convenience Playlists
 
 System-provided playlists that require no configuration:
-- **All subscriptions**: all episodes from all subscribed feeds, newest first, no filters. Playing from the library plays this playlist (a playlist whose only source is the All shows source, [[ADR-0050 A playlist with no sources is empty]])
+- **All subscriptions**: all episodes from all subscribed feeds, newest first, no filters. It is a playlist like any other, so pressing play on its row in the library plays it (a playlist whose only source is the All shows source, [[ADR-0050 A playlist with no sources is empty]])
 - **Downloaded / available**: all downloaded episodes, regardless of feed (needs the Download status filter, [[playlists-rules]])
 - **In progress**: episodes in progress, from all subscribed feeds (a playback status filter; the definition is in [[playlists-rules]])
 - **Random All**: all episodes, random sort *(not MVP — depends on random sort

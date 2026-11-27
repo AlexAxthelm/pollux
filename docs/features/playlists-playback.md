@@ -42,14 +42,15 @@ The active context is determined by **where in the UI the user initiated
 playback**, not by which playlists happen to contain that episode:
 - Playing from a playlist view → that playlist becomes active
 - Playing from a subscription view → that subscription (implicit playlist) becomes active
-- Playing from the library → the All subscriptions convenience playlist ([[playlists-convenience]])
-  becomes active
+- Pressing play on a row in the library → that row's playlist or show becomes active. All subscriptions
+  is a playlist like any other, so there is no separate "play from the library" ([[playlists-convenience]])
 
 **Activating a playlist:**
 - Pressing play on an episode within a playlist view sets that playlist as active
   and begins playback at that episode
-- Pressing play on a playlist from the library resumes from the current position
-  if already active, or begins from the first episode if not
+- Pressing play on a playlist or show row in the library resumes from the current position
+  if already active, or activates it and begins at the first episode of its list if not
+  (played or not; "From the top" only applies to advancing)
 
 **Episode ordering note:** The playlist's list is not dragged into order; episodes are pinned instead, and pinned episodes can be dragged within their group (later). Pinning an episode to the top
 or end adds a "Manual ordering" sort to the rules (not MVP;
