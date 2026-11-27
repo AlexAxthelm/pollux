@@ -147,7 +147,7 @@ user-facing copy until this is resolved.
 Relationships: references a Playlist or Subscription (via EpisodeSource), and
 an Episode.
 
-When an episode starts, the context also holds its route and the resolved settings values, so the player keeps one consistent copy (see [[ADR-0044 An episode's settings come from the context it is played from]]). *Not built yet.*
+When an episode starts, the context also holds its route and the resolved settings values, so the player keeps one consistent copy (see [[ADR-0044 An episode's settings come from the context it is played from]]). Only the final values are stored, not each level's own setting, so if any step of the route is gone (a playlist deleted, or a source entry removed) the playing episode keeps its values until it ends. *Not built yet.*
 
 The queue ([[ADR-0046 Queued episodes play before the active playlist resumes]]) also persists
 with the play context: an ordered list of entries, each an episode id plus the context route it was
