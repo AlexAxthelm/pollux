@@ -133,7 +133,7 @@ It updates as sources and rules change. The rows are the same as in the full pla
   ([[US-0243 See when a filter hides a hand-picked episode]]). See
   [[US-0246 Choose what the playlist preview shows]].
 - **Remove button:** a row from the hand-picked list can show a **Remove** button, which can be hidden ([[US-0252 Remove a hand-picked episode from the preview]]). Later, with the hand-picked list.
-- **Work-bound message:** "This playlist was not fully loaded" appears at the end only if the work bound cut the resolution ([[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]]).
+- **Work-bound failure:** if the work bound is passed, the preview shows "This playlist could not be loaded" and no episodes ([[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]]).
 
 ## Removing things other playlists depend on
 

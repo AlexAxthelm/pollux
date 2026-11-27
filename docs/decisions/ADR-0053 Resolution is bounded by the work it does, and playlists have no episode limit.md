@@ -20,7 +20,8 @@ related:
 ## Decision
 
 - **Playlists have no episode limit.** There is no setting, no per-playlist override and no "Showing first N episodes." message. A user who wants a cap adds **First N episodes** to the rules, at the end of the stack for a cap on the final list ([[playlists-rules]]).
-- **A resolution is bounded by the work it does.** It counts the playlists it expands and the episodes it handles (the second matters when Deduplicate is off, because included playlists can then multiply a list without a loop). When the count passes a fixed bound, it stops expanding further included playlists and handling further episodes, and the playlist shows "This playlist was not fully loaded". The number is chosen when the resolver is built, by measuring, and replaces the 50,000 hard maximum.
+- **A resolution is bounded by the work it does.** It counts the playlists it expands and the episodes it handles (the second matters when Deduplicate is off, because included playlists can then multiply a list without a loop). The count covers the whole root request, nested work included, and not each included playlist on its own. When the count passes a fixed bound, the resolution **fails**: the playlist shows "This playlist could not be loaded". There is no partial result. Nothing is shown from it as if it were the playlist, played from it, or used for pin cleanup, and an included playlist that fails makes the playlist that includes it fail too. A partial list could be in the wrong order, could contain episodes a filter excludes, and could make a pin look as if no source provides its episode.
+- **The bound is set high**, so that it is rarely met in practice: it is a guard against a runaway, and meeting it means something is wrong. The number is chosen by performance testing, with a worst-case library in mind (for example 200 shows with 500 episodes each, through All shows). It is one number, used by the preview, playback and restore, so that a preview always predicts playback.
 - **Subscriptions and the All shows source are not capped.** A playlist can therefore be very long. Lists are shown and played lazily, so length alone is not a problem.
 - Caching playlists that are outside any loop is an optimisation for the build, not a rule here. How the cost of loops grows, and the smarter budget to decide when import is built, are in [[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]].
 
@@ -30,4 +31,4 @@ related:
 - Nothing cuts an included playlist unless its own rules say so, so the silent truncation that ADR-0030 accepted is gone. End-pinned episodes ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]) are no longer cut by a limit.
 - With Deduplicate off, repeated copies count toward the work bound.
 - The "three kinds of limit" overlap is gone: First N episodes is the only cut by count.
-- Open for the build: the bound's number, and whether it needs to differ between the preview, playback and restore.
+- Open for the build: the bound's number, set by performance testing.
