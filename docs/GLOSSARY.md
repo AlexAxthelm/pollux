@@ -40,10 +40,33 @@ For code-facing definitions and entity relationships, see [[DATA_MODEL]].
       ([[ADR-0046 Queued episodes play before the active playlist resumes]],
       [[US-0152 Queue]]).
     - **Convenience playlist**: internal/doc term for system-provided playlists
-      that require no configuration ("All Subscriptions", "Downloaded"). Not a
-      user-facing distinction — these appear in the UI simply as playlists.
+      that require no configuration ("All subscriptions", "In progress"). They
+      appear in the UI as playlists, but cannot be edited, renamed or deleted; the
+      user duplicates one to change it ([[playlists-convenience]]).
+    - **Duplicate**: the action that copies a playlist, system ones included, into a
+      new playlist the user owns ([[US-0255 Duplicate a playlist]]).
   - See also: [[DATA_MODEL]] — Playlist, PlaylistSource, PlaylistRule,
     PlaylistPin.
+
+- **Source**: where a playlist's episodes come from: a show, another playlist, the
+  **All shows** source (every subscribed show, including ones added later), or the
+  playlist's own **hand-picked list**. Sources are ordered; the order is what the
+  "by source" sort uses ([[playlists-editor]]).
+  - **Hand-picked list**: single episodes added to one playlist by hand ("Add to
+    playlist"). It belongs to that playlist and works as one of its sources
+    ([[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]).
+
+- **Rule**: one step in a playlist's ordered stack of rules, applied top to bottom:
+  a **filter** (keeps or drops episodes, with include or exclude), a **sort**, or
+  **Deduplicate** ([[playlists-rules]],
+  [[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]).
+  - **First N episodes**: the filter that keeps the first N of the list at that
+    point. It is the only way to cap a playlist's length.
+  - **Manual ordering**: the sort that places pinned episodes first or last.
+
+- **Pin**: an episode the user has sent to the top or the end of a playlist. A
+  pinned episode stays where it was put while the **Manual ordering** rule is below
+  the other sorts ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]).
 
 - **EpisodeSource** *(placeholder — not a finalized term)*: the internal
   abstraction representing either a subscription or a playlist. Used in the
@@ -76,6 +99,8 @@ For code-facing definitions and entity relationships, see [[DATA_MODEL]].
   Valid values: **unplayed**, **in-progress**, **played**. Use these exact
   terms in code and user-facing copy; avoid synonyms like "listened",
   "finished", or "watched".
+  - In a playlist filter the option is **Not played**: anything not marked played,
+    so it includes started episodes ([[playlists-rules]]).
 
 - **Flag** / **Starred**: a user-set marker on an episode. "Flag" is the
   internal term; the user-facing affordance may be a star or equivalent icon.
