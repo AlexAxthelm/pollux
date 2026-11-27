@@ -50,7 +50,7 @@ playback**, not by which playlists happen to contain that episode:
   and begins playback at that episode
 - Pressing play on a playlist or show row in the library resumes from the current position
   if already active, or activates it and begins at the first episode of its list if not
-  (played or not; "From the top" only applies to advancing)
+  (played or not; "From the top" only applies to advancing). **Known gap, first version:** pressing play on a row that is not active always starts at the first episode of its list, so a half-played episode in the middle is not picked up. A "continue where I was" behavior for each playlist or show is a follow-up ([[US-0258 Pick up each playlist where I left it]]).
 
 **Episode ordering note:** The playlist's list is not dragged into order; episodes are pinned instead, and pinned episodes can be dragged within their group (later). Pinning an episode to the top
 or end adds a "Manual ordering" sort to the rules (not MVP;
