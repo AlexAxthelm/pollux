@@ -65,7 +65,7 @@ Sections inherit from the global page, with an "(inherited from library)" note u
 A value the subscription has set has a small reset button next to it, which returns it to the
 global value.
 - Playback
-- Library (display options)
+- Library (display options), including **Episode order** for a show (Newest first, Oldest first, Title A–Z; default newest first), which is also the order its implicit playlist plays in. It is not a setting of user-made playlists ([[ADR-0028 A subscription is an implicit single-feed playlist]])
 - Storage (how many episodes to keep locally)
 - Refresh interval (on subscriptions and on playlists: a playlist's refresh interval is a request, and anything can request a refresh, as with storage and download settings, [[ADR-0044 An episode's settings come from the context it is played from]])
 

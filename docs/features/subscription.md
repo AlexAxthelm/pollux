@@ -76,7 +76,7 @@ value. Refresh interval and download rules are not subscription settings yet.
 
 - Feed artwork, title, description
 - Episode list (full, including de-listed episodes behind toggle)
-- The Sort menu is the order of the show's implicit playlist: it decides what plays next when the show is the active context, and it does not apply when the show is a source of another playlist ([[ADR-0028 A subscription is an implicit single-feed playlist]]).
+- The Sort menu sets the show's stored **Episode order** setting (default newest first, a per-show override of a global default) and is the order of the show's implicit playlist: it decides what plays next when the show is the active context, and it does not apply when the show is a source of another playlist ([[ADR-0028 A subscription is an implicit single-feed playlist]]). *As built:* the choice is kept only while the page is open, not stored per show.
 - Gear icon to the subscription's settings. *As built:* next to the Sort button.
 - Unsubscribe (in menu, protected)
 
