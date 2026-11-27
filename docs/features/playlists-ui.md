@@ -18,7 +18,7 @@ described in [[episode-ui]].
 ### Full View
 
 ```
-[ Icon / Title ]   [ Summary stats ]   [ ⋮ config ]   (config menu: Edit, Duplicate, Delete; later)
+[ Icon / Title ]   [ Summary stats ]   [ ⋮ config ]   (config menu: Edit, Duplicate, Delete; Duplicate is later)
 ────────────────────────────────────────────────────
 Episode row
 Episode row

@@ -20,6 +20,6 @@ Pausing near the end does **not** mark the episode played and does not clear the
 
 ## Consequences
 
-- This changes the "when they pause" part of ADR-0002. Until this ADR is accepted, ADR-0002 stands; when it is, mark ADR-0002 `superseded` in part and update [[player-progress]].
+- This changes the "when they pause" part of ADR-0002. ADR-0002 notes that it is partly superseded by this ADR, and [[player-progress]] says so. The player does not do this yet.
 - A paused episode near its end stays in progress, keeps its position and its playlist context, and play resumes it. It survives a cold start in the same way.
 - System pauses are unchanged. Playlist advance still happens only when the episode ends ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).

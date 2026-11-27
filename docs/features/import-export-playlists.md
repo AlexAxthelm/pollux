@@ -19,7 +19,7 @@ We would also look to have a more detailed export functionality that includes OP
 
 ## What a shared playlist carries
 
-A playlist is sources plus one ordered rule stack ([[ADR-0027 A playlist is a query over sources]], [[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]), so that is what an export has to hold, along with its settings. The hand-picked list and pins refer to episodes the receiver may not have, so whether they travel is open. An import can also bring a loop, or a dense cluster of playlists, past the editor's confirmation. Building import is the point at which to decide the resolution work budget and to mark loops ([[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]).
+A playlist is sources plus one ordered rule stack ([[ADR-0027 A playlist is a query over sources]], [[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]), so that is what an export has to hold, along with its settings. The hand-picked list and pins refer to episodes the receiver may not have, so whether they travel is open. An import can also bring a loop, or a dense cluster of playlists, past the editor's confirmation. Building import is the point at which to refine the work bound that [[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]] already sets, and to mark loops ([[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]).
 
 ## User stories
 

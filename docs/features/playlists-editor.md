@@ -53,7 +53,7 @@ Preview                    [⋯ details]
    Episode 5            [↺][≡]
 ```
 
-In the first version the sketch has no Undo/Redo, no **+ Episode**, no hand-picked row, no pinned rows and no **⋯ details** menu; see the MVP slice in [[playlists]].
+In the first version the Settings row holds only the minimal playlist settings, **Advanced** shows nothing until there are advanced settings, and **Next episode** has one choice because **From the top** is later. The sketch also has no Undo/Redo, no **+ Episode**, no hand-picked row, no pinned rows and no **⋯ details** menu; see the MVP slice in [[playlists]].
 
 ## Creating a playlist
 

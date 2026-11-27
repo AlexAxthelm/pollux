@@ -30,8 +30,8 @@ How a playlist plays, and how one becomes the active playlist. The data model is
 - A playlist with no rules applied includes all episodes from its sources
 
 **Playlist persistence:** The active playlist persists through fully closing the
-app and reappears on next open. The active playlist becomes inactive only when it
-reaches its end.
+app and reappears on next open. The active playlist becomes inactive when playback ends, as
+[[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]] describes (nothing follows, the playing episode left the list, or the playlist was deleted).
 
 ## Active playlist
 

@@ -20,9 +20,9 @@ Additionally, when binging multiple feeds simultaneously, episodes from the olde
 
 ## The Solution
 
-*The first template is only the **Archive** playlist below. The Latest playlist and the composite are described here for later and are specified once the components are built.*
+**First template: Archive.** One playlist. Source: the selected feeds (blank when the template opens). Rules: include unplayed; sort by age (oldest first).
 
-A composite playlist built from two sub-playlists:
+**Later: the Latest playlist and the composite.** These are described here for later and are specified once the components are built. The composite is built from two sub-playlists:
 
 **"Latest" sub-playlist** (one for all the selected feeds; N per source counts each feed separately):
 - Source: selected feed(s)
@@ -40,7 +40,7 @@ A composite playlist built from two sub-playlists:
 
 This ensures new episodes surface immediately, and archive listening resumes naturally after.
 
-**Known issue: new episodes do not surface at once.** With the default "Play next", a new episode lands at the top of the list, above where the listener is, and only plays after the rest of the list. "New episodes surface immediately" holds only if the composite playlist is set to **From the top** (the first unplayed episode, [[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]). The cost of that setting is that an episode left half-played is picked again whenever it is the first unplayed one. For now the template keeps the default behavior and this is noted for use.
+**Known issue: new episodes do not surface at once.** With the default "Play next", a new episode lands above where the listener is, and the playlist stops at its end, so it may not play in that session. "New episodes surface immediately" holds only if the composite playlist is set to **From the top** (the first unplayed episode, [[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]). The cost of that setting is that an episode left half-played is picked again whenever it is the first unplayed one. For now the template keeps the default behavior and this is noted for use.
 
 ## Clumping Problem (Later)
 
