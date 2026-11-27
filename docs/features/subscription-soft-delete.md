@@ -28,7 +28,7 @@ A "Delete now" button is available for users who want immediate hard deletion.
 
 ## Playlists, hand-picked episodes and pins
 
-*Not decided; for when soft-delete is built.* Today an unsubscribe drops the show's hand-picked members, pins and source rows at once ([[subscription-unsubscribe]], [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]], [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]), because the MVP deletes the show with its episodes. With a grace period the summary above promises that "playlist membership" is restored, so one option is:
+*Not decided; for when soft-delete is built.* The planned unsubscribe (not built yet) drops the show's hand-picked members, pins and source rows at once ([[subscription-unsubscribe]], [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]], [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]), because the MVP deletes the show with its episodes. With a grace period the summary above promises that "playlist membership" is restored, so one option is:
 
 - During the 30 days the soft-deleted show counts as absent: its episodes are in no playlist (also not through the All shows source), and the hand-picked page and count skip its members.
 - Its hand-picked members, pins and source rows stay stored without effect, and come back if the user resubscribes.

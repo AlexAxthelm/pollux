@@ -17,9 +17,10 @@ the primary way users add content to Pollux.
 
 - **Subscription**: a podcast/show, represented by a feed URI that the app polls
   for updates. 1:1 with an RSS/Atom/JSONFeed file.
-- **Feed**: the general abstraction for "an ordered, potentially changing set of
-  episodes." Both subscriptions and playlists satisfy this interface. The rest of
-  the app talks to feeds, not specifically to subscriptions or playlists. 
+- **EpisodeSource**: the internal abstraction for "an ordered, potentially changing set of
+  episodes", which both subscriptions and playlists satisfy; the rest of the app talks to it,
+  not specifically to subscriptions or playlists ([[DATA_MODEL]]). "Feed" is reserved for the
+  feed document ([[GLOSSARY]]).
 
 These terms are internal. User-facing language should use "podcast" or "show"
 for subscriptions, and "playlist" for user-created feeds.

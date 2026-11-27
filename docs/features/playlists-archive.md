@@ -38,7 +38,7 @@ Additionally, when binging multiple feeds simultaneously, episodes from the olde
 - Sources: Latest playlist, then Archive playlist
 - Sort: by source (sequential) — Latest episodes always precede archive episodes
 
-This ensures new episodes surface immediately, and archive listening resumes naturally after.
+This is meant to surface new episodes at once, with archive listening resuming after them; the known issue below says when it does not.
 
 **Known issue: new episodes do not surface at once.** With the default "Play next", a new episode lands above where the listener is, and the playlist stops at its end, so it may not play in that session. "New episodes surface immediately" holds only if the composite playlist is set to **From the top** (the first episode that is not played, [[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]). The cost of that setting is that an episode left half-played is picked again whenever it is the first one not played. For now the template keeps the default behavior and this is noted for use.
 

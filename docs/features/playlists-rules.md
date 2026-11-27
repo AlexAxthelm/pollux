@@ -86,7 +86,7 @@ Specific episodes can be added or included by hand
   that relates to rules is decided in
   [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]:
   a hand-picked source owned by the playlist, not MVP. Filters apply to hand-picked
-  episodes as normal. Nothing is open here.
+  episodes as normal.
 
 ## User stories
 

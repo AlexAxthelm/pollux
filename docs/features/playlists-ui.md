@@ -18,7 +18,7 @@ described in [[episode-ui]].
 ### Full View
 
 ```
-[ Icon / Title ]   [ Summary stats ]   [ ⋮ config ]   (config menu: Edit, Duplicate, Delete; Duplicate is later)
+[ Icon / Title ]   [ Summary stats ]   [ ⋮ config ]   (config menu: Edit, Duplicate, Delete; Duplicate is later. A system playlist cannot be edited or deleted, so in the first version it has no config menu)
 ────────────────────────────────────────────────────
 Episode row
 Episode row

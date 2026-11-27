@@ -78,7 +78,7 @@ changing it. See [[ADR-0046 Queued episodes play before the active playlist resu
 
 Reordering by hand is decided in
 [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]; queueing
-in [[ADR-0046 Queued episodes play before the active playlist resumes]]. Nothing is open here.
+in [[ADR-0046 Queued episodes play before the active playlist resumes]].
 
 ## User stories
 

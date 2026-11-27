@@ -27,7 +27,7 @@ The active context is determined by **where in the UI the user initiated playbac
 
 Pressing play on an episode within a playlist view sets that playlist as active and begins playback at that episode. Pressing play on a playlist from the library resumes from the current position if it is already active, or begins from the first episode if not.
 
-The active playlist persists through fully closing the app and reappears on next open. It becomes inactive only when it reaches its end.
+The active playlist persists through fully closing the app and reappears on next open. It becomes inactive when playback ends, which [[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]] describes.
 
 ## Consequences
 

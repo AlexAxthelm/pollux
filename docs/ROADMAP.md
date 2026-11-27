@@ -161,12 +161,12 @@ The archive binge feature is the reason this app exists. Once MVP is solid:
 
 - **Show notes**: timestamp detection → synthetic chapters (the player's show-notes
   page itself is built; see [[player-show-notes]])
-- **Archive binge playlist**: composite playlist template, surfaced in create
-  playlist flow, one-tap setup (see [[playlists-archive]])
+- **Archive template**: the first template is the single Archive playlist, surfaced in the create
+  playlist flow with a blank sources list; the Latest playlist and the composite come later (see [[playlists-archive]])
 - **OPML import/export**: standard import for migrating from other apps (see
   [[import-export-opml]])
-- **Playlist reordering**: behind mode toggle, alphabetical + by last updated (see
-  [[playlists-playback]])
+- **Library ordering of playlists**: behind mode toggle, alphabetical + by last updated (see
+  [[library-ordering]]). Ordering the episodes inside a playlist by hand is pins, a separate item ([[US-0242 Order a playlist by hand with top and end pools]]).
 
 ---
 
