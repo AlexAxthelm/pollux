@@ -31,7 +31,7 @@ Settings are organized into sections on a single scrollable screen.
 - Skip increment — forward (default: 30s)
 - Skip increment — back (default: 15s)
 - Resume behavior — rewind on resume (default: 3s; can be set to 0 to disable)
-- Next episode behavior — "Play next" (in sequence) vs. "From the top", the first unplayed episode of the list (default: play next). Resolves for the active context only, then global; it does not walk the route ([[ADR-0044 An episode's settings come from the context it is played from]])
+- Next episode behavior — "Play next" (in sequence) vs. "From the top", the first episode of the list that is not played (default: play next). Resolves for the active context only, then global; it does not walk the route ([[ADR-0044 An episode's settings come from the context it is played from]])
 
 ### Library
 - Unplayed count display — total unplayed vs. immediately available unplayed

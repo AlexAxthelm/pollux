@@ -22,15 +22,15 @@ A playlist with no sources is empty. A playlist with sources and no rules plays 
 
 Each rule works on what the rules above it left behind. That one idea explains everything else.
 
-**Example: "my 20 newest unplayed episodes".**
+**Example: "my 20 newest episodes that are not played".**
 
 | Rule | What is left |
 |---|---|
 | Sort by age, newest first | everything, newest first |
-| Keep only unplayed | the unplayed ones, still newest first |
-| First 20 episodes | the 20 newest unplayed |
+| Keep only not played | the not-played ones, still newest first |
+| First 20 episodes | the 20 newest not played |
 
-Swap the last two and you get something different: the first 20 episodes, of which only the unplayed are kept, which may be just a few. Each rule row shows how many episodes are left after it, so you can see the difference as you drag.
+Swap the last two and you get something different: the first 20 episodes, of which only the not-played ones are kept, which may be just a few. Each rule row shows how many episodes are left after it, so you can see the difference as you drag.
 
 **Several sorts.** The last sort is the main order. The ones above it only decide ties. If you sort by show and then by age, the list is in age order, and episodes published at exactly the same time stay grouped by show.
 

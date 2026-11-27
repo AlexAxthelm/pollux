@@ -15,5 +15,5 @@ so that "Add to playlist" doesn't seem to do nothing
 
 Notes (later, not specified further):
 
-- For example, adding a played episode to a playlist that includes only unplayed ones.
+- For example, adding a played episode to a playlist that includes only episodes that are not played.
 - A warning, not a block: hand-picked episodes are filtered like any other.

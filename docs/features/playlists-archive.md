@@ -20,19 +20,19 @@ Additionally, when binging multiple feeds simultaneously, episodes from the olde
 
 ## The Solution
 
-**First template: Archive.** One playlist. Source: the selected feeds (blank when the template opens). Rules: include unplayed; sort by age (oldest first).
+**First template: Archive.** One playlist. Source: the selected feeds (blank when the template opens). Rules: include not played; sort by age (oldest first).
 
 **Later: the Latest playlist and the composite.** These are described here for later and are specified once the components are built. The composite is built from two sub-playlists:
 
 **"Latest" sub-playlist** (one for all the selected feeds; N per source counts each feed separately):
 - Source: selected feed(s)
-- Rules, in this order: **N per source** (most recent, 1), then **include** playback status **unplayed**
-- **Why this order.** "Most recent 1, then unplayed" gives the latest episode of each show if it is unplayed, and nothing once it has been played. That is the intent: a new episode surfaces, and when it has been heard the Latest list is empty and the archive carries on. The reverse order ("unplayed, then most recent 1") would give the newest *unplayed* episode of each show, so after the user plays the newest, the second newest would jump to the front of the queue and break the archive's oldest-first order.
+- Rules, in this order: **N per source** (most recent, 1), then **include** playback status **not played**
+- **Why this order.** "Most recent 1, then not played" gives the latest episode of each show if it is not played, and nothing once it has been played. That is the intent: a new episode surfaces, and when it has been heard the Latest list is empty and the archive carries on. The reverse order ("not played, then most recent 1") would give the newest episode *not played* of each show, so after the user plays the newest, the second newest would jump to the front of the queue and break the archive's oldest-first order.
 - Sort: by age (desc)
 
 **"Archive" sub-playlist** (one for all the selected feeds):
 - Source: selected feed(s)
-- Rules: include unplayed; sort by age (oldest first)
+- Rules: include not played; sort by age (oldest first)
 
 **Composite playlist:**
 - Sources: Latest playlist, then Archive playlist
@@ -40,14 +40,14 @@ Additionally, when binging multiple feeds simultaneously, episodes from the olde
 
 This ensures new episodes surface immediately, and archive listening resumes naturally after.
 
-**Known issue: new episodes do not surface at once.** With the default "Play next", a new episode lands above where the listener is, and the playlist stops at its end, so it may not play in that session. "New episodes surface immediately" holds only if the composite playlist is set to **From the top** (the first unplayed episode, [[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]). The cost of that setting is that an episode left half-played is picked again whenever it is the first unplayed one. For now the template keeps the default behavior and this is noted for use.
+**Known issue: new episodes do not surface at once.** With the default "Play next", a new episode lands above where the listener is, and the playlist stops at its end, so it may not play in that session. "New episodes surface immediately" holds only if the composite playlist is set to **From the top** (the first episode that is not played, [[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]). The cost of that setting is that an episode left half-played is picked again whenever it is the first one not played. For now the template keeps the default behavior and this is noted for use.
 
 ## Clumping Problem (Later)
 
 When multiple feeds are included and their archives are at different points in history, earlier-archive feeds dominate the front of the queue. Future sort strategies to address this:
 
 - **Round-robin**: alternate episodes between feeds
-- **Proportional**: feeds with more unplayed episodes get proportionally more slots
+- **Proportional**: feeds with more episodes not played get proportionally more slots
 - **Date-normalized**: treat each feed's archive as unit length [0,1] and interleave by normalized position
 
 For MVP, sequential sort by source is acceptable. Document this as a known limitation.

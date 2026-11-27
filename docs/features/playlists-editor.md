@@ -34,7 +34,7 @@ follows them.
 
 ▾ Rules
    ≡ Deduplicate                    ⊖
-   ≡ filter: unplayed               ⊖
+   ≡ filter: not played              ⊖
    ≡ filter: duration < 2h          ⊖
    ≡ sort: oldest first             ⊖
   [+ Filter] [+ Sort]
@@ -94,7 +94,7 @@ row has a drag handle and a remove button. **+ Filter** and **+ Sort** add a row
 
 - **Deduplicate:** present and on for a new playlist, at the top. It takes no criteria. There is at most one: **+ Filter** does not offer it while it is in the stack, and adding it back after removal puts it at the top.
 - **Filters:** `include` or `exclude`, a criterion and a value ([[ADR-0043 Every filter can include or exclude]]).
-  Example rows: `include · playback status · unplayed`, `exclude · duration · > 2:00:00`,
+  Example rows: `include · playback status · not played`, `exclude · duration · > 2:00:00`,
   `include · "first N episodes" · 20`.
 - **Sorts:** a direction, a key and, for some keys, parameters. Each sort orders the list as it stands at
   that point, so the last sort is the main order and the ones above it break ties.
@@ -102,8 +102,8 @@ row has a drag handle and a remove button. **+ Filter** and **+ Sort** add a row
   preview). It can be moved and removed like the others, once nothing is pinned. When a sort is below it, the row says so ("Sorts below this will reorder pinned episodes"), and when First N episodes is below it, that pins apply before the cut. Fixed at the bottom is the fallback if this confuses ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]).
 
 **Order matters.** Deduplicate keeps the first occurrence in the order the list has at that point,
-which is the result of the rules above it. Example: "first 2, then unplayed" gives the first 2 episodes if unplayed;
-"unplayed, then first 2" gives the first 2 of the unplayed set.
+which is the result of the rules above it. Example: "first 2, then not played" gives the first 2 episodes if they are not played;
+"not played, then first 2" gives the first 2 of the not-played set.
 
 Two aids make the order readable (they are part of the MVP editor):
 
@@ -114,14 +114,14 @@ Two aids make the order readable (they are part of the MVP editor):
 
 Collapsed by default, using the standard settings interface ([[settings-cascade]]). Settings take effect when the playlist is saved; unsaved controls change only the editor's draft. The **Advanced**
 switch in its header shows the less common settings, when there are any.
-**Next episode** (**Play next** or **From the top**, the first unplayed episode) is the per-playlist setting from [[playlists-playback]].
+**Next episode** (**Play next** or **From the top**, the first episode not played) is the per-playlist setting from [[playlists-playback]].
 
 ## Preview
 
 A scrollable episode list showing the result of the current rules as if the playlist were saved now.
 It updates as sources and rules change. The rows are the same as in the full playlist view, except that there is no Play button (the preview is not playable)
 ([[playlists-ui]]), not a simplified list. If nothing matches, an empty state says why (for example
-"No unplayed episodes match these filters").
+"No episodes match these filters").
 
 - **Order buttons:** an unpinned row has up and down buttons that send the episode to the top or the
   end of the list. A pinned row has a drag handle to order it within its group, and a reset button
