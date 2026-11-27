@@ -24,6 +24,10 @@ so that the removal is reflected in those too. If playlists use the show as a so
 
 see subscription-soft-delete.md for future unsubscribe improvements
 
+## Effect on the queue
+
+*To settle when the queue is built.* Pending queue entries for the show's episodes, and a queue anchor that the show supplied, need cleaning up in the same transaction. See [[ADR-0046 Queued episodes play before the active playlist resumes]].
+
 ## Effect on hand-picked episodes
 
 A playlist's hand-picked list ([[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]])

@@ -35,7 +35,7 @@ A "Delete now" button is available for users who want immediate hard deletion.
 - At hard delete (30 days, or "Delete now") they are dropped, as today.
 - The unsubscribe confirmation then says that playlists stop using the show now, and that it comes back if the user resubscribes in time.
 
-Nothing decided today blocks this: it only moves the drop from the unsubscribe to the hard delete.
+Today's decisions do not stop this, but it is more than moving the drop to the hard delete. Pin cleanup removes a pin when no source provides its episode ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]), so opening a playlist during the grace period would remove pins that this promises to restore. Cleanup would have to leave alone the pins whose episodes are only temporarily unavailable because their show is soft-deleted.
 
 ## User stories
 
