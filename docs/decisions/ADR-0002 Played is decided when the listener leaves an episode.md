@@ -4,10 +4,13 @@ status: accepted
 feature:
   - "[[player-progress]]"
 related:
+  - "[[ADR-0052 Pausing near the end does not mark an episode played]]"
   - "[[US-0155 Set played threshold]]"
   - "[[ADR-0005 Position persistence cadence and resume rewind]]"
 ---
 # Played is decided when the listener leaves an episode
+
+*Partly superseded by [[ADR-0052 Pausing near the end does not mark an episode played]]: a pause no longer finishes an episode. The rest stands.*
 
 ## Context
 

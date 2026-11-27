@@ -68,7 +68,7 @@ A **+** in the library's Playlists section starts a new playlist ([[US-0196 Crea
 
 - **Back** on the left. Leaving with unsaved changes warns first.
 - Tapping the playlist name renames it.
-- **Save** saves the playlist. It is disabled until the playlist has a name. A playlist with no sources, or with no rules, is valid: no sources is an empty playlist, no rules is source order. Edits take effect on Save; when they reach an episode that is playing is in [[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]].
+- **Save** saves the playlist. It is disabled until the playlist has a name. A playlist with no sources, or with no rules, is valid: no sources is an empty playlist, no rules is source order. Edits take effect on Save; how they reach an episode that is playing is in [[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]].
 - **Undo** reverts the last editor action, repeatedly (a stack). Once something has been undone, **Redo**
   appears. See [[US-0245 Undo and redo in the playlist editor]].
 

@@ -31,11 +31,12 @@ backgrounding, switching episode, and end. Per-second ticks are transient.
 ## When an episode counts as played
 
 Played is decided when the listener *leaves* an episode, never as a side effect of
-saving progress: when the engine reaches the end, when they pause, or when they
-start another episode, while within **15s** of the end (never more than a quarter
+saving progress: when the engine reaches the end or when they start another episode, while within **15s** of the end (never more than a quarter
 of a short episode). The episode becomes played, its position resets to 0, and the
 player goes inactive. The 15s will become a user setting
 ([[US-0155 Set played threshold]]).
+
+A pause near the end does not finish the episode: it stays in progress with its place and its playlist context, and play resumes it ([[ADR-0052 Pausing near the end does not mark an episode played]]). *Not built yet: the player still finishes an episode on a pause within the tolerance, as [[ADR-0002 Played is decided when the listener leaves an episode]] describes.*
 
 Saving progress and backgrounding never finish an episode, so listening on through
 the last seconds with the screen locked is never cut short. A system pause (a call,
