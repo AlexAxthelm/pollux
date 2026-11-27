@@ -14,6 +14,6 @@ so that I know playback will end after it, and can undo the edit if I didn't mea
 
 Notes (later, not specified further):
 
-- The warning says what will happen: the episode keeps playing with the route it started with (a settings edit at a level on that route still applies, [[ADR-0044 An episode's settings come from the context it is played from]]), and playback ends when it finishes ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).
+- The warning says what will happen: the episode keeps playing with the route it started with (a settings edit at a level on that route still applies while every step of the route exists, [[ADR-0044 An episode's settings come from the context it is played from]]), and playback ends when it finishes ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).
 - It mentions that the editor's undo button can revert the edit ([[US-0245 Undo and redo in the playlist editor]]).
 - It is a warning, not a block.
