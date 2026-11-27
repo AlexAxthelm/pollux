@@ -47,7 +47,7 @@ Siri, unplugged headphones) keeps the episode and its place.
 The active playlist and current position are restored on cold start, so the
 mini-player is visible immediately if something was playing when the app closed.
 
-- An episode already marked played is not restored.
+- An episode already marked played is not restored. This includes the wait after a failed advance to the next episode: it is not saved, so a restart leaves the player inactive ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).
 - An in-progress episode comes back paused at its place.
 - Saving the play context is retried until storage confirms it, up to 5 attempts.
   If it never succeeds, a relaunch may not restore that episode.
