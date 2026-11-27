@@ -60,6 +60,7 @@ Sorts define the order of the filtered episode list.
 |---|---|---|
 | Manual ordering | none | Appears when the playlist has pins and puts them at the front or back in hand-set order. See [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]. |
 | By source (interleaved) | strategy: round-robin / proportional / date-normalized | Solves the archive-clumping problem; see [[playlists-archive]] |
+| By last played | asc / desc | Orders by when an episode was last played; would put the most recently listened episode first in In progress. Needs a stored last-played time ([[listening-stats]]). See [[playlists-convenience]]. |
 | By duration | asc / desc | |
 | By play count | asc / desc | Surfaces favorites or finds unlistened gems |
 | Random | - | - |
