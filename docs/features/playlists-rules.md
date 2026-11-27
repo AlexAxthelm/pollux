@@ -32,6 +32,16 @@ exclude ([[ADR-0043 Every filter can include or exclude]]).
 | Deduplicate | none | Keeps the first occurrence of each episode at this point in the rules. On by default, at the top of the filters; it can be moved or turned off. It has no include/exclude toggle. A playlist has at most one, and it can be added again at the top after removal. See [[US-0217 Playlist deduplication]], [[US-0218 Playlist allows duplicates]]. |
 | Title | text | Includes or excludes episodes whose title contains the given text (a simple match; case sensitivity is an option of the rule). Not in the original MVP scope, but cheap to include. A general regular-expression filter may follow. See [[US-0224 Playlist filter on titles]]. |
 
+**First N episodes is a rolling window, not a limit on how much plays.** Example: the library is `[A, B, C, D, E]`, all not played, and the rules are *include Not played*, *sort oldest first*, *First N episodes*. Start playing A. Each advance resolves the list again, and the episode that has just finished is held in place ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).
+
+| N | What plays |
+|---|---|
+| 1 | A only. The list is `[A]`, and nothing follows A. |
+| 2 | A, B, C, D, E. At A's end the list is `[A, B]`, so B plays; at B's end it is `[B, C]`, then `[C, D]`, `[D, E]`, and E is last. |
+| 3 | A, B, C, D, E, in the same way. |
+
+So "cap a playlist's length" is true of one resolution of the list, and does not mean "play at most N episodes".
+
 ### Later
 
 | Rule | Parameters | Notes |

@@ -67,7 +67,7 @@ global value.
 - Playback
 - Library (display options)
 - Storage (how many episodes to keep locally)
-- Refresh interval (subscriptions only) #needs-decision [[ADR-0044 An episode's settings come from the context it is played from]] says refresh settings are also valid on playlists, as requests; the two disagree.
+- Refresh interval (on subscriptions and on playlists: a playlist's refresh interval is a request, and anything can request a refresh, as with storage and download settings, [[ADR-0044 An episode's settings come from the context it is played from]])
 
 Playlists have a settings page of the same shape, marked as editing that playlist; an unset
 value there reads "Follows each source" (see Context stack).
