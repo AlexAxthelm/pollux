@@ -65,7 +65,7 @@ Desired behavior:
 2. Archive episodes fill the rest of the queue
 3. Queue does not clump all 2016-era episodes together (later)
 
-This is achievable with MVP rules for steps 1–2. Step 3 requires an interleaved sort strategy.
+This is achievable with MVP rules for the initial ordering in steps 1–2, but a new episode only plays first if the playlist is set to From the top, which is later (see the known issue above). Step 3 requires an interleaved sort strategy.
 
 ## User stories
 
