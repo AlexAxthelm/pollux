@@ -6,7 +6,7 @@ feature:
   - "[[playlists-editor]]"
 related:
   - "[[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]]"
-  - "[[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]]"
+  - "[[ADR-0030 Playlist resolution is capped at 1,000 episodes instead of detecting cycles]]"
   - "[[ADR-0027 A playlist is a query over sources]]"
   - "[[US-0208 Playlists include other playlists]]"
   - "[[US-0244 Be asked before making a playlist loop]]"
@@ -15,7 +15,7 @@ related:
 
 ## Context
 
-Because playlists can include other playlists, loops are possible: a playlist including itself directly, or through other playlists. This was split out of [[ADR-0030 Playlist resolution is capped by a per-playlist episode limit]], where it was first written down.
+Because playlists can include other playlists, loops are possible: a playlist including itself directly, or through other playlists. This was split out of [[ADR-0030 Playlist resolution is capped at 1,000 episodes instead of detecting cycles]], where it was first written down.
 
 ## Decision
 
