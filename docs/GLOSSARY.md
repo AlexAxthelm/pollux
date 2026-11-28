@@ -30,8 +30,9 @@ For code-facing definitions and entity relationships, see [[DATA_MODEL]].
       subscription in documentation or code.
   - See also: [[DATA_MODEL]] — Subscription.
 
-- **Playlist**: a user-created query over one or more sources, with optional
-  filters and sorts applied. Produces an ordered episode list.
+- **Playlist**: a query over an ordered list of sources (possibly none), made by
+  the user or provided by the app, with an ordered stack of rules (filters, sorts,
+  Deduplicate) applied. Produces an ordered episode list.
   - Related terms:
     - **Smart playlist**: avoid this in user-facing copy. The word "playlist"
       covers all cases.

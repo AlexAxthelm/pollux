@@ -34,6 +34,7 @@ Settings are organized into sections on a single scrollable screen.
 - Next episode behavior — "Play next" (in sequence) vs. "From the top", the first episode of the list that is not played (default: play next). Resolves for the active context only, then global; it does not walk the route ([[ADR-0044 An episode's settings come from the context it is played from]])
 
 ### Library
+- Episode order for a show — Newest first, Oldest first or Title A–Z (global default: newest first; a per-show override). It is the order the show's implicit playlist plays in and applies to shows only, not to user-made playlists ([[ADR-0028 A subscription is an implicit single-feed playlist]]). *Not built yet: today the Sort is a view choice kept on the open show page.*
 - Unplayed count display — total unplayed vs. immediately available unplayed
   (default: total)
 

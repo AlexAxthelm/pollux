@@ -17,7 +17,7 @@ see [[playlists-editor]]
 
 ## Filters
 
-Details of each rule are settled as it is built. One is fixed already: rules that use dates or times compare the full timestamp, even where only the date is shown.
+Details of each rule are settled as it is built. Two are fixed already. Rules that use dates or times compare the full timestamp, even where only the date is shown. Undated episodes sort last in both date directions, as on the show page, so "N per source, newest 2" for a show with one dated and two undated episodes gives the dated one and the first undated one; equal timestamps keep the order they arrived in (a stable base tie-break, such as the episode id, is chosen when built), and a base tie-break never overrides an earlier sort.
 
 Filters narrow the set of episodes included in the playlist. Every filter can include or
 exclude ([[ADR-0043 Every filter can include or exclude]]).
@@ -39,7 +39,7 @@ exclude ([[ADR-0043 Every filter can include or exclude]]).
 | All shows | One episode from each show |
 | The All subscriptions playlist | One episode from the whole library |
 
-The editor shows which one a source is, in its label, so that the user can tell them apart.
+The editor shows which one a source is, in its label, so that the user can tell them apart. In the first version the All shows picker entry is later, so only the second row can be built there: one episode per show over all shows is not possible with N per source until it arrives.
 
 **First N episodes is a rolling window, not a limit on how much plays.** Example: the library is `[A, B, C, D, E]`, all not played, and the rules are *include Not played*, *sort oldest first*, *First N episodes*. Start playing A. Each advance resolves the list again, and the episode that has just finished is held in place ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).
 

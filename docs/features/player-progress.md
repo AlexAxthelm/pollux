@@ -21,7 +21,7 @@ off. A small rewind on resume (e.g. 3-5s) is acceptable and common practice for
 context overlap. The user can disable that behavior (see `settings.md`).
 
 Today the rewind is 3s on any resume after a pause, on cold-start restore, and when
-resuming a saved position (clamped at 0), and is hard-coded until Settings exists.
+resuming a saved position (clamped at 0), and was hard-coded; the rewind is now a setting (see [[settings]]).
 
 ## Saving position
 

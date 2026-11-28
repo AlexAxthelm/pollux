@@ -38,8 +38,7 @@ A playlist is fundamentally a **query** over a set of sources, with filters and 
 
 **Sorts** define the order of the resulting episodes (see [[playlists-rules]])
 
-This model is intentionally complete from the start. MVP scope is limited by
-which filter and sort *operations* are implemented, not by the model itself.
+MVP scope is set in the MVP slice below; the model is extensible ([[ADR-0027 A playlist is a query over sources]]).
 
 ### Subscriptions as Implicit Playlists
 
@@ -63,7 +62,7 @@ resolution does stops a runaway ([[ADR-0053 Resolution is bounded by the work it
 
 ## MVP slice
 
-The model is complete from the start; the slice is which parts get built first. The milestone is the one in [[ROADMAP]]: create a playlist with rules, play from it, and have it behave as the active playlist.
+The slice is which parts get built first. The milestone is the one in [[ROADMAP]]: create a playlist with rules, play from it, and have it behave as the active playlist.
 
 **In**
 

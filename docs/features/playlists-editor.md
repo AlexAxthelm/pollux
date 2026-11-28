@@ -53,7 +53,7 @@ Preview                    [⋯ details]
    Episode 5            [↺][≡]
 ```
 
-The **Advanced** switch and the **Next episode** selector are built in the first version but **disabled** (a development choice: drawn in a debug color); they are inert until there are advanced settings and a second choice. In the first version the Settings row holds only the minimal playlist settings, **Advanced** shows nothing until there are advanced settings, and **Next episode** has one choice because **From the top** is later. The sketch shows the fuller design: the first version does not implement Undo/Redo, **+ Episode**, the hand-picked row, pinned rows or the **⋯ details** menu; see the MVP slice in [[playlists]].
+The **Advanced** switch and the **Next episode** selector are built in the first version but **disabled** (a development choice), until there are advanced settings and a second choice. The Settings row holds only the minimal playlist settings. The sketch shows the fuller design: the first version does not implement Undo/Redo, **+ Episode**, the hand-picked row, pinned rows or the **⋯ details** menu; see the MVP slice in [[playlists]].
 
 ## Creating a playlist
 
@@ -99,7 +99,7 @@ row has a drag handle and a remove button. **+ Filter** and **+ Sort** add a row
 - **Sorts:** a direction, a key and, for some keys, parameters. Each sort orders the list as it stands at
   that point, so the last sort is the main order and the ones above it break ties.
 - **Manual ordering:** a sort row that appears by itself once the user has pinned episodes (see the
-  preview). It can be moved and removed like the others, once nothing is pinned. When a sort is below it, the row says so ("Sorts below this will reorder pinned episodes"), and when First N episodes is below it, that pins apply before the cut. Fixed at the bottom is the fallback if this confuses ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]).
+  preview). It can be moved like the others, and removed once nothing is pinned. When a sort is below it, the row says so ("Sorts below this will reorder pinned episodes"), and when First N episodes is below it, that pins apply before the cut. Fixed at the bottom is the fallback if this confuses ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]).
 
 **Order matters.** Deduplicate keeps the first occurrence in the order the list has at that point,
 which is the result of the rules above it. Example: "first 2, then not played" gives the first 2 episodes if they are not played;

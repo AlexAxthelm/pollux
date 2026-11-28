@@ -99,7 +99,7 @@ whether playback position, played status, and flags survive a refresh.
 
 ### Playlist *(Identified)*
 
-A query definition: one or more sources, with ordered filters and sorts applied.
+A query definition: an ordered list of sources (possibly none, which is an empty playlist), with an ordered stack of rules applied.
 Produces an ordered Episode list at query time — it is not a stored list of
 episodes (apart from the hand-picked list below, which stores episode ids).
 
@@ -240,5 +240,7 @@ These names are placeholders. The final names and the Rust representation
 (trait, generic struct, or otherwise) will be settled during implementation.
 The key constraint is that all levels share the same field shape so that the
 cascade logic is uniform.
+
+Which levels a setting applies to is declared per setting ([[ADR-0044 An episode's settings come from the context it is played from]]). For example "Episode order" is a field that is meaningful only at the global and subscription levels, so the shared shape does not mean every field applies at every level ([[ADR-0028 A subscription is an implicit single-feed playlist]]).
 
 See also: [[settings]], [[DESIGN_PRINCIPLES]] §3.
