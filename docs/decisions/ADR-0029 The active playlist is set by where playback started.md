@@ -4,6 +4,7 @@ status: accepted
 feature:
   - "[[playlists-playback]]"
 related:
+  - "[[ADR-0046 Queued episodes play before the active playlist resumes]]"
   - "[[ADR-0044 An episode's settings come from the context it is played from]]"
   - "[[ADR-0007 Playback source is separate from the episode's feed]]"
   - "[[ADR-0006 No auto-advance until playlists exist]]"
@@ -22,13 +23,13 @@ The active context is determined by **where in the UI the user initiated playbac
 
 - Playing from a playlist view makes that playlist active.
 - Playing from a subscription view makes that subscription (the implicit playlist) active.
-- Playing from the library makes the library (the implicit all-subscriptions playlist) active.
+- Pressing play on a row in the library makes that row's playlist or show active. All subscriptions is a playlist like any other, so there is no separate "play from the library" ([[playlists-convenience]]).
 
-Pressing play on an episode within a playlist view sets that playlist as active and begins playback at that episode. Pressing play on a playlist from the library resumes from the current position if it is already active, or begins from the first episode if not.
+Pressing play on an episode within a playlist view sets that playlist as active and begins playback at that episode. Pressing play on a playlist or show row in the library resumes from the current position if it is already active, or activates it and begins at the first episode of its list if not (played or not: "From the top" only applies to advancing). Whether a library row has a play control is part of the library design. **Known gap, first version:** pressing play on a row that is not active always starts at the first episode of its list, so a half-played episode in the middle is not picked up. A "continue where I was" behavior for each playlist or show is a follow-up ([[US-0258 Pick up each playlist where I left it]]).
 
-The active playlist persists through fully closing the app and reappears on next open. It becomes inactive only when it reaches its end.
+The active playlist persists through fully closing the app and reappears on next open. It becomes inactive when playback ends, which [[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]] describes.
 
 ## Consequences
 
 - Each episode inherits its settings through the chain from the active playlist, but what plays next is whatever is next in the active playlist. See [[ADR-0044 An episode's settings come from the context it is played from]].
-- Queueing an episode so it plays without changing the playlist ([[US-0152 Queue]]) has no counterpart in this model; see the open question in [[playlists-playback]].
+- Queueing an episode so it plays without changing the playlist ([[US-0152 Queue]]) is answered by a separate queue that plays before the active playlist resumes; see [[ADR-0046 Queued episodes play before the active playlist resumes]].

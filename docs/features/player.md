@@ -92,6 +92,8 @@ The player displays the active playlist/source context (e.g. "From: Music -
 Boppy"). This is tappable and navigates back to the source playlist or
 subscription view.
 
+If the source playlist has been deleted while its episode plays (or after a restart that restores it), the row keeps showing the playlist's name as it was when the episode started, and is not tappable ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]). The play context stores that name with the route. With soft-delete, the row would take the user to the deleted playlist ([[US-0256 Restore a deleted playlist from the player]]).
+
 This also appears in the mini-player (see `mini-player.md`).
 
 ## Player Options Menu

@@ -26,6 +26,10 @@ Sync is out of scope for MVP and v1.0.
 - [[sync-downloads]]: per-device control over which episodes are downloaded
 - [[sync-playback]]: subscriptions, playback positions, the listening log, and per-device state
 
+## Playlists
+
+Playlists are one of the things that sync. Convenience playlists (All subscriptions, In progress) are system playlists: real rows with fixed, well-known ids, with their sources and rules defined in the app and not stored ([[playlists-convenience]]). Sync must treat them as system rows, so that each device does not end up with a second copy, and must not sync their definitions as user data. A user's playlists sync as sources plus one ordered rule stack, plus settings, pins and the hand-picked list ([[import-export-playlists]], which has the same question about what travels).
+
 ## Decisions
 
 - [[ADR-0037 Audio files are re-downloaded on each device, not synced]]

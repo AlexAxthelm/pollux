@@ -1,0 +1,44 @@
+---
+type: decision
+status: accepted
+feature:
+  - "[[playlists]]"
+  - "[[playlists-rules]]"
+  - "[[playlists-playback]]"
+  - "[[playlists-editor]]"
+related:
+  - "[[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]"
+  - "[[US-0248 Be warned when an episode I add is hidden by the rules]]"
+  - "[[ADR-0027 A playlist is a query over sources]]"
+  - "[[US-0202 Add episodes to playlists]]"
+  - "[[US-0204 Episodes can be reordered in playlists]]"
+  - "[[US-0242 Order a playlist by hand with top and end pools]]"
+  - "[[US-0243 See when a filter hides a hand-picked episode]]"
+---
+# A playlist owns an ordered list of hand-picked episodes as a source
+
+## Context
+
+Some episodes need to be in a playlist even though no show or playlist source would put them there. [[US-0202 Add episodes to playlists]] asks for this. A playlist stays a query ([[ADR-0027 A playlist is a query over sources]]), so these episodes have to be a source, not a stored order. Moving episodes to the top or end is a separate matter, decided in [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]].
+
+## Decision
+
+A playlist can own a **hand-picked list**: single episodes that were added by hand. It is a source in the query, but it exists only inside its playlist. It is not selectable as a source by other playlists, and it does not appear in the library or the Feed Selector. The editor shows it as a row in the sources, such as "12 other episodes", that can be ordered like any other source and tapped to edit ([[playlists-editor]]).
+
+- Its natural order is the order the episodes were added, oldest first, so each member stores when it was added ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]).
+- **Filters apply to hand-picked episodes as normal.** A filter can remove one. The user needs to be able to see that it has happened ([[US-0243 See when a filter hides a hand-picked episode]]).
+- Hand-picked lists are not MVP, as [[playlists-playback]] already says.
+
+## Consequences
+
+- "Add to playlist" in the episode menu, and **+ Episode** in the editor, add an episode to the hand-picked list ([[episode]], [[playlists-editor]]).
+- `DATA_MODEL` gains a hand-picked source: a playlist-owned list of episode ids, each with the time it was added.
+- Still pure query: the hand-picked list is one more `FROM`.
+- **Storage:** hand-picked episodes count as members of the playlist. Where the playlist requests retention or downloads ([[ADR-0044 An episode's settings come from the context it is played from]], [[storage-eviction]], [[US-0044 Retention rules interactions]]), those requests cover its hand-picked episodes too, so a hand-picked episode of a show that keeps none is still retained while the playlist asks for it.
+- **Unsubscribe:** when a show is unsubscribed its episodes are deleted, and any hand-picked members for those episodes are dropped in the same transaction, so the list never holds an id with no episode. See [[subscription-unsubscribe]].
+- A hand-picked row can say where it was added from (for example "added from playlist 'foobar favorites'"), a small nicety like the queue's `from:` line ([[ADR-0046 Queued episodes play before the active playlist resumes]]). Not specified further.
+- An episode is removed from the hand-picked list with a **Remove from playlist** action on its menu, shown only for an episode that came from this source. Removing it also removes the episode's pin if no other source provides the episode ([[US-0252 Remove a hand-picked episode from the preview]]).
+- **Tapping the hand-picked row** opens a page listing its episodes in their natural order (oldest added first), as the usual episode rows with the date added. Episodes are removed by swipe, or with an **Edit** button, as in the queue ([[ADR-0046 Queued episodes play before the active playlist resumes]]). The page has **+ Episode**, the same action as in the editor. An episode that the rules hide is shown dimmed with a note ([[US-0243 See when a filter hides a hand-picked episode]], [[US-0248 Be warned when an episode I add is hidden by the rules]]).
+- To come back to, after the simple version is in use: **reordering on this page.** It would replace the "oldest added first" natural order with a stored order, so each member would need a position as well as the time it was added. Until then, order in the playlist comes from the rules and pins.
+- **To settle when the hand-picked list is built:** adding the same episode twice. If it made two members, both would have the same route (the playlist and its hand-picked entry) and could not be told apart when Deduplicate is off. Making a repeated addition do nothing, because the episode is already in the list, is the simple answer; otherwise a member needs its own identity in the route ([[ADR-0044 An episode's settings come from the context it is played from]]).
+- **To settle when playlist storage is built:** retention of a hand-picked episode that the rules now hide. Hand-picked episodes count as members for retention and download requests, but ADR-0044 describes requests from "playlists that contain an episode" without saying whether that means source membership or the resolved list. Example: a hand-picked episode becomes played and drops out of a not-played playlist that requests retention. Say whether it stays protected; it changes what "Remove from playlist" and "keep this playlist offline" mean ([[ADR-0044 An episode's settings come from the context it is played from]], [[storage-eviction]]).

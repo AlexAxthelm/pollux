@@ -101,22 +101,27 @@ where you left off.
 
 The core differentiator.
 
-- **Playlist data model**: query model (sources → filters → sorts), position
-  tracking, active queue management (see [[playlists]] and
+- **Playlist data model**: query model (sources → one ordered stack of filters and sorts), position
+  tracking, active playlist management (see [[playlists]] and
   [[ADR-0027 A playlist is a query over sources]])
-- **MVP filter operations**: limit by recency (newest/oldest N), playback status
+- **MVP filter operations**: "First N episodes", "N per source", playback status, Deduplicate (on by default), title text match
 - **MVP sort operations**: by age (asc/desc), by source (sequential)
 - **Playlist view**: full view with summary stats, compact view
 - **Playlist editor**: rules builder (feeds, filters, sorts), live preview,
   feed selector
-- **Convenience playlists**: All Subscriptions, Downloaded/Available (see
+- **Convenience playlists**: All Subscriptions, In progress (Downloaded/Available later, see
   [[playlists-convenience]])
-- **Circular dependency cap**: 1,000 episode limit, message if reached (see
-  [[ADR-0030 Playlist resolution is capped at 1,000 episodes instead of detecting cycles]],
-  which is still a draft)
+- **Playlist limits**: leaving out a playlist already on the path ends loops, and a bound on the work a resolution does stops a runaway (see
+  [[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]])
 
 Milestone: can create a playlist with rules, play from it, and have it behave
-as the active queue.
+as the active playlist.
+
+The slice that is built for this milestone, and what waits, is in [[playlists]] ("MVP slice").
+
+After the milestone: the hand-picked list and Add to playlist, pins and Manual ordering, the
+queue ([[ADR-0046 Queued episodes play before the active playlist resumes]]), undo and redo in the
+editor, loop confirmation and removal warnings, the Downloaded playlist.
 
 ---
 
@@ -156,12 +161,12 @@ The archive binge feature is the reason this app exists. Once MVP is solid:
 
 - **Show notes**: timestamp detection → synthetic chapters (the player's show-notes
   page itself is built; see [[player-show-notes]])
-- **Archive binge playlist**: composite playlist template, surfaced in create
-  playlist flow, one-tap setup (see [[playlists-archive]])
+- **Archive template**: the first template is the single Archive playlist, surfaced in the create
+  playlist flow with a blank sources list; the Latest playlist and the composite come later (see [[playlists-archive]])
 - **OPML import/export**: standard import for migrating from other apps (see
   [[import-export-opml]])
-- **Playlist reordering**: behind mode toggle, alphabetical + by last updated (see
-  [[playlists-playback]])
+- **Library ordering of playlists**: behind mode toggle, alphabetical + by last updated (see
+  [[library-ordering]]). Ordering the episodes inside a playlist by hand is pins, a separate item ([[US-0242 Order a playlist by hand with top and end pools]]).
 
 ---
 

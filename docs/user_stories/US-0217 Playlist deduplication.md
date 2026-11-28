@@ -3,6 +3,7 @@ type: user-story
 status: accepted
 feature:
   - "[[playlists-playback]]"
+  - "[[playlists-rules]]"
 related: []
 ---
 As a curator

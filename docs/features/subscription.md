@@ -17,9 +17,10 @@ the primary way users add content to Pollux.
 
 - **Subscription**: a podcast/show, represented by a feed URI that the app polls
   for updates. 1:1 with an RSS/Atom/JSONFeed file.
-- **Feed**: the general abstraction for "an ordered, potentially changing set of
-  episodes." Both subscriptions and playlists satisfy this interface. The rest of
-  the app talks to feeds, not specifically to subscriptions or playlists. 
+- **EpisodeSource**: the internal abstraction for "an ordered, potentially changing set of
+  episodes", which both subscriptions and playlists satisfy; the rest of the app talks to it,
+  not specifically to subscriptions or playlists ([[DATA_MODEL]]). "Feed" is reserved for the
+  feed document ([[GLOSSARY]]).
 
 These terms are internal. User-facing language should use "podcast" or "show"
 for subscriptions, and "playlist" for user-created feeds.
@@ -75,6 +76,7 @@ value. Refresh interval and download rules are not subscription settings yet.
 
 - Feed artwork, title, description
 - Episode list (full, including de-listed episodes behind toggle)
+- The Sort menu sets the show's stored **Episode order** setting (default newest first, a per-show override of a global default) and is the order of the show's implicit playlist: it decides what plays next when the show is the active context, and it does not apply when the show is a source of another playlist ([[ADR-0028 A subscription is an implicit single-feed playlist]]). *As built:* the choice is kept only while the page is open, not stored per show.
 - Gear icon to the subscription's settings. *As built:* next to the Sort button.
 - Unsubscribe (in menu, protected)
 

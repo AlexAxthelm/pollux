@@ -20,9 +20,19 @@ have been flagged to be saved ("this will delete 27 episodes, including 3 saved
 ones")
 
 When a subscription is removed, playlists should have their rule re-evaluated,
-so that the removal is reflected in those too.
+so that the removal is reflected in those too. If playlists use the show as a source, the unsubscribe confirmation says how many and previews them; the show is then dropped from each ([[US-0251 See which playlists use a show or playlist before removing it]]).
 
 see subscription-soft-delete.md for future unsubscribe improvements
+
+## Effect on the queue
+
+*To settle when the queue is built.* Pending queue entries for the show's episodes, and a queue anchor that the show supplied, need cleaning up in the same transaction. See [[ADR-0046 Queued episodes play before the active playlist resumes]].
+
+## Effect on hand-picked episodes
+
+A playlist's hand-picked list ([[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]])
+holds episode ids. Removing the subscription deletes its episodes, so the hand-picked members for
+those episodes are removed in the same transaction, and so are any pins for them ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]). *Not built yet* (hand-picked lists and pins are not MVP).
 
 ## Effect on playback
 

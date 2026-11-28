@@ -1,12 +1,16 @@
 ---
 type: decision
-status: accepted
+status: superseded
 feature:
   - "[[playlists-circular-dependencies]]"
 related:
   - "[[US-0208 Playlists include other playlists]]"
+  - "[[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]"
+  - "[[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]]"
 ---
 # Playlist resolution is capped at 1,000 episodes instead of detecting cycles
+
+*Superseded. The handling of loops is replaced by [[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]], and the cap by [[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]]. The text below is the original decision.*
 
 ## Context
 

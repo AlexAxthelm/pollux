@@ -99,31 +99,40 @@ whether playback position, played status, and flags survive a refresh.
 
 ### Playlist *(Identified)*
 
-A query definition: one or more sources, with ordered filters and sorts applied.
+A query definition: an ordered list of sources (possibly none, which is an empty playlist), with an ordered stack of rules applied.
 Produces an ordered Episode list at query time — it is not a stored list of
-episodes.
+episodes (apart from the hand-picked list below, which stores episode ids).
 
-One-to-many with PlaylistSource, PlaylistFilter, PlaylistSort.
+One-to-many with PlaylistSource, PlaylistRule and PlaylistPin. A **system** playlist (a convenience playlist, [[playlists-convenience]]) is a real row with a fixed id from a reserved range, flagged as system (its app-defined source entries have fixed ids too); its sources and rules come from the app and are not stored, so the resolver reads a playlist's definition either from storage (a user playlist) or from the app (a system playlist).
 
 See also: [[GLOSSARY]] — Playlist.
 
 ### PlaylistSource *(Identified)*
 
 A join entity between a Playlist and one of its sources. A source may be a
-Subscription or another Playlist (enabling meta-playlists). Carries an ordering
+Subscription, another Playlist (enabling meta-playlists), or the convenience **All shows** source that follows the library. Carries an ordering
 so that "by source" sorts are deterministic.
 
-### PlaylistFilter *(Identified)*
+A further kind of source is the playlist's own **hand-picked list**: single episode ids,
+each with the time it was added (the list's natural order, oldest first). It exists only
+inside the playlist that owns it and cannot be used as a source by another playlist. Filters
+apply to its episodes as normal. See [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]. *Not MVP.*
 
-A filter rule attached to a Playlist. Carries a type (e.g. playback status,
-recency limit), parameters, include/exclude polarity, and an ordering (filters
-are applied sequentially).
+### PlaylistPin *(Identified)*
 
-### PlaylistSort *(Identified)*
+An episode that the user has moved to the top or the end of a playlist: the playlist, the episode id, a group (top or end) and its place in that group. It is keyed by the episode, not by the source it came through, so a pin works on an episode from a show, an included playlist or the hand-picked list. The Manual ordering sort uses the pins. See [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]. *Not MVP.*
 
-A sort rule attached to a Playlist. Carries a type (e.g. by age, by source),
-parameters, direction (asc/desc), and an ordering (sorts are applied as
-primary → secondary → etc.).
+### PlaylistRule *(Identified)*
+
+One row of a playlist's rule stack ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]). Filters, sorts, Deduplicate and Manual ordering are all rules in the same stack, so there is one entity and one `position` that is unique within the playlist. Reordering is one update.
+
+- `kind` and `type`: a filter (for example playback status, "First N episodes", "N per source", Title), a sort (by age, by source), Deduplicate, or Manual ordering.
+- `parameters`: the rule's own values, stored as JSON. The shape depends on the type and is checked in code, as with the settings objects below. In Rust the rule is an enum with a variant per type.
+- `polarity` (include or exclude): filters only, except Deduplicate, which is on or off ([[ADR-0043 Every filter can include or exclude]]).
+- `direction` (asc or desc): sorts that have one.
+- `position`: its place in the stack. Rules are applied top to bottom, each to the result of the ones above, so the last sort applied is the main order.
+
+A playlist has at most one Deduplicate and at most one Manual ordering (which exists while the playlist has pins, PlaylistPin above). The Sources section is a different ordered list: PlaylistSource keeps its own order, which the "by source" sort and Deduplicate's "first" read.
 
 ### PlayContext *(Identified)*
 
@@ -137,6 +146,12 @@ user-facing copy until this is resolved.
 
 Relationships: references a Playlist or Subscription (via EpisodeSource), and
 an Episode.
+
+When an episode starts, the context also holds its route and the resolved settings values, so the player keeps one consistent copy (see [[ADR-0044 An episode's settings come from the context it is played from]]). Only the final values are stored, not each level's own setting, so if any step of the route is gone (a playlist deleted, or a source entry removed) the playing episode keeps its values until it ends. *Not built yet.*
+
+The queue ([[ADR-0046 Queued episodes play before the active playlist resumes]]) also persists
+with the play context: an ordered list of entries, each an episode id plus the context route it was
+queued from, plus the anchor the playlist resumes after when the queue empties (an episode id and its route), and the source's name as it was when the episode started, so the player can still label it if the playlist is deleted. *Not built yet.*
 
 Stored in the single-row `play_context` table as the episode id plus the source as
 a kind and an id (`Subscription` today). Position is not stored here: it lives on
@@ -225,5 +240,7 @@ These names are placeholders. The final names and the Rust representation
 (trait, generic struct, or otherwise) will be settled during implementation.
 The key constraint is that all levels share the same field shape so that the
 cascade logic is uniform.
+
+Which levels a setting applies to is declared per setting ([[ADR-0044 An episode's settings come from the context it is played from]]). For example "Episode order" is a field that is meaningful only at the global and subscription levels, so the shared shape does not mean every field applies at every level ([[ADR-0028 A subscription is an implicit single-feed playlist]]).
 
 See also: [[settings]], [[DESIGN_PRINCIPLES]] §3.

@@ -13,10 +13,17 @@ depends:
 ## Convenience Playlists
 
 System-provided playlists that require no configuration:
-- **All subscriptions**: all episodes from all subscribed feeds, no filters
-- **Downloaded / available**: all downloaded episodes, regardless of feed
+- **All subscriptions**: all episodes from all subscribed feeds, newest first, no filters. It is a playlist like any other, so pressing play on its row in the library plays it (a playlist whose only source is the All shows source, [[ADR-0050 A playlist with no sources is empty]])
+- **Downloaded / available**: all downloaded episodes, regardless of feed (needs the Download status filter, [[playlists-rules]])
+- **In progress**: episodes in progress, from all subscribed feeds (a playback status filter; the definition is in [[playlists-rules]]). With no sorts it is in source order, newest release first, not by when each was last played, because the first version has no "last played" sort. A "By last played" sort is the follow-up ([[playlists-rules]], [[listening-stats]]).
 - **Random All**: all episodes, random sort *(not MVP — depends on random sort
   in [[playlists-rules]] and [[random]])*
+
+**What they are.** Convenience playlists are real playlists, so what works for a playlist works for them, except settings (see below): other playlists can use them as sources, playback and the queue can point at them, and they are listed in the library. Each has a fixed, well-known id, and so does each of its app-defined source entries (All subscriptions has one, for All shows), from a reserved range that user-created playlists, sync and import never use. That way a device does not create a second copy, references stay stable, and a route through a system playlist can name its entry ([[ADR-0044 An episode's settings come from the context it is played from]]). It is flagged as a system playlist, and its sources and rules are defined in the app, not stored, so a new version of the app can change them. They are **not editable, not deletable, not hideable and not renamable**. To change one, the user **duplicates** it: every playlist, system ones included, has a Duplicate action, and the copy is an ordinary user playlist that stores its own sources, rules and settings ([[US-0255 Duplicate a playlist]]). The system ones are then fixed starting points. In the first version only **All subscriptions** and **In progress** exist.
+
+Playing from All subscriptions goes down the list: "next" is whatever follows the finished episode, played or not, so the newest episode is followed by the next older one and so on. A show does the same in its own Sort order ([[ADR-0028 A subscription is an implicit single-feed playlist]]). That is the behavior for the first version. **To follow up later:** better behavior for these lists and for shows, probably only when they are the active context (for example skipping played episodes), without changing what the list shows or how they behave as a source of another playlist.
+
+Convenience playlists have filters and sorts but no settings of their own, so an episode played from one resolves its settings from its show, then global, as it does when played from the library ([[ADR-0044 An episode's settings come from the context it is played from]]). Exceptions can be made if a need turns up.
 
 ## Quick options
 
@@ -34,7 +41,7 @@ Archive binge is surfaced as a suggested playlist from the create-playlist flow;
 
 ## Open questions
 
-- Is "in progress" a system playlist? The stories name it, but the list above does not.
+None open.
 
 ## User stories
 

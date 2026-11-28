@@ -22,26 +22,23 @@ Playlists are the primary way users organize and consume episodes in Pollux.
 - [[playlists-editor]]: creating and editing a playlist
 - [[playlists-archive]]: archive binge playlists
 - [[playlists-circular-dependencies]]: playlists that include each other
+- [[playlists-how-it-works]]: a plain-language guide, a draft for the in-app help
 
 ## Data Model
 
 A playlist is fundamentally a **query** over a set of sources, with filters and sorts applied:
 
 ```
-(sources) → [filters] → [sorts] → ordered episode list
+(sources) → [rules: filters, sorts, deduplicate, in one ordered stack] → ordered episode list
 ```
 
-**Sources** may be:
-- One or more feed subscriptions
-- One or more other playlists (enabling composite / meta-playlists)
-- A mix of both
+**Sources** are shows, other playlists, the All shows source, and (later) the playlist's own hand-picked list; see [[ADR-0027 A playlist is a query over sources]].
 
 **Filters** narrow which episodes are included (see [[playlists-rules]])
 
 **Sorts** define the order of the resulting episodes (see [[playlists-rules]])
 
-This model is intentionally complete from the start. MVP scope is limited by
-which filter and sort *operations* are implemented, not by the model itself.
+MVP scope is set in the MVP slice below; the model is extensible ([[ADR-0027 A playlist is a query over sources]]).
 
 ### Subscriptions as Implicit Playlists
 
@@ -60,17 +57,45 @@ building composite listening queues. See [[playlists-archive]].
 
 See [[playlists-circular-dependencies]].
 
-**MVP behavior:** No detection required. Episode resolution is capped at 1,000
-items. If the cap is reached, show: *"Showing first 1,000 episodes."*
+A playlist already on the resolution path is left out ([[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]), and a bound on the work a
+resolution does stops a runaway ([[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]]).
 
-The reasoning, and the fact that it is not yet confirmed, are in
-[[ADR-0030 Playlist resolution is capped at 1,000 episodes instead of detecting cycles]].
+## MVP slice
+
+The slice is which parts get built first. The milestone is the one in [[ROADMAP]]: create a playlist with rules, play from it, and have it behave as the active playlist.
+
+**In**
+
+- **Sources:** subscriptions and other playlists. The **All shows** source is in, because the All Subscriptions convenience playlist is one; its entry in the editor's picker can follow.
+- **Rules:** one stack with include/exclude, drag to reorder and remove, a result count under each rule and a line of helper text on the tie-break order ([[ADR-0047 A playlist's rules are one ordered stack of operations on the list]]). Filters: "First N episodes", "N per source", "Playback status", Deduplicate (on by default, at most one), Title. Sorts: by age, by source. No sorts means source order.
+- **Resolution:** a bound on the work a resolution does ([[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]]), and a playlist already on the path is omitted from resolution ([[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]), since both are needed for resolution to end.
+- **Playback:** the playlist is the active context, with automatic advance on the re-resolved list, and a playing episode that leaves the list for any reason lets it finish ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]). This replaces [[ADR-0006 No auto-advance until playlists exist]]. The play context carries a `Playlist` source and a route.
+- **Convenience playlists:** All Subscriptions, In progress.
+- **Editor:** name, Save, Back with an unsaved-changes warning, Sources, Rules, Settings, a preview that matches the playlist view, and the empty state. Delete a playlist.
+- **Playlist views:** full and compact ([[playlists-ui]]). Deleting the playlist that is playing lets its current episode finish, then playback ends ([[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]).
+
+**Out (later)**
+
+- The playlist's hand-picked list and everything that depends on it: [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]], Add to playlist, + Episode, [[US-0243 See when a filter hides a hand-picked episode]], [[US-0248 Be warned when an episode I add is hidden by the rules]], [[US-0252 Remove a hand-picked episode from the preview]].
+- Pins and Manual ordering ([[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]], [[US-0242 Order a playlist by hand with top and end pools]]).
+- The queue ([[ADR-0046 Queued episodes play before the active playlist resumes]]).
+- Undo and redo ([[US-0245 Undo and redo in the playlist editor]]), the preview's details menu and Show excluded ([[US-0246 Choose what the playlist preview shows]], [[US-0247 Preview the rules at any point in the stack]]).
+- Loop confirmation in the editor ([[US-0244 Be asked before making a playlist loop]]), the warnings in [[US-0250 Be warned before removing the playing episode from its playlist]] and [[US-0251 See which playlists use a show or playlist before removing it]] (plain deletes and unsubscribes still work, with the ordinary confirmation).
+- Duplicate a playlist ([[US-0255 Duplicate a playlist]]), soon after the MVP because it is the way to customise a system playlist.
+- The Downloaded convenience playlist (needs the Download status filter), the later filters and sorts in [[playlists-rules]], "From the top", the archive template, import and export, playlist reordering.
+
+**Settings in the slice.** The play context carries the route, and the settings resolver walks it ([[ADR-0044 An episode's settings come from the context it is played from]]). Playlist-level settings are wired up for a minimal set only, such as skip time, and only the active playlist's level is read at first: the route is stored from the start, and the levels of included playlists are read when they are built (adding a layer to the resolver, not changing stored data); the other settings join as they are built on the settings branch. Building the resolver over the route is part of this slice. Settings not yet wired up fall through to the subscription and global levels, as they do today.
 
 ## Decisions
 
 - [[ADR-0027 A playlist is a query over sources]]
 - [[ADR-0028 A subscription is an implicit single-feed playlist]]
-- [[ADR-0030 Playlist resolution is capped at 1,000 episodes instead of detecting cycles]] (draft)
+- [[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]]
+- [[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]
+- [[ADR-0046 Queued episodes play before the active playlist resumes]]
+- [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]]
+- [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]]
+- [[ADR-0043 Every filter can include or exclude]]
 
 ## User stories
 

@@ -17,8 +17,7 @@ Episodes waiting to be downloaded, and how they are processed.
 - Episodes are queued for download and processed in order.
 - Queue items can be reordered (move to top) or cancelled, so the user can
   prioritize some files.
-- Episodes in the queue or active playlist are downloaded with high priority, so
-  they are available when the current episode finishes.
+- Episodes that are in the download queue and also in the Up next queue or the active playlist move up towards the top of it, so they are available when the current episode finishes. Activating a playlist adds nothing to the download queue beyond the normal download and retention rules, so it never enqueues a whole playlist. Fetching the next episode ahead of time is a later story ([[US-0259 Download the next episode ahead of time]]). *Later: this is part of connecting playlists to downloads.*
 - Before each download starts, the storage limit is checked; see "Check before
   downloading" in [[storage-limits]]. A queue that would exceed the limit stops
   rather than evicting (see "Fail on full").

@@ -31,10 +31,10 @@ Settings are organized into sections on a single scrollable screen.
 - Skip increment — forward (default: 30s)
 - Skip increment — back (default: 15s)
 - Resume behavior — rewind on resume (default: 3s; can be set to 0 to disable)
-- Next episode behavior — play next in sequence vs. play first unplayed
-  (default: play next)
+- Next episode behavior — "Play next" (in sequence) vs. "From the top", the first episode of the list that is not played (default: play next). Resolves for the active context only, then global; it does not walk the route ([[ADR-0044 An episode's settings come from the context it is played from]])
 
 ### Library
+- Episode order for a show — Newest first, Oldest first or Title A–Z (global default: newest first; a per-show override). It is the order the show's implicit playlist plays in and applies to shows only, not to user-made playlists ([[ADR-0028 A subscription is an implicit single-feed playlist]]). *Not built yet: today the Sort is a view choice kept on the open show page.*
 - Unplayed count display — total unplayed vs. immediately available unplayed
   (default: total)
 
@@ -67,7 +67,6 @@ Settings are organized into sections on a single scrollable screen.
 
 Settings for power-users. Should be hidden by default, but can be shown
 
-* Limit for playlist episodes (default 1000)
 
 ## As built
 

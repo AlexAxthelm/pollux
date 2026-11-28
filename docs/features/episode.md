@@ -25,6 +25,8 @@ A mutable field representing the user's current relationship with the episode:
 - **In-progress**: started but not finished
 - **Played**: completed (or manually marked as such)
 
+In playlist filters the option is **Not played**: not marked played, so it includes started episodes ([[playlists-rules]]).
+
 Status is set automatically by playback (reaching the end of an episode, within a
 small tolerance, marks it as played). Users may also set status manually at any
 time, regardless of actual listening history.
@@ -71,10 +73,10 @@ eviction (see [[storage-protection]]). Additional flag types may be added later.
 - Download / Delete download
 - Mark as played / Mark as unplayed
 - Flag / Unflag *(star or equivalent)*
-- Add to playlist
+- Add to playlist (adds the episode to that playlist's hand-picked list, the same action as **+ Episode** in the playlist editor; not MVP, since hand-picked lists are not; [[ADR-0042 A playlist owns an ordered list of hand-picked episodes as a source]])
 - Share link *(system share sheet)*
 - Go to subscription / feed
-- Move to top / Move to bottom *(only shown when viewing episode within a playlist)*
+- Move to top / Move to bottom *(only shown when viewing episode within a playlist; not MVP, it needs pins, [[ADR-0051 Pinned episodes are a per-playlist list that the Manual ordering sort uses]])*
 - *(future)* Add / remove tags
 
 ## UI

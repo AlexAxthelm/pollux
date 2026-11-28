@@ -20,48 +20,52 @@ Additionally, when binging multiple feeds simultaneously, episodes from the olde
 
 ## The Solution
 
-A composite playlist built from two sub-playlists:
+**First template: Archive.** One playlist. Source: the selected feeds (blank when the template opens). Rules: include not played; sort by age (oldest first).
 
-**"Latest" sub-playlist** (per feed):
+**Later: the Latest playlist and the composite.** These are described here for later and are specified once the components are built. The composite is built from two sub-playlists:
+
+**"Latest" sub-playlist** (one for all the selected feeds; N per source counts each feed separately):
 - Source: selected feed(s)
-- Filter: most recent 1 episode, unplayed
+- Rules, in this order: **N per source** (most recent, 1), then **include** playback status **not played**
+- **Why this order.** "Most recent 1, then not played" gives the latest episode of each show if it is not played, and nothing once it has been played. That is the intent: a new episode surfaces, and when it has been heard the Latest list is empty and the archive carries on. The reverse order ("not played, then most recent 1") would give the newest episode *not played* of each show, so after the user plays the newest, the second newest would jump to the front of the queue and break the archive's oldest-first order.
 - Sort: by age (desc)
 
-**"Archive" sub-playlist** (per feed):
+**"Archive" sub-playlist** (one for all the selected feeds):
 - Source: selected feed(s)
-- Filter: unplayed, oldest-first
-- Sort: by age (asc)
+- Rules: include not played; sort by age (oldest first)
 
 **Composite playlist:**
 - Sources: Latest playlist, then Archive playlist
 - Sort: by source (sequential) — Latest episodes always precede archive episodes
 
-This ensures new episodes surface immediately, and archive listening resumes naturally after.
+This is meant to surface new episodes at once, with archive listening resuming after them; the known issue below says when it does not.
+
+**Known issue: new episodes do not surface at once.** With the default "Play next", a new episode lands above where the listener is, and the playlist stops at its end, so it may not play in that session. "New episodes surface immediately" holds only if the composite playlist is set to **From the top** (the first episode that is not played, [[ADR-0049 Playback moves on to whatever follows the finished episode in the re-resolved playlist]]). The cost of that setting is that an episode left half-played is picked again whenever it is the first one not played. For now the template keeps the default behavior and this is noted for use.
 
 ## Clumping Problem (Later)
 
 When multiple feeds are included and their archives are at different points in history, earlier-archive feeds dominate the front of the queue. Future sort strategies to address this:
 
 - **Round-robin**: alternate episodes between feeds
-- **Proportional**: feeds with more unplayed episodes get proportionally more slots
+- **Proportional**: feeds with more episodes not played get proportionally more slots
 - **Date-normalized**: treat each feed's archive as unit length [0,1] and interleave by normalized position
 
 For MVP, sequential sort by source is acceptable. Document this as a known limitation.
 
 ## UI Suggestion
 
-Archive binge should be surfaced as a suggested playlist from a "create playlist" flow. The underlying rules should be visible and editable, but the template should make setup a one-tap action.
+Archive should be surfaced as a template in the create-playlist flow ([[playlists-editor]]), opening as a normal editable playlist with a blank sources list. The underlying rules should be visible and editable, but the template should make setup a one-tap action.
 
 ## Example
 
-User subscribes to three music podcasts. Two have archives from 2016, one from 2018. They want to hear new episodes weekly and work through all archives.
+User subscribes to three music podcasts. Two have archives from 2016, one from 2018. They want to hear new episodes weekly and work through all archives. (The Latest and Archive playlists and the composite below are the later, fuller setup.)
 
 Desired behavior:
 1. Any new episode this week plays first
 2. Archive episodes fill the rest of the queue
 3. Queue does not clump all 2016-era episodes together (later)
 
-This is achievable with MVP rules for steps 1–2. Step 3 requires an interleaved sort strategy.
+This is achievable with MVP rules for the initial ordering in steps 1–2, but a new episode only plays first if the playlist is set to From the top, which is later (see the known issue above). Step 3 requires an interleaved sort strategy.
 
 ## User stories
 

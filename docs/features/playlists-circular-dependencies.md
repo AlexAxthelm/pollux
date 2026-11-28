@@ -13,36 +13,31 @@ By allowing playlists to include other playlists as sources, circular
 dependencies are possible — a playlist including itself directly, or more likely
 via indirection through other playlists.
 
-## Why It's Usually Fine
+## Resolution
 
-Circular dependencies don't usually cause infinite loops in practice, and some users
-may create them on purpose. The reasoning is in
-[[ADR-0030 Playlist resolution is capped at 1,000 episodes instead of detecting cycles]].
+While a playlist is being resolved, a source already on the current path contributes
+nothing; only that source is cut. If A includes B and C, and B includes A, C and D, then A is
+(C + D) + C. This always ends. Episodes that arrive by two routes can still appear twice if Deduplicate is off. See
+[[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]].
 
-## MVP Behavior
+Resolution cost in a densely cross-linked cluster is a known risk. A bound on the work a resolution does stops a runaway ([[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]]); the trigger for a smarter budget is in [[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]].
 
-No detection required. The app resolves episodes up to a cap of **1,000 items**.
-If the cap is reached, the playlist displays:
+## Confirmation when adding a source
 
-*"Showing first 1,000 episodes."*
+When the user adds a source that already includes this playlist (directly or through other
+playlists), the editor asks first, says what will be left out, and links to this page. See
+[[playlists-editor]] and [[US-0244 Be asked before making a playlist loop]]. *Not built yet.*
 
-This handles all cases safely — intentional or accidental circular deps both
-resolve to a finite, usable list.
+## Future: Marking existing loops
 
-Note that this should be configurable in advanced settings
-
-## Future: Detection and Warning
-
-A circular dependency warning in the playlist config UI would help users
-understand and resolve unintentional loops. This requires cycle detection in
-the playlist source graph and a clear, non-alarming way to surface it.
-
-This is non-trivial to communicate well — defer until there's a clear UX
-approach.
+A persistent mark in the sources list for a source that sits in a loop, for playlists that
+arrive by import or sync and skip the confirmation. The wording needs care so it isn't
+alarming; not specified yet.
 
 ## Decisions
 
-- [[ADR-0030 Playlist resolution is capped at 1,000 episodes instead of detecting cycles]] (draft)
+- [[ADR-0048 Resolution leaves out a playlist already on the path, and the editor asks before a loop is made]]
+- [[ADR-0053 Resolution is bounded by the work it does, and playlists have no episode limit]]
 
 ## User stories
 
